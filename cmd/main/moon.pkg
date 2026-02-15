@@ -1,6 +1,7 @@
-// import {
-//   "wzzc-dev/riscv_analyzer" @lib,
-// }
+import {
+  "wzzc-dev/riscv_analyzer/decode" @decode,
+  "wzzc-dev/riscv_analyzer/disasm" @disasm,
+}
 
 options(
   "is-main": true,

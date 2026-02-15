@@ -1,0 +1,3 @@
+import {
+  "wzzc-dev/riscv_analyzer/decode" @decode,
+}

@@ -1,0 +1,61 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "wzzc-dev/riscv_analyzer/analysis"
+
+import {
+  "wzzc-dev/riscv_analyzer/decode",
+}
+
+// Values
+pub fn get_branch_target(@decode.Instruction) -> Int
+
+pub fn is_call(@decode.Instruction) -> Bool
+
+pub fn is_conditional_branch(@decode.Instruction) -> Bool
+
+pub fn is_return(@decode.Instruction) -> Bool
+
+pub fn is_terminator(@decode.Instruction) -> Bool
+
+pub fn is_unconditional_jump(@decode.Instruction) -> Bool
+
+// Errors
+
+// Types and methods
+pub struct BasicBlock {
+  start_addr : UInt
+  end_addr : UInt
+  instruction_count : Int
+  is_terminated : Bool
+}
+pub impl Show for BasicBlock
+
+pub struct CFG {
+  blocks : FixedArray[BasicBlock]
+  edges : FixedArray[Edge]
+  entry_points : FixedArray[UInt]
+}
+pub fn CFG::new() -> Self
+pub impl Show for CFG
+
+pub struct Edge {
+  from_block : UInt
+  to_block : UInt
+  edge_type : EdgeType
+}
+pub impl Show for Edge
+
+pub enum EdgeType {
+  FallThrough
+  Jump
+  BranchTaken
+  BranchNotTaken
+  Call
+  Return
+}
+pub impl Eq for EdgeType
+pub impl Show for EdgeType
+
+// Type aliases
+
+// Traits
+

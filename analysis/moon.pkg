@@ -1,0 +1,5 @@
+///| Package configuration for analysis module
+
+import {
+  "wzzc-dev/riscv_analyzer/decode" @decode,
+}

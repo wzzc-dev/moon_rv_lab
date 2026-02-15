@@ -1,0 +1,90 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "wzzc-dev/riscv_analyzer/decode"
+
+// Values
+pub fn decode(UInt) -> DecodeResult
+
+pub fn decode_from_bytes(FixedArray[Byte]) -> DecodeResult?
+
+pub fn instruction_length(UInt) -> Int
+
+pub fn is_compressed(UInt) -> Bool
+
+pub fn reg_name(UInt) -> String
+
+// Errors
+
+// Types and methods
+pub struct DecodeResult(Instruction)
+#deprecated
+pub fn DecodeResult::inner(Self) -> Instruction
+
+pub enum Instruction {
+  LUI(UInt, Int)
+  AUIPC(UInt, Int)
+  JAL(UInt, Int)
+  JALR(UInt, UInt, Int)
+  BEQ(UInt, UInt, Int)
+  BNE(UInt, UInt, Int)
+  BLT(UInt, UInt, Int)
+  BGE(UInt, UInt, Int)
+  BLTU(UInt, UInt, Int)
+  BGEU(UInt, UInt, Int)
+  LB(UInt, UInt, Int)
+  LH(UInt, UInt, Int)
+  LW(UInt, UInt, Int)
+  LBU(UInt, UInt, Int)
+  LHU(UInt, UInt, Int)
+  SB(UInt, UInt, Int)
+  SH(UInt, UInt, Int)
+  SW(UInt, UInt, Int)
+  ADDI(UInt, UInt, Int)
+  SLTI(UInt, UInt, Int)
+  SLTIU(UInt, UInt, Int)
+  XORI(UInt, UInt, Int)
+  ORI(UInt, UInt, Int)
+  ANDI(UInt, UInt, Int)
+  SLLI(UInt, UInt, UInt)
+  SRLI(UInt, UInt, UInt)
+  SRAI(UInt, UInt, UInt)
+  ADD(UInt, UInt, UInt)
+  SUB(UInt, UInt, UInt)
+  SLL(UInt, UInt, UInt)
+  SLT(UInt, UInt, UInt)
+  SLTU(UInt, UInt, UInt)
+  XOR(UInt, UInt, UInt)
+  SRL(UInt, UInt, UInt)
+  SRA(UInt, UInt, UInt)
+  OR(UInt, UInt, UInt)
+  AND(UInt, UInt, UInt)
+  FENCE(UInt, UInt)
+  FENCE_I
+  ECALL
+  EBREAK
+  Invalid(UInt)
+}
+pub fn Instruction::branch_offset(Self) -> Int
+pub fn Instruction::category(Self) -> InstructionCategory
+pub fn Instruction::is_branch(Self) -> Bool
+pub fn Instruction::is_control_flow(Self) -> Bool
+pub fn Instruction::is_jump(Self) -> Bool
+pub impl Show for Instruction
+
+pub enum InstructionCategory {
+  Arithmetic
+  Logical
+  Compare
+  Branch
+  Jump
+  Load
+  Store
+  System
+  Unknown
+}
+pub impl Eq for InstructionCategory
+pub impl Show for InstructionCategory
+
+// Type aliases
+
+// Traits
+

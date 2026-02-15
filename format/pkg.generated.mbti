@@ -1,0 +1,178 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "wzzc-dev/riscv_analyzer/format"
+
+// Values
+pub const EI_CLASS : Int = 4
+
+pub const EI_DATA : Int = 5
+
+pub const EI_MAG0 : Int = 0
+
+pub const EI_MAG1 : Int = 1
+
+pub const EI_MAG2 : Int = 2
+
+pub const EI_MAG3 : Int = 3
+
+pub const EI_NIDENT : Int = 16
+
+pub const EI_OSABI : Int = 7
+
+pub const EI_VERSION : Int = 6
+
+pub const ELFCLASS32 : Byte = \x01
+
+pub const ELFCLASS64 : Byte = \x02
+
+pub const ELFDATA2LSB : Byte = \x01
+
+pub const ELFDATA2MSB : Byte = \x02
+
+pub const EM_RISCV : UInt = 243
+
+pub const ET_DYN : UInt = 3
+
+pub const ET_EXEC : UInt = 2
+
+pub const PF_R : UInt = 0x4
+
+pub const PF_X : UInt = 0x1
+
+pub const PT_LOAD : UInt = 1
+
+pub const SHF_EXECINSTR : UInt = 0x4
+
+pub const SHT_NOBITS : UInt = 8
+
+pub const SHT_NULL : UInt = 0
+
+pub const SHT_PROGBITS : UInt = 1
+
+pub const SHT_STRTAB : UInt = 3
+
+pub const SHT_SYMTAB : UInt = 2
+
+pub fn get_elf_class(FixedArray[Byte]) -> ElfClass
+
+pub fn is_elf(FixedArray[Byte]) -> Bool
+
+pub fn parse_elf(FixedArray[Byte]) -> ElfFile?
+
+// Errors
+
+// Types and methods
+pub struct Elf32Header {
+  e_ident : FixedArray[Byte]
+  e_type : UInt
+  e_machine : UInt
+  e_version : UInt
+  e_entry : UInt
+  e_phoff : UInt
+  e_shoff : UInt
+  e_flags : UInt
+  e_ehsize : UInt
+  e_phentsize : UInt
+  e_phnum : UInt
+  e_shentsize : UInt
+  e_shnum : UInt
+  e_shstrndx : UInt
+}
+pub impl Show for Elf32Header
+
+pub struct Elf32ProgramHeader {
+  p_type : UInt
+  p_offset : UInt
+  p_vaddr : UInt
+  p_paddr : UInt
+  p_filesz : UInt
+  p_memsz : UInt
+  p_flags : UInt
+  p_align : UInt
+}
+pub impl Show for Elf32ProgramHeader
+
+pub struct Elf32SectionHeader {
+  sh_name : UInt
+  sh_type : UInt
+  sh_flags : UInt
+  sh_addr : UInt
+  sh_offset : UInt
+  sh_size : UInt
+  sh_link : UInt
+  sh_info : UInt
+  sh_addralign : UInt
+  sh_entsize : UInt
+}
+pub impl Show for Elf32SectionHeader
+
+pub struct Elf64Header {
+  e_ident : FixedArray[Byte]
+  e_type : UInt
+  e_machine : UInt
+  e_version : UInt
+  e_entry : UInt
+  e_phoff : UInt
+  e_shoff : UInt
+  e_flags : UInt
+  e_ehsize : UInt
+  e_phentsize : UInt
+  e_phnum : UInt
+  e_shentsize : UInt
+  e_shnum : UInt
+  e_shstrndx : UInt
+}
+pub impl Show for Elf64Header
+
+pub struct Elf64ProgramHeader {
+  p_type : UInt
+  p_flags : UInt
+  p_offset : UInt
+  p_vaddr : UInt
+  p_paddr : UInt
+  p_filesz : UInt
+  p_memsz : UInt
+  p_align : UInt
+}
+pub impl Show for Elf64ProgramHeader
+
+pub struct Elf64SectionHeader {
+  sh_name : UInt
+  sh_type : UInt
+  sh_flags : UInt
+  sh_addr : UInt
+  sh_offset : UInt
+  sh_size : UInt
+  sh_link : UInt
+  sh_info : UInt
+  sh_addralign : UInt
+  sh_entsize : UInt
+}
+pub impl Show for Elf64SectionHeader
+
+pub enum ElfClass {
+  Elf32
+  Elf64
+  Unknown
+}
+pub impl Eq for ElfClass
+pub impl Show for ElfClass
+
+pub struct ElfFile {
+  is_64bit : Bool
+  header32 : Elf32Header?
+  header64 : Elf64Header?
+  sections32 : Array[Elf32SectionHeader]
+  sections64 : Array[Elf64SectionHeader]
+  programs32 : Array[Elf32ProgramHeader]
+  programs64 : Array[Elf64ProgramHeader]
+  raw_data : FixedArray[Byte]
+}
+pub fn ElfFile::entry_point(Self) -> UInt
+pub fn ElfFile::get_code_sections(Self) -> Array[(UInt, FixedArray[Byte])]
+pub fn ElfFile::is_riscv(Self) -> Bool
+pub impl Show for ElfFile
+
+// Type aliases
+
+// Traits
+

@@ -1,0 +1,20 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "wzzc-dev/riscv_analyzer/disasm"
+
+import {
+  "wzzc-dev/riscv_analyzer/decode",
+}
+
+// Values
+pub fn disassemble(@decode.Instruction) -> String
+
+pub fn disassemble_with_addr(@decode.Instruction, UInt) -> String
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
+
