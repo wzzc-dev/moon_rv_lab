@@ -1,0 +1,7 @@
+// import {
+//   "wzzc-dev/riscv_analyzer" @lib,
+// }
+
+options(
+  "is-main": true,
+)
