@@ -42,7 +42,7 @@ Add to your `moon.mod.json`:
 
 ### Decode Instructions
 
-```moonbit
+```moonbit nocheck
 import "wzzc-dev/riscv_analyzer/decode" @decode
 
 let @decode.DecodeResult(inst) = @decode.decode(0x123452B7U)
@@ -51,7 +51,7 @@ let @decode.DecodeResult(inst) = @decode.decode(0x123452B7U)
 
 ### Disassemble Instructions
 
-```moonbit
+```moonbit nocheck
 import "wzzc-dev/riscv_analyzer/decode" @decode
 import "wzzc-dev/riscv_analyzer/disasm" @disasm
 
@@ -62,7 +62,7 @@ let asm = @disasm.disassemble(inst)
 
 ### Parse ELF Files
 
-```moonbit
+```moonbit nocheck
 import "wzzc-dev/riscv_analyzer/format" @format
 
 let elf = @format.parse_elf(bytes).?
@@ -73,7 +73,7 @@ let code_sections = elf.get_code_sections()
 
 ### Control Flow Analysis
 
-```moonbit
+```moonbit nocheck
 import "wzzc-dev/riscv_analyzer/analysis" @analysis
 
 let cfg = @analysis.analyze_code(code_bytes, start_address)

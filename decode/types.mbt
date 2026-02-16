@@ -50,12 +50,49 @@ pub enum Instruction {
   SRA(UInt, UInt, UInt) // rd, rs1, rs2
   OR(UInt, UInt, UInt) // rd, rs1, rs2
   AND(UInt, UInt, UInt) // rd, rs1, rs2
+  // RV32M extension (multiply/divide)
+  MUL(UInt, UInt, UInt) // rd, rs1, rs2 - multiply lower
+  MULH(UInt, UInt, UInt) // rd, rs1, rs2 - multiply upper (signed * signed)
+  MULHSU(UInt, UInt, UInt) // rd, rs1, rs2 - multiply upper (signed * unsigned)
+  MULHU(UInt, UInt, UInt) // rd, rs1, rs2 - multiply upper (unsigned * unsigned)
+  DIV(UInt, UInt, UInt) // rd, rs1, rs2 - divide signed
+  DIVU(UInt, UInt, UInt) // rd, rs1, rs2 - divide unsigned
+  REM(UInt, UInt, UInt) // rd, rs1, rs2 - remainder signed
+  REMU(UInt, UInt, UInt) // rd, rs1, rs2 - remainder unsigned
   // Fence instructions
   FENCE(UInt, UInt) // pred, succ
   FENCE_I
   // System instructions
   ECALL
   EBREAK
+  // RV32C compressed instructions (16-bit)
+  C_ADDI4SPN(UInt, UInt) // rd', imm
+  C_LW(UInt, UInt, UInt) // rd', rs1', imm
+  C_SW(UInt, UInt, UInt) // rs2', rs1', imm
+  C_NOP
+  C_ADDI(UInt, Int) // rd, imm
+  C_JAL(Int) // imm
+  C_LI(UInt, Int) // rd, imm
+  C_ADDI16SP(Int) // imm
+  C_LUI(UInt, Int) // rd, imm
+  C_SRLI(UInt, UInt) // rd', shamt
+  C_SRAI(UInt, UInt) // rd', shamt
+  C_ANDI(UInt, Int) // rd', imm
+  C_SUB(UInt, UInt) // rd', rs2'
+  C_XOR(UInt, UInt) // rd', rs2'
+  C_OR(UInt, UInt) // rd', rs2'
+  C_AND(UInt, UInt) // rd', rs2'
+  C_J(Int) // imm
+  C_BEQZ(UInt, Int) // rs1', imm
+  C_BNEZ(UInt, Int) // rs1', imm
+  C_SLLI(UInt, UInt) // rd, shamt
+  C_LWSP(UInt, UInt) // rd, imm
+  C_JR(UInt) // rs1
+  C_MV(UInt, UInt) // rd, rs2
+  C_EBREAK
+  C_JALR(UInt) // rs1
+  C_ADD(UInt, UInt) // rd, rs2
+  C_SWSP(UInt, UInt) // rs2, imm
   // Unknown/invalid instruction
   Invalid(UInt) // code
 } derive(Show)
@@ -98,12 +135,43 @@ pub fn Instruction::category(self : Instruction) -> InstructionCategory {
     | SRLI(_, _, _)
     | SRAI(_, _, _) => InstructionCategory::Arithmetic
     XORI(_, _, _) | ORI(_, _, _) | ANDI(_, _, _) => InstructionCategory::Logical
-    ADD(_, _, _) | SUB(_, _, _) | SLL(_, _, _) | SLT(_, _, _) | SLTU(_, _, _) =>
-      InstructionCategory::Arithmetic
+    ADD(_, _, _)
+    | SUB(_, _, _)
+    | SLL(_, _, _)
+    | SLT(_, _, _)
+    | SLTU(_, _, _)
+    | MUL(_, _, _)
+    | MULH(_, _, _)
+    | MULHSU(_, _, _)
+    | MULHU(_, _, _)
+    | DIV(_, _, _)
+    | DIVU(_, _, _)
+    | REM(_, _, _)
+    | REMU(_, _, _) => InstructionCategory::Arithmetic
     XOR(_, _, _) | SRL(_, _, _) | SRA(_, _, _) | OR(_, _, _) | AND(_, _, _) =>
       InstructionCategory::Logical
     FENCE(_, _) | FENCE_I => InstructionCategory::System
     ECALL | EBREAK => InstructionCategory::System
+    // RV32C compressed instructions
+    C_NOP
+    | C_ADDI(_, _)
+    | C_LI(_, _)
+    | C_ADDI16SP(_)
+    | C_LUI(_, _)
+    | C_SRLI(_, _)
+    | C_SRAI(_, _)
+    | C_ADDI4SPN(_, _)
+    | C_SLLI(_, _) => InstructionCategory::Arithmetic
+    C_ANDI(_, _) | C_AND(_, _) | C_OR(_, _) | C_XOR(_, _) =>
+      InstructionCategory::Logical
+    C_J(_) | C_JAL(_) | C_JR(_) | C_JALR(_) => InstructionCategory::Jump
+    C_BEQZ(_, _) | C_BNEZ(_, _) => InstructionCategory::Branch
+    C_LW(_, _, _) | C_LWSP(_, _) => InstructionCategory::Load
+    C_SW(_, _, _) | C_SWSP(_, _) => InstructionCategory::Store
+    C_MV(_, _) => InstructionCategory::Arithmetic
+    C_ADD(_, _) => InstructionCategory::Arithmetic
+    C_SUB(_, _) => InstructionCategory::Arithmetic
+    C_EBREAK => InstructionCategory::System
     Invalid(_) => InstructionCategory::Unknown
   }
 }
@@ -117,7 +185,9 @@ pub fn Instruction::is_branch(self : Instruction) -> Bool {
     | BLT(_, _, _)
     | BGE(_, _, _)
     | BLTU(_, _, _)
-    | BGEU(_, _, _) => true
+    | BGEU(_, _, _)
+    | C_BEQZ(_, _)
+    | C_BNEZ(_, _) => true
     _ => false
   }
 }
@@ -126,7 +196,7 @@ pub fn Instruction::is_branch(self : Instruction) -> Bool {
 /// Check if instruction is a jump
 pub fn Instruction::is_jump(self : Instruction) -> Bool {
   match self {
-    JAL(_, _) | JALR(_, _, _) => true
+    JAL(_, _) | JALR(_, _, _) | C_J(_) | C_JAL(_) | C_JR(_) | C_JALR(_) => true
     _ => false
   }
 }

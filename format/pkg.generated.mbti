@@ -42,6 +42,12 @@ pub const PT_LOAD : UInt = 1
 
 pub const SHF_EXECINSTR : UInt = 0x4
 
+pub const SHN_ABS : UInt = 0xFFF1
+
+pub const SHN_UNDEF : UInt = 0
+
+pub const SHT_DYNSYM : UInt = 11
+
 pub const SHT_NOBITS : UInt = 8
 
 pub const SHT_NULL : UInt = 0
@@ -51,6 +57,22 @@ pub const SHT_PROGBITS : UInt = 1
 pub const SHT_STRTAB : UInt = 3
 
 pub const SHT_SYMTAB : UInt = 2
+
+pub const STB_GLOBAL : UInt = 1
+
+pub const STB_LOCAL : UInt = 0
+
+pub const STB_WEAK : UInt = 2
+
+pub const STT_FILE : UInt = 4
+
+pub const STT_FUNC : UInt = 2
+
+pub const STT_NOTYPE : UInt = 0
+
+pub const STT_OBJECT : UInt = 1
+
+pub const STT_SECTION : UInt = 3
 
 pub fn get_elf_class(FixedArray[Byte]) -> ElfClass
 
@@ -105,6 +127,16 @@ pub struct Elf32SectionHeader {
 }
 pub impl Show for Elf32SectionHeader
 
+pub struct Elf32Symbol {
+  st_name : UInt
+  st_value : UInt
+  st_size : UInt
+  st_info : Byte
+  st_other : Byte
+  st_shndx : UInt
+}
+pub impl Show for Elf32Symbol
+
 pub struct Elf64Header {
   e_ident : FixedArray[Byte]
   e_type : UInt
@@ -149,6 +181,16 @@ pub struct Elf64SectionHeader {
 }
 pub impl Show for Elf64SectionHeader
 
+pub struct Elf64Symbol {
+  st_name : UInt
+  st_info : Byte
+  st_other : Byte
+  st_shndx : UInt
+  st_value : UInt
+  st_size : UInt
+}
+pub impl Show for Elf64Symbol
+
 pub enum ElfClass {
   Elf32
   Elf64
@@ -169,12 +211,49 @@ pub struct ElfFile {
 }
 pub fn ElfFile::entry_point(Self) -> UInt
 pub fn ElfFile::extract_bytes(Self, UInt, UInt) -> FixedArray[Byte]?
+pub fn ElfFile::find_section_by_name(Self, String) -> Int
+pub fn ElfFile::find_symbol_by_addr(Self, UInt) -> Symbol?
 pub fn ElfFile::get_code_sections(Self) -> Array[(UInt, FixedArray[Byte])]
+pub fn ElfFile::get_function_symbols(Self) -> Array[Symbol]
 pub fn ElfFile::get_section(Self, Int) -> (UInt, UInt, UInt)?
+pub fn ElfFile::get_section_name(Self, Int) -> String
+pub fn ElfFile::get_symbols(Self) -> Array[Symbol]
 pub fn ElfFile::is_riscv(Self) -> Bool
 pub fn ElfFile::program_count(Self) -> Int
 pub fn ElfFile::section_count(Self) -> Int
 pub impl Show for ElfFile
+
+pub struct Symbol {
+  name : String
+  value : UInt
+  size : UInt
+  sym_type : SymbolType
+  binding : SymbolBinding
+  section_index : UInt
+}
+pub fn Symbol::binding_from_info(Byte) -> SymbolBinding
+pub fn Symbol::type_from_info(Byte) -> SymbolType
+pub impl Show for Symbol
+
+pub enum SymbolBinding {
+  Local
+  Global
+  Weak
+  Unknown
+}
+pub impl Eq for SymbolBinding
+pub impl Show for SymbolBinding
+
+pub enum SymbolType {
+  NoType
+  Object
+  Func
+  Section
+  File
+  Unknown
+}
+pub impl Eq for SymbolType
+pub impl Show for SymbolType
 
 // Type aliases
 

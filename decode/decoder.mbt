@@ -234,20 +234,52 @@ pub fn decode(code : UInt) -> DecodeResult {
           match f7 {
             0b0000000 => DecodeResult(ADD(rd, rs1, rs2))
             0b0100000 => DecodeResult(SUB(rd, rs1, rs2))
+            0b0000001 => DecodeResult(MUL(rd, rs1, rs2))
             _ => DecodeResult(Invalid(code))
           }
-        0b001 => DecodeResult(SLL(rd, rs1, rs2))
-        0b010 => DecodeResult(SLT(rd, rs1, rs2))
-        0b011 => DecodeResult(SLTU(rd, rs1, rs2))
-        0b100 => DecodeResult(XOR(rd, rs1, rs2))
+        0b001 =>
+          match f7 {
+            0b0000000 => DecodeResult(SLL(rd, rs1, rs2))
+            0b0000001 => DecodeResult(MULH(rd, rs1, rs2))
+            _ => DecodeResult(Invalid(code))
+          }
+        0b010 =>
+          match f7 {
+            0b0000000 => DecodeResult(SLT(rd, rs1, rs2))
+            0b0000001 => DecodeResult(MULHSU(rd, rs1, rs2))
+            _ => DecodeResult(Invalid(code))
+          }
+        0b011 =>
+          match f7 {
+            0b0000000 => DecodeResult(SLTU(rd, rs1, rs2))
+            0b0000001 => DecodeResult(MULHU(rd, rs1, rs2))
+            _ => DecodeResult(Invalid(code))
+          }
+        0b100 =>
+          match f7 {
+            0b0000000 => DecodeResult(XOR(rd, rs1, rs2))
+            0b0000001 => DecodeResult(DIV(rd, rs1, rs2))
+            _ => DecodeResult(Invalid(code))
+          }
         0b101 =>
           match f7 {
             0b0000000 => DecodeResult(SRL(rd, rs1, rs2))
             0b0100000 => DecodeResult(SRA(rd, rs1, rs2))
+            0b0000001 => DecodeResult(DIVU(rd, rs1, rs2))
             _ => DecodeResult(Invalid(code))
           }
-        0b110 => DecodeResult(OR(rd, rs1, rs2))
-        0b111 => DecodeResult(AND(rd, rs1, rs2))
+        0b110 =>
+          match f7 {
+            0b0000000 => DecodeResult(OR(rd, rs1, rs2))
+            0b0000001 => DecodeResult(REM(rd, rs1, rs2))
+            _ => DecodeResult(Invalid(code))
+          }
+        0b111 =>
+          match f7 {
+            0b0000000 => DecodeResult(AND(rd, rs1, rs2))
+            0b0000001 => DecodeResult(REMU(rd, rs1, rs2))
+            _ => DecodeResult(Invalid(code))
+          }
         _ => DecodeResult(Invalid(code))
       }
     // MISC_MEM (Fence)
@@ -305,5 +337,316 @@ pub fn instruction_length(code : UInt) -> Int {
     2
   } else {
     4
+  }
+}
+
+///|
+/// Convert compressed register index to full register index
+/// Compressed registers: x8-x15 (s0-s1, a0-a5)
+fn c_reg_to_full(reg : UInt) -> UInt {
+  reg + 8U
+}
+
+///|
+/// Sign extend a 6-bit value to signed Int
+fn sign_extend_6(value : UInt) -> Int {
+  let sign_bit = (value >> 5).reinterpret_as_int()
+  if sign_bit == 1 {
+    value.reinterpret_as_int() - 64
+  } else {
+    value.reinterpret_as_int()
+  }
+}
+
+///|
+/// Sign extend a 8-bit value to signed Int
+fn sign_extend_8(value : UInt) -> Int {
+  let sign_bit = (value >> 7).reinterpret_as_int()
+  if sign_bit == 1 {
+    value.reinterpret_as_int() - 256
+  } else {
+    value.reinterpret_as_int()
+  }
+}
+
+///|
+/// Sign extend a 9-bit value to signed Int
+fn sign_extend_9(value : UInt) -> Int {
+  let sign_bit = (value >> 8).reinterpret_as_int()
+  if sign_bit == 1 {
+    value.reinterpret_as_int() - 512
+  } else {
+    value.reinterpret_as_int()
+  }
+}
+
+///|
+/// Sign extend a 12-bit value to signed Int (for C.J/C.JAL)
+fn sign_extend_12_c(value : UInt) -> Int {
+  let sign_bit = (value >> 11).reinterpret_as_int()
+  if sign_bit == 1 {
+    value.reinterpret_as_int() - 4096
+  } else {
+    value.reinterpret_as_int()
+  }
+}
+
+///|
+/// Decode a 16-bit compressed instruction
+pub fn decode_compressed(code16 : UInt) -> DecodeResult {
+  // Quadrant is bits [1:0]
+  let quadrant = code16 & 0x3U
+  // funct3 is bits [15:13]
+  let f3 = (code16 >> 13) & 0x7U
+
+  match quadrant {
+    // Quadrant 0
+    0b00 =>
+      match f3 {
+        // C.ADDI4SPN
+        0b000 => {
+          let nzuimm = (((code16 >> 5) & 0x1U) << 3) |
+            (((code16 >> 6) & 0x1U) << 2) |
+            (((code16 >> 7) & 0x3U) << 6) |
+            (((code16 >> 11) & 0x3U) << 4)
+          let rd = c_reg_to_full((code16 >> 2) & 0x7U)
+          if nzuimm == 0U {
+            DecodeResult(Invalid(code16))
+          } else {
+            DecodeResult(C_ADDI4SPN(rd, nzuimm))
+          }
+        }
+        // C.LW
+        0b010 => {
+          let rd = c_reg_to_full((code16 >> 2) & 0x7U)
+          let rs1 = c_reg_to_full((code16 >> 7) & 0x7U)
+          let imm = (((code16 >> 10) & 0x1U) << 2) |
+            (((code16 >> 6) & 0x1U) << 6) |
+            (((code16 >> 5) & 0x1U) << 5) |
+            (((code16 >> 11) & 0x3U) << 3)
+          DecodeResult(C_LW(rd, rs1, imm))
+        }
+        // C.SW
+        0b110 => {
+          let rs2 = c_reg_to_full((code16 >> 2) & 0x7U)
+          let rs1 = c_reg_to_full((code16 >> 7) & 0x7U)
+          let imm = (((code16 >> 10) & 0x1U) << 2) |
+            (((code16 >> 6) & 0x1U) << 6) |
+            (((code16 >> 5) & 0x1U) << 5) |
+            (((code16 >> 11) & 0x3U) << 3)
+          DecodeResult(C_SW(rs2, rs1, imm))
+        }
+        _ => DecodeResult(Invalid(code16))
+      }
+    // Quadrant 1
+    0b01 =>
+      match f3 {
+        // C.ADDI / C.NOP
+        0b000 => {
+          let rd = (code16 >> 7) & 0x1FU
+          let imm = (((code16 >> 12) & 0x1U) << 5) | ((code16 >> 2) & 0x1FU)
+          let imm_signed = sign_extend_6(imm)
+          if rd == 0U && imm_signed == 0 {
+            DecodeResult(C_NOP)
+          } else if rd == 0U {
+            DecodeResult(Invalid(code16))
+          } else {
+            DecodeResult(C_ADDI(rd, imm_signed))
+          }
+        }
+        // C.JAL
+        0b001 => {
+          let imm = (((code16 >> 12) & 0x1U) << 11) |
+            (((code16 >> 11) & 0x1U) << 4) |
+            (((code16 >> 9) & 0x3U) << 8) |
+            (((code16 >> 8) & 0x1U) << 10) |
+            (((code16 >> 7) & 0x1U) << 6) |
+            (((code16 >> 6) & 0x1U) << 7) |
+            (((code16 >> 3) & 0x3U) << 1) |
+            (((code16 >> 2) & 0x1U) << 5)
+          let imm_signed = sign_extend_12_c(imm)
+          DecodeResult(C_JAL(imm_signed))
+        }
+        // C.LI
+        0b010 => {
+          let rd = (code16 >> 7) & 0x1FU
+          let imm = (((code16 >> 12) & 0x1U) << 5) | ((code16 >> 2) & 0x1FU)
+          let imm_signed = sign_extend_6(imm)
+          DecodeResult(C_LI(rd, imm_signed))
+        }
+        // C.ADDI16SP / C.LUI
+        0b011 => {
+          let rd = (code16 >> 7) & 0x1FU
+          let imm = (((code16 >> 12) & 0x1U) << 5) | ((code16 >> 2) & 0x1FU)
+          let imm_signed = sign_extend_6(imm)
+          if rd == 2U {
+            // C.ADDI16SP
+            let sp_imm = (((code16 >> 12) & 0x1U) << 9) |
+              (((code16 >> 5) & 0x1U) << 4) |
+              (((code16 >> 2) & 0x3U) << 6) |
+              (((code16 >> 4) & 0x1U) << 5)
+            let sp_imm_signed = sign_extend_9(sp_imm)
+            if sp_imm_signed == 0 {
+              DecodeResult(Invalid(code16))
+            } else {
+              DecodeResult(C_ADDI16SP(sp_imm_signed))
+            }
+          } else if rd != 0U && imm_signed != 0 {
+            // C.LUI
+            DecodeResult(C_LUI(rd, imm_signed))
+          } else {
+            DecodeResult(Invalid(code16))
+          }
+        }
+        // C.SRLI, C.SRAI, C.ANDI, C.SUB, C.XOR, C.OR, C.AND
+        0b100 => {
+          let rs1 = c_reg_to_full((code16 >> 7) & 0x7U)
+          let f2 = (code16 >> 10) & 0x3U
+          match f2 {
+            // C.SRLI
+            0b00 => {
+              let shamt = (((code16 >> 12) & 0x1U) << 5) |
+                ((code16 >> 2) & 0x1FU)
+              DecodeResult(C_SRLI(rs1, shamt))
+            }
+            // C.SRAI
+            0b01 => {
+              let shamt = (((code16 >> 12) & 0x1U) << 5) |
+                ((code16 >> 2) & 0x1FU)
+              DecodeResult(C_SRAI(rs1, shamt))
+            }
+            // C.ANDI
+            0b10 => {
+              let imm = (((code16 >> 12) & 0x1U) << 5) | ((code16 >> 2) & 0x1FU)
+              let imm_signed = sign_extend_6(imm)
+              DecodeResult(C_ANDI(rs1, imm_signed))
+            }
+            // C.SUB, C.XOR, C.OR, C.AND
+            0b11 => {
+              let rs2 = c_reg_to_full((code16 >> 2) & 0x7U)
+              let f1 = (code16 >> 12) & 0x1U
+              match f1 {
+                0b0 => DecodeResult(C_SUB(rs1, rs2))
+                0b1 => DecodeResult(C_XOR(rs1, rs2))
+                _ => DecodeResult(Invalid(code16))
+              }
+            }
+            _ => DecodeResult(Invalid(code16))
+          }
+        }
+        // C.J
+        0b101 => {
+          let imm = (((code16 >> 12) & 0x1U) << 11) |
+            (((code16 >> 11) & 0x1U) << 4) |
+            (((code16 >> 9) & 0x3U) << 8) |
+            (((code16 >> 8) & 0x1U) << 10) |
+            (((code16 >> 7) & 0x1U) << 6) |
+            (((code16 >> 6) & 0x1U) << 7) |
+            (((code16 >> 3) & 0x3U) << 1) |
+            (((code16 >> 2) & 0x1U) << 5)
+          let imm_signed = sign_extend_12_c(imm)
+          DecodeResult(C_J(imm_signed))
+        }
+        // C.BEQZ
+        0b110 => {
+          let rs1 = c_reg_to_full((code16 >> 7) & 0x7U)
+          let imm = (((code16 >> 12) & 0x1U) << 8) |
+            (((code16 >> 10) & 0x3U) << 3) |
+            (((code16 >> 5) & 0x1U) << 6) |
+            (((code16 >> 3) & 0x3U) << 1) |
+            (((code16 >> 2) & 0x1U) << 5)
+          let imm_signed = sign_extend_9(imm)
+          DecodeResult(C_BEQZ(rs1, imm_signed))
+        }
+        // C.BNEZ
+        0b111 => {
+          let rs1 = c_reg_to_full((code16 >> 7) & 0x7U)
+          let imm = (((code16 >> 12) & 0x1U) << 8) |
+            (((code16 >> 10) & 0x3U) << 3) |
+            (((code16 >> 5) & 0x1U) << 6) |
+            (((code16 >> 3) & 0x3U) << 1) |
+            (((code16 >> 2) & 0x1U) << 5)
+          let imm_signed = sign_extend_9(imm)
+          DecodeResult(C_BNEZ(rs1, imm_signed))
+        }
+        _ => DecodeResult(Invalid(code16))
+      }
+    // Quadrant 2
+    0b10 =>
+      match f3 {
+        // C.SLLI
+        0b000 => {
+          let rd = (code16 >> 7) & 0x1FU
+          let shamt = (((code16 >> 12) & 0x1U) << 5) | ((code16 >> 2) & 0x1FU)
+          DecodeResult(C_SLLI(rd, shamt))
+        }
+        // C.LWSP
+        0b010 => {
+          let rd = (code16 >> 7) & 0x1FU
+          let imm = (((code16 >> 12) & 0x1U) << 5) |
+            (((code16 >> 4) & 0x7U) << 2) |
+            (((code16 >> 2) & 0x3U) << 6)
+          DecodeResult(C_LWSP(rd, imm))
+        }
+        // C.JR, C.MV, C.EBREAK, C.JALR, C.ADD
+        0b100 => {
+          let rd = (code16 >> 7) & 0x1FU
+          let rs2 = (code16 >> 2) & 0x1FU
+          let rs1 = rd
+          if rs2 == 0U {
+            // C.JR or C.EBREAK
+            if rd == 0U {
+              DecodeResult(C_EBREAK)
+            } else {
+              DecodeResult(C_JR(rd))
+            }
+            // C.MV or C.ADD
+          } else if rd == 0U {
+            DecodeResult(Invalid(code16))
+          } else {
+            let f1 = (code16 >> 12) & 0x1U
+            match f1 {
+              0b0 => DecodeResult(C_MV(rd, rs2))
+              0b1 => DecodeResult(C_ADD(rd, rs2))
+              _ => DecodeResult(Invalid(code16))
+            }
+          }
+        }
+        // C.SWSP
+        0b110 => {
+          let rs2 = (code16 >> 2) & 0x1FU
+          let imm = (((code16 >> 9) & 0x3FU) << 2) | ((code16 >> 7) & 0x3U)
+          DecodeResult(C_SWSP(rs2, imm))
+        }
+        _ => DecodeResult(Invalid(code16))
+      }
+    _ => DecodeResult(Invalid(code16))
+  }
+}
+
+///|
+/// Decode from 16-bit instruction bytes (little-endian)
+pub fn decode_compressed_from_bytes(bytes : FixedArray[Byte]) -> DecodeResult? {
+  if bytes.length() >= 2 {
+    let code16 = bytes[0].to_uint() | (bytes[1].to_uint() << 8)
+    Some(decode_compressed(code16))
+  } else {
+    None
+  }
+}
+
+///|
+/// Decode instruction from bytes, handling both 16-bit and 32-bit
+pub fn decode_from_bytes_auto(bytes : FixedArray[Byte]) -> DecodeResult? {
+  if bytes.length() < 2 {
+    return None
+  }
+  let first_two = bytes[0].to_uint() | (bytes[1].to_uint() << 8)
+  if is_compressed(first_two) {
+    decode_compressed_from_bytes(bytes)
+  } else if bytes.length() >= 4 {
+    decode_from_bytes(bytes)
+  } else {
+    None
   }
 }

@@ -525,3 +525,358 @@ pub fn ElfFile::extract_bytes(
     None
   }
 }
+
+///|
+/// Symbol table entry for 32-bit ELF
+pub struct Elf32Symbol {
+  st_name : UInt // Symbol name (string table index)
+  st_value : UInt // Symbol value
+  st_size : UInt // Symbol size
+  st_info : Byte // Symbol type and binding
+  st_other : Byte // Symbol visibility
+  st_shndx : UInt // Section index
+} derive(Show)
+
+///|
+/// Symbol table entry for 64-bit ELF
+pub struct Elf64Symbol {
+  st_name : UInt // Symbol name (string table index)
+  st_info : Byte // Symbol type and binding
+  st_other : Byte // Symbol visibility
+  st_shndx : UInt // Section index
+  st_value : UInt // Symbol value
+  st_size : UInt // Symbol size
+} derive(Show)
+
+///|
+/// Symbol type enumeration
+pub enum SymbolType {
+  NoType
+  Object
+  Func
+  Section
+  File
+  Unknown
+} derive(Show, Eq)
+
+///|
+/// Symbol binding enumeration
+pub enum SymbolBinding {
+  Local
+  Global
+  Weak
+  Unknown
+} derive(Show, Eq)
+
+///|
+/// Parsed symbol information
+pub struct Symbol {
+  name : String
+  value : UInt
+  size : UInt
+  sym_type : SymbolType
+  binding : SymbolBinding
+  section_index : UInt
+} derive(Show)
+
+///|
+/// Get symbol type from st_info
+pub fn Symbol::type_from_info(info : Byte) -> SymbolType {
+  let typ = (info.to_uint() & 0xFU).to_int()
+  match typ {
+    0 => SymbolType::NoType
+    1 => SymbolType::Object
+    2 => SymbolType::Func
+    3 => SymbolType::Section
+    4 => SymbolType::File
+    _ => SymbolType::Unknown
+  }
+}
+
+///|
+/// Get symbol binding from st_info
+pub fn Symbol::binding_from_info(info : Byte) -> SymbolBinding {
+  let bind = ((info.to_uint() >> 4) & 0xFU).to_int()
+  match bind {
+    0 => SymbolBinding::Local
+    1 => SymbolBinding::Global
+    2 => SymbolBinding::Weak
+    _ => SymbolBinding::Unknown
+  }
+}
+
+///|
+/// Parse a 32-bit symbol table entry
+fn parse_elf32_symbol(bytes : FixedArray[Byte], offset : Int) -> Elf32Symbol {
+  Elf32Symbol::{
+    st_name: read_u32_le(bytes, offset),
+    st_value: read_u32_le(bytes, offset + 4),
+    st_size: read_u32_le(bytes, offset + 8),
+    st_info: bytes[offset + 12],
+    st_other: bytes[offset + 13],
+    st_shndx: read_u16_le(bytes, offset + 14),
+  }
+}
+
+///|
+/// Parse a 64-bit symbol table entry
+fn parse_elf64_symbol(bytes : FixedArray[Byte], offset : Int) -> Elf64Symbol {
+  Elf64Symbol::{
+    st_name: read_u32_le(bytes, offset),
+    st_info: bytes[offset + 4],
+    st_other: bytes[offset + 5],
+    st_shndx: read_u16_le(bytes, offset + 6),
+    st_value: read_u64_le(bytes, offset + 8),
+    st_size: read_u64_le(bytes, offset + 16),
+  }
+}
+
+///|
+/// Read a null-terminated string from bytes
+fn read_string(bytes : FixedArray[Byte], offset : Int) -> String {
+  let result : Array[Char] = []
+  let mut i = offset
+  while i < bytes.length() && bytes[i] != b'\x00' {
+    result.push(bytes[i].to_int().unsafe_to_char())
+    i = i + 1
+  }
+  let mut s = ""
+  for c in result {
+    s = s + c.to_string()
+  }
+  s
+}
+
+///|
+/// Find section by type
+fn find_section_by_type(
+  sections32 : Array[Elf32SectionHeader],
+  sections64 : Array[Elf64SectionHeader],
+  is_64bit : Bool,
+  sh_type : UInt,
+) -> Int {
+  if is_64bit {
+    for i = 0; i < sections64.length(); i = i + 1 {
+      if sections64[i].sh_type == sh_type {
+        return i
+      }
+    }
+  } else {
+    for i = 0; i < sections32.length(); i = i + 1 {
+      if sections32[i].sh_type == sh_type {
+        return i
+      }
+    }
+  }
+  -1
+}
+
+///|
+/// Get string table section index
+fn get_strtab_section_index(elf : ElfFile) -> Int {
+  if elf.is_64bit {
+    match elf.header64 {
+      Some(h) => h.e_shstrndx.reinterpret_as_int()
+      None => -1
+    }
+  } else {
+    match elf.header32 {
+      Some(h) => h.e_shstrndx.reinterpret_as_int()
+      None => -1
+    }
+  }
+}
+
+///|
+/// Parse symbol table and return array of symbols
+pub fn ElfFile::get_symbols(self : ElfFile) -> Array[Symbol] {
+  let result : Array[Symbol] = []
+
+  // Find .symtab section
+  let symtab_idx = find_section_by_type(
+    self.sections32,
+    self.sections64,
+    self.is_64bit,
+    SHT_SYMTAB,
+  )
+  if symtab_idx < 0 {
+    // Try .dynsym
+    let dynsym_idx = find_section_by_type(
+      self.sections32,
+      self.sections64,
+      self.is_64bit,
+      SHT_DYNSYM,
+    )
+    if dynsym_idx < 0 {
+      return result
+    }
+    return self.parse_symbols_from_section(dynsym_idx)
+  }
+
+  self.parse_symbols_from_section(symtab_idx)
+}
+
+///|
+/// Parse symbols from a specific section index
+fn ElfFile::parse_symbols_from_section(
+  self : ElfFile,
+  symtab_idx : Int,
+) -> Array[Symbol] {
+  let result : Array[Symbol] = []
+
+  // Get symbol table section info
+  let symtab_info = if self.is_64bit {
+    if symtab_idx >= self.sections64.length() {
+      return result
+    }
+    let sh = self.sections64[symtab_idx]
+    Some((sh.sh_offset, sh.sh_size, sh.sh_entsize, sh.sh_link))
+  } else {
+    if symtab_idx >= self.sections32.length() {
+      return result
+    }
+    let sh = self.sections32[symtab_idx]
+    Some((sh.sh_offset, sh.sh_size, sh.sh_entsize, sh.sh_link))
+  }
+
+  match symtab_info {
+    Some((sym_offset, sym_size, sym_entsize, strtab_idx)) => {
+      // Get string table section info
+      let strtab_info = if self.is_64bit {
+        if strtab_idx.reinterpret_as_int() >= self.sections64.length() {
+          None
+        } else {
+          let sh = self.sections64[strtab_idx.reinterpret_as_int()]
+          Some((sh.sh_offset, sh.sh_size))
+        }
+      } else if strtab_idx.reinterpret_as_int() >= self.sections32.length() {
+        None
+      } else {
+        let sh = self.sections32[strtab_idx.reinterpret_as_int()]
+        Some((sh.sh_offset, sh.sh_size))
+      }
+
+      match strtab_info {
+        Some((str_offset, _)) => {
+          // Parse symbols
+          let entsize = sym_entsize.reinterpret_as_int()
+          let offset = sym_offset.reinterpret_as_int()
+          let size = sym_size.reinterpret_as_int()
+          let num_symbols = size / entsize
+
+          for i = 0; i < num_symbols; i = i + 1 {
+            let sym_offset = offset + i * entsize
+            if self.is_64bit {
+              let sym = parse_elf64_symbol(self.raw_data, sym_offset)
+              let name = read_string(
+                self.raw_data,
+                str_offset.reinterpret_as_int() +
+                sym.st_name.reinterpret_as_int(),
+              )
+              result.push(Symbol::{
+                name,
+                value: sym.st_value,
+                size: sym.st_size,
+                sym_type: Symbol::type_from_info(sym.st_info),
+                binding: Symbol::binding_from_info(sym.st_info),
+                section_index: sym.st_shndx,
+              })
+            } else {
+              let sym = parse_elf32_symbol(self.raw_data, sym_offset)
+              let name = read_string(
+                self.raw_data,
+                str_offset.reinterpret_as_int() +
+                sym.st_name.reinterpret_as_int(),
+              )
+              result.push(Symbol::{
+                name,
+                value: sym.st_value,
+                size: sym.st_size,
+                sym_type: Symbol::type_from_info(sym.st_info),
+                binding: Symbol::binding_from_info(sym.st_info),
+                section_index: sym.st_shndx,
+              })
+            }
+          }
+        }
+        None => ignore(())
+      }
+    }
+    None => ignore(())
+  }
+
+  result
+}
+
+///|
+/// Get function symbols only
+pub fn ElfFile::get_function_symbols(self : ElfFile) -> Array[Symbol] {
+  let all_symbols = self.get_symbols()
+  let funcs : Array[Symbol] = []
+  for sym in all_symbols {
+    if sym.sym_type == SymbolType::Func && sym.size > 0U {
+      funcs.push(sym)
+    }
+  }
+  funcs
+}
+
+///|
+/// Find symbol by address
+pub fn ElfFile::find_symbol_by_addr(self : ElfFile, addr : UInt) -> Symbol? {
+  let symbols = self.get_symbols()
+  for sym in symbols {
+    if sym.value <= addr && addr < sym.value + sym.size {
+      return Some(sym)
+    }
+  }
+  None
+}
+
+///|
+/// Get section name by index
+pub fn ElfFile::get_section_name(self : ElfFile, section_idx : Int) -> String {
+  let shstrndx = get_strtab_section_index(self)
+  if shstrndx < 0 {
+    return ""
+  }
+
+  let str_offset = if self.is_64bit {
+    if section_idx >= self.sections64.length() {
+      return ""
+    }
+    let sh = self.sections64[section_idx]
+    let strtab = self.sections64[shstrndx]
+    strtab.sh_offset.reinterpret_as_int() + sh.sh_name.reinterpret_as_int()
+  } else {
+    if section_idx >= self.sections32.length() {
+      return ""
+    }
+    let sh = self.sections32[section_idx]
+    let strtab = self.sections32[shstrndx]
+    strtab.sh_offset.reinterpret_as_int() + sh.sh_name.reinterpret_as_int()
+  }
+
+  if str_offset >= self.raw_data.length() {
+    return ""
+  }
+  read_string(self.raw_data, str_offset)
+}
+
+///|
+/// Find section by name
+pub fn ElfFile::find_section_by_name(self : ElfFile, name : String) -> Int {
+  let num_sections = if self.is_64bit {
+    self.sections64.length()
+  } else {
+    self.sections32.length()
+  }
+
+  for i = 0; i < num_sections; i = i + 1 {
+    let section_name = self.get_section_name(i)
+    if section_name == name {
+      return i
+    }
+  }
+  -1
+}

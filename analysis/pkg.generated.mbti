@@ -8,6 +8,8 @@ import {
 // Values
 pub fn analyze_code(FixedArray[Byte], UInt) -> CFG
 
+pub fn build_call_graph(FixedArray[DecodedInst], CFG) -> CallGraph
+
 pub fn build_cfg(FixedArray[DecodedInst], UInt) -> CFG
 
 pub fn decode_instructions(FixedArray[Byte], UInt) -> FixedArray[DecodedInst]
@@ -26,7 +28,11 @@ pub fn is_terminator(@decode.Instruction) -> Bool
 
 pub fn is_unconditional_jump(@decode.Instruction) -> Bool
 
+pub fn print_call_graph(CallGraph) -> Unit
+
 pub fn print_cfg(CFG) -> Unit
+
+pub fn reachable_functions(CallGraph) -> FixedArray[UInt]
 
 // Errors
 
@@ -46,6 +52,22 @@ pub struct CFG {
 }
 pub fn CFG::new() -> Self
 pub impl Show for CFG
+
+pub struct CallGraph {
+  nodes : FixedArray[CallGraphNode]
+  entry_point : UInt
+}
+pub fn CallGraph::new() -> Self
+pub impl Show for CallGraph
+
+pub struct CallGraphNode {
+  address : UInt
+  name : String
+  size : UInt
+  calls : FixedArray[UInt]
+  called_by : FixedArray[UInt]
+}
+pub impl Show for CallGraphNode
 
 pub struct DecodedInst {
   addr : UInt
@@ -71,6 +93,8 @@ pub enum EdgeType {
 }
 pub impl Eq for EdgeType
 pub impl Show for EdgeType
+
+type FuncInfo
 
 // Type aliases
 

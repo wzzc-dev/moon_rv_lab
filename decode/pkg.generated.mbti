@@ -4,7 +4,13 @@ package "wzzc-dev/riscv_analyzer/decode"
 // Values
 pub fn decode(UInt) -> DecodeResult
 
+pub fn decode_compressed(UInt) -> DecodeResult
+
+pub fn decode_compressed_from_bytes(FixedArray[Byte]) -> DecodeResult?
+
 pub fn decode_from_bytes(FixedArray[Byte]) -> DecodeResult?
+
+pub fn decode_from_bytes_auto(FixedArray[Byte]) -> DecodeResult?
 
 pub fn instruction_length(UInt) -> Int
 
@@ -57,10 +63,45 @@ pub enum Instruction {
   SRA(UInt, UInt, UInt)
   OR(UInt, UInt, UInt)
   AND(UInt, UInt, UInt)
+  MUL(UInt, UInt, UInt)
+  MULH(UInt, UInt, UInt)
+  MULHSU(UInt, UInt, UInt)
+  MULHU(UInt, UInt, UInt)
+  DIV(UInt, UInt, UInt)
+  DIVU(UInt, UInt, UInt)
+  REM(UInt, UInt, UInt)
+  REMU(UInt, UInt, UInt)
   FENCE(UInt, UInt)
   FENCE_I
   ECALL
   EBREAK
+  C_ADDI4SPN(UInt, UInt)
+  C_LW(UInt, UInt, UInt)
+  C_SW(UInt, UInt, UInt)
+  C_NOP
+  C_ADDI(UInt, Int)
+  C_JAL(Int)
+  C_LI(UInt, Int)
+  C_ADDI16SP(Int)
+  C_LUI(UInt, Int)
+  C_SRLI(UInt, UInt)
+  C_SRAI(UInt, UInt)
+  C_ANDI(UInt, Int)
+  C_SUB(UInt, UInt)
+  C_XOR(UInt, UInt)
+  C_OR(UInt, UInt)
+  C_AND(UInt, UInt)
+  C_J(Int)
+  C_BEQZ(UInt, Int)
+  C_BNEZ(UInt, Int)
+  C_SLLI(UInt, UInt)
+  C_LWSP(UInt, UInt)
+  C_JR(UInt)
+  C_MV(UInt, UInt)
+  C_EBREAK
+  C_JALR(UInt)
+  C_ADD(UInt, UInt)
+  C_SWSP(UInt, UInt)
   Invalid(UInt)
 }
 pub fn Instruction::branch_offset(Self) -> Int

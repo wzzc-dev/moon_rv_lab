@@ -5,19 +5,22 @@
 ///|
 /// Print usage information
 fn print_usage() -> Unit {
-  println("RISC-V Binary Analyzer")
-  println("Usage: rv-disasm [hex_code]")
+  println("RISC-V Binary Analyzer v0.2.0")
+  println("")
+  println("Usage: rv-analyzer <command> [options]")
+  println("")
+  println("Commands:")
+  println("  disasm <hex>        Disassemble a single instruction (hex format)")
+  println("  help                Show this help message")
   println("")
   println("Examples:")
-  println("  rv-disasm 0x123452B7    # Decode a single instruction")
-  println("  rv-disasm 305418599     # Decode using decimal")
+  println("  rv-analyzer disasm 0x123452B7")
 }
 
 ///|
 /// Parse a hex string to UInt
 fn parse_hex(s : String) -> UInt? {
   if s.length() >= 2 && s[0] == '0' && s[1] == 'x' {
-    // Skip "0x" prefix
     let mut result : UInt = 0U
     for i = 2; i < s.length(); i = i + 1 {
       let c = s[i]
@@ -88,12 +91,19 @@ fn parse_number(s : String) -> UInt? {
 
 ///|
 /// Disassemble a single instruction from hex string
-pub fn disasm_hex(hex : String) -> String {
+fn disasm_hex(hex : String) -> String {
   match parse_number(hex) {
-    Some(code) => {
-      let @decode.DecodeResult(inst) = @decode.decode(code)
-      @disasm.disassemble(inst)
-    }
+    Some(code) =>
+      // Check if it's a compressed instruction
+      if @decode.is_compressed(code) {
+        let @decode.DecodeResult(inst) = @decode.decode_compressed(
+          code & 0xFFFFU,
+        )
+        @disasm.disassemble(inst)
+      } else {
+        let @decode.DecodeResult(inst) = @decode.decode(code)
+        @disasm.disassemble(inst)
+      }
     None => "Error: Invalid instruction code: \{hex}"
   }
 }
@@ -105,19 +115,37 @@ fn main {
   println("==============================")
   println("")
 
-  // LUI x5, 0x12345
+  // LUI x5, 0x12345 (RV32I)
   let lui_code = "0x123452B7"
   println("\{lui_code}: \{disasm_hex(lui_code)}")
 
-  // ADD x5, x6, x7
+  // ADD x5, x6, x7 (RV32I)
   let add_code = "0x007302B3"
   println("\{add_code}: \{disasm_hex(add_code)}")
 
-  // BEQ x5, x6, 0x10
+  // MUL x5, x6, x7 (RV32M)
+  let mul_code = "0x027302B3"
+  println("\{mul_code}: \{disasm_hex(mul_code)}")
+
+  // BEQ x5, x6, 0x10 (RV32I)
   let beq_code = "0x00628863"
   println("\{beq_code}: \{disasm_hex(beq_code)}")
 
-  // JAL ra, 0x100
+  // JAL ra, 0x100 (RV32I)
   let jal_code = "0x100000EF"
   println("\{jal_code}: \{disasm_hex(jal_code)}")
+
+  // C.LI x5, 1 (RV32C compressed)
+  let cli_code = "0x0505"
+  println("\{cli_code}: \{disasm_hex(cli_code)}")
+
+  // C.ADD x5, x6 (RV32C compressed)
+  let cadd_code = "0x9832"
+  println("\{cadd_code}: \{disasm_hex(cadd_code)}")
+
+  println("")
+  println("=== Supported Instruction Sets ===")
+  println("- RV32I: Base integer instructions (40 instructions)")
+  println("- RV32M: Multiply/divide extension (8 instructions)")
+  println("- RV32C: Compressed instructions (32 instructions)")
 }

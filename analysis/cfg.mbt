@@ -121,6 +121,8 @@ pub fn is_call(inst : @decode.Instruction) -> Bool {
   match inst {
     @decode.JAL(rd, _) => rd == 1U || rd == 5U // JAL ra or JAL t0
     @decode.JALR(rd, _, _) => rd == 1U || rd == 5U
+    @decode.C_JAL(_) => true // C.JAL always writes to ra
+    @decode.C_JALR(rs1) => rs1 != 0U // C.JALR (not C.JR)
     _ => false
   }
 }
@@ -130,6 +132,7 @@ pub fn is_call(inst : @decode.Instruction) -> Bool {
 pub fn is_return(inst : @decode.Instruction) -> Bool {
   match inst {
     @decode.JALR(rd, rs1, _) => rd == 0U && rs1 == 1U // JALR x0, ra, 0 (ret)
+    @decode.C_JR(rs1) => rs1 == 1U // C.JR ra (ret)
     _ => false
   }
 }
@@ -409,4 +412,235 @@ pub fn print_cfg(cfg : CFG) -> Unit {
       "  \{format_hex_uint(edge.from_block)} -> \{format_hex_uint(edge.to_block)} (\{type_str})",
     )
   }
+}
+
+///|
+/// Function call graph node
+pub struct CallGraphNode {
+  /// Function address (entry point)
+  address : UInt
+  /// Function name (if known)
+  name : String
+  /// Size of function in bytes
+  size : UInt
+  /// Addresses of functions called by this function
+  calls : FixedArray[UInt]
+  /// Addresses of functions that call this function
+  called_by : FixedArray[UInt]
+} derive(Show)
+
+///|
+/// Function call graph
+pub struct CallGraph {
+  /// All function nodes
+  nodes : FixedArray[CallGraphNode]
+  /// Entry point address
+  entry_point : UInt
+} derive(Show)
+
+///|
+/// Create an empty call graph
+pub fn CallGraph::new() -> CallGraph {
+  { nodes: [], entry_point: 0U }
+}
+
+///|
+/// Function info from analysis
+struct FuncInfo {
+  addr : UInt
+  name : String
+  size : UInt
+  calls : Array[UInt]
+}
+
+///|
+/// Build call graph from CFG and decoded instructions
+pub fn build_call_graph(
+  instructions : FixedArray[DecodedInst],
+  cfg : CFG,
+) -> CallGraph {
+  // Find all call edges
+  let call_edges : Array[(UInt, UInt)] = [] // (caller_addr, callee_addr)
+  let func_starts : Array[UInt] = []
+
+  // Use CFG entry points as function starts
+  for addr in cfg.entry_points {
+    func_starts.push(addr)
+  }
+
+  // Collect call targets from CFG edges
+  for edge in cfg.edges {
+    if edge.edge_type == EdgeType::Call {
+      call_edges.push((edge.from_block, edge.to_block))
+      func_starts.push(edge.to_block)
+    }
+  }
+
+  // Also consider JAL/JALR instructions that look like calls
+  for inst_info in instructions {
+    if is_call(inst_info.inst) {
+      let target_offset = get_branch_target(inst_info.inst)
+      let target_addr = compute_target_addr(inst_info.addr, target_offset)
+      call_edges.push((inst_info.addr, target_addr))
+      func_starts.push(target_addr)
+    }
+  }
+
+  // Deduplicate function starts
+  func_starts.sort()
+  let unique_starts : Array[UInt] = []
+  let mut prev : UInt? = None
+  for addr in func_starts {
+    match prev {
+      Some(p) =>
+        if addr != p {
+          unique_starts.push(addr)
+          prev = Some(addr)
+        }
+      None => {
+        unique_starts.push(addr)
+        prev = Some(addr)
+      }
+    }
+  }
+
+  // Build function info
+  let func_infos : Array[FuncInfo] = []
+  for i = 0; i < unique_starts.length(); i = i + 1 {
+    let addr = unique_starts[i]
+    let next_addr = if i + 1 < unique_starts.length() {
+      unique_starts[i + 1]
+    } else {
+      let last_inst = instructions[instructions.length() - 1]
+      last_inst.addr + 4U
+    }
+
+    // Find symbol name
+    let name = format_hex_uint(addr)
+
+    // Find calls from this function
+    let calls : Array[UInt] = []
+    for edge in call_edges {
+      let caller = edge.0
+      let callee = edge.1
+      if caller >= addr && caller < next_addr && callee != 0U {
+        calls.push(callee)
+      }
+    }
+
+    func_infos.push(FuncInfo::{ addr, name, size: next_addr - addr, calls })
+  }
+
+  // Build call graph nodes
+  let nodes : Array[CallGraphNode] = []
+  for info in func_infos {
+    // Deduplicate calls
+    let sorted_calls = info.calls
+    let unique_calls : Array[UInt] = []
+    let mut prev_call : UInt? = None
+    for c in sorted_calls {
+      match prev_call {
+        Some(p) =>
+          if c != p {
+            unique_calls.push(c)
+            prev_call = Some(c)
+          }
+        None => {
+          unique_calls.push(c)
+          prev_call = Some(c)
+        }
+      }
+    }
+
+    nodes.push(CallGraphNode::{
+      address: info.addr,
+      name: info.name,
+      size: info.size,
+      calls: FixedArray::from_array(unique_calls),
+      called_by: [],
+    })
+  }
+
+  // Find entry point
+  let entry = if cfg.entry_points.length() > 0 {
+    cfg.entry_points[0]
+  } else if nodes.length() > 0 {
+    nodes[0].address
+  } else {
+    0U
+  }
+
+  CallGraph::{ nodes: FixedArray::from_array(nodes), entry_point: entry }
+}
+
+///|
+/// Print call graph for debugging
+pub fn print_call_graph(cg : CallGraph) -> Unit {
+  println("=== Call Graph ===")
+  println("Entry Point: \{format_hex_uint(cg.entry_point)}")
+  println("Functions: \{cg.nodes.length()}")
+  for node in cg.nodes {
+    println(
+      "  \{node.name} (\{format_hex_uint(node.address)}, size=\{node.size.reinterpret_as_int()})",
+    )
+    if node.calls.length() > 0 {
+      let mut calls_str = "    calls: "
+      for i = 0; i < node.calls.length(); i = i + 1 {
+        if i > 0 {
+          calls_str = calls_str + ", "
+        }
+        calls_str = calls_str + format_hex_uint(node.calls[i])
+      }
+      println(calls_str)
+    }
+    if node.called_by.length() > 0 {
+      let mut called_by_str = "    called_by: "
+      for i = 0; i < node.called_by.length(); i = i + 1 {
+        if i > 0 {
+          called_by_str = called_by_str + ", "
+        }
+        called_by_str = called_by_str + format_hex_uint(node.called_by[i])
+      }
+      println(called_by_str)
+    }
+  }
+}
+
+///|
+/// Find all functions reachable from entry point
+pub fn reachable_functions(cg : CallGraph) -> FixedArray[UInt] {
+  let visited : Array[UInt] = []
+  let stack : Array[UInt] = [cg.entry_point]
+
+  while stack.length() > 0 {
+    match stack.pop() {
+      Some(addr) => {
+        let mut already_visited = false
+        for v in visited {
+          if v == addr {
+            already_visited = true
+            break
+          }
+        }
+        if already_visited {
+          continue
+        }
+        visited.push(addr)
+
+        // Find node and add its calls to stack
+        for node in cg.nodes {
+          if node.address == addr {
+            for callee in node.calls {
+              stack.push(callee)
+            }
+            break
+          }
+        }
+      }
+      None => ignore(())
+    }
+  }
+
+  visited.sort()
+  FixedArray::from_array(visited)
 }

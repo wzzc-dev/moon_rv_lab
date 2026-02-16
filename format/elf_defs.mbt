@@ -72,6 +72,9 @@ pub const SHT_STRTAB : UInt = 3U
 pub const SHT_NOBITS : UInt = 8U
 
 ///|
+pub const SHT_DYNSYM : UInt = 11U
+
+///|
 /// Section flags
 pub const SHF_EXECINSTR : UInt = 0x4U
 
@@ -85,3 +88,36 @@ pub const PF_X : UInt = 0x1U
 
 ///|
 pub const PF_R : UInt = 0x4U
+
+///|
+/// Symbol binding (upper 4 bits of st_info)
+pub const STB_LOCAL : UInt = 0U
+
+///|
+pub const STB_GLOBAL : UInt = 1U
+
+///|
+pub const STB_WEAK : UInt = 2U
+
+///|
+/// Symbol type (lower 4 bits of st_info)
+pub const STT_NOTYPE : UInt = 0U
+
+///|
+pub const STT_OBJECT : UInt = 1U
+
+///|
+pub const STT_FUNC : UInt = 2U
+
+///|
+pub const STT_SECTION : UInt = 3U
+
+///|
+pub const STT_FILE : UInt = 4U
+
+///|
+/// Special section indices
+pub const SHN_UNDEF : UInt = 0U
+
+///|
+pub const SHN_ABS : UInt = 0xFFF1U

@@ -172,6 +172,24 @@ pub fn disassemble(inst : @decode.Instruction) -> String {
     @decode.AND(rd, rs1, rs2) =>
       "and \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}, \{@decode.reg_name(rs2)}"
 
+    // RV32M extension (multiply/divide)
+    @decode.MUL(rd, rs1, rs2) =>
+      "mul \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.MULH(rd, rs1, rs2) =>
+      "mulh \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.MULHSU(rd, rs1, rs2) =>
+      "mulhsu \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.MULHU(rd, rs1, rs2) =>
+      "mulhu \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.DIV(rd, rs1, rs2) =>
+      "div \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.DIVU(rd, rs1, rs2) =>
+      "divu \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.REM(rd, rs1, rs2) =>
+      "rem \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.REMU(rd, rs1, rs2) =>
+      "remu \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}, \{@decode.reg_name(rs2)}"
+
     // Fence instructions
     @decode.FENCE(pred, succ) =>
       "fence \{pred.reinterpret_as_int()}, \{succ.reinterpret_as_int()}"
@@ -180,6 +198,52 @@ pub fn disassemble(inst : @decode.Instruction) -> String {
     // System instructions
     @decode.ECALL => "ecall"
     @decode.EBREAK => "ebreak"
+
+    // RV32C compressed instructions
+    @decode.C_NOP => "c.nop"
+    @decode.C_ADDI4SPN(rd, imm) =>
+      "c.addi4spn \{@decode.reg_name(rd)}, sp, \{imm}"
+    @decode.C_LW(rd, rs1, imm) =>
+      "c.lw \{@decode.reg_name(rd)}, \{imm}(\{@decode.reg_name(rs1)})"
+    @decode.C_SW(rs2, rs1, imm) =>
+      "c.sw \{@decode.reg_name(rs2)}, \{imm}(\{@decode.reg_name(rs1)})"
+    @decode.C_ADDI(rd, imm) =>
+      "c.addi \{@decode.reg_name(rd)}, \{format_imm(imm)}"
+    @decode.C_JAL(imm) => "c.jal \{format_hex_imm(imm)}"
+    @decode.C_LI(rd, imm) => "c.li \{@decode.reg_name(rd)}, \{format_imm(imm)}"
+    @decode.C_ADDI16SP(imm) => "c.addi16sp \{format_imm(imm)}"
+    @decode.C_LUI(rd, imm) =>
+      "c.lui \{@decode.reg_name(rd)}, \{format_hex_imm(imm)}"
+    @decode.C_SRLI(rd, shamt) =>
+      "c.srli \{@decode.reg_name(rd)}, \{shamt.reinterpret_as_int()}"
+    @decode.C_SRAI(rd, shamt) =>
+      "c.srai \{@decode.reg_name(rd)}, \{shamt.reinterpret_as_int()}"
+    @decode.C_ANDI(rd, imm) =>
+      "c.andi \{@decode.reg_name(rd)}, \{format_imm(imm)}"
+    @decode.C_SUB(rd, rs2) =>
+      "c.sub \{@decode.reg_name(rd)}, \{@decode.reg_name(rs2)}"
+    @decode.C_XOR(rd, rs2) =>
+      "c.xor \{@decode.reg_name(rd)}, \{@decode.reg_name(rs2)}"
+    @decode.C_OR(rd, rs2) =>
+      "c.or \{@decode.reg_name(rd)}, \{@decode.reg_name(rs2)}"
+    @decode.C_AND(rd, rs2) =>
+      "c.and \{@decode.reg_name(rd)}, \{@decode.reg_name(rs2)}"
+    @decode.C_J(imm) => "c.j \{format_hex_imm(imm)}"
+    @decode.C_BEQZ(rs1, imm) =>
+      "c.beqz \{@decode.reg_name(rs1)}, \{format_hex_imm(imm)}"
+    @decode.C_BNEZ(rs1, imm) =>
+      "c.bnez \{@decode.reg_name(rs1)}, \{format_hex_imm(imm)}"
+    @decode.C_SLLI(rd, shamt) =>
+      "c.slli \{@decode.reg_name(rd)}, \{shamt.reinterpret_as_int()}"
+    @decode.C_LWSP(rd, imm) => "c.lwsp \{@decode.reg_name(rd)}, \{imm}(sp)"
+    @decode.C_JR(rs1) => "c.jr \{@decode.reg_name(rs1)}"
+    @decode.C_MV(rd, rs2) =>
+      "c.mv \{@decode.reg_name(rd)}, \{@decode.reg_name(rs2)}"
+    @decode.C_EBREAK => "c.ebreak"
+    @decode.C_JALR(rs1) => "c.jalr \{@decode.reg_name(rs1)}"
+    @decode.C_ADD(rd, rs2) =>
+      "c.add \{@decode.reg_name(rd)}, \{@decode.reg_name(rs2)}"
+    @decode.C_SWSP(rs2, imm) => "c.swsp \{@decode.reg_name(rs2)}, \{imm}(sp)"
 
     // Invalid instruction
     @decode.Invalid(code) => ".invalid \{format_hex_uint(code)}"
