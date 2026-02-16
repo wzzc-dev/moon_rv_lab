@@ -74,15 +74,32 @@ pub const STT_OBJECT : UInt = 1
 
 pub const STT_SECTION : UInt = 3
 
+pub fn detect_format(FixedArray[Byte]) -> BinaryFormat
+
 pub fn get_elf_class(FixedArray[Byte]) -> ElfClass
 
 pub fn is_elf(FixedArray[Byte]) -> Bool
 
+pub fn is_ihex_format(String) -> Bool
+
 pub fn parse_elf(FixedArray[Byte]) -> ElfFile?
+
+pub fn parse_ihex_line(String) -> IHexRecord?
+
+pub fn parse_raw_binary(FixedArray[Byte], UInt) -> RawBinary
 
 // Errors
 
 // Types and methods
+pub enum BinaryFormat {
+  ELF
+  IHex
+  RawBinary
+  Unknown
+}
+pub impl Eq for BinaryFormat
+pub impl Show for BinaryFormat
+
 pub struct Elf32Header {
   e_ident : FixedArray[Byte]
   e_type : UInt
@@ -222,6 +239,31 @@ pub fn ElfFile::is_riscv(Self) -> Bool
 pub fn ElfFile::program_count(Self) -> Int
 pub fn ElfFile::section_count(Self) -> Int
 pub impl Show for ElfFile
+
+pub struct IHexRecord {
+  record_type : IHexRecordType
+  address : UInt
+  data : FixedArray[Byte]
+}
+pub impl Show for IHexRecord
+
+pub enum IHexRecordType {
+  Data
+  EndOfFile
+  ExtendedSegAddr
+  StartSegAddr
+  ExtendedLinAddr
+  StartLinAddr
+  Invalid
+}
+pub impl Eq for IHexRecordType
+pub impl Show for IHexRecordType
+
+pub struct RawBinary {
+  code : FixedArray[Byte]
+  base_addr : UInt
+}
+pub impl Show for RawBinary
 
 pub struct Symbol {
   name : String

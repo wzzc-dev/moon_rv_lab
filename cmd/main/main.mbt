@@ -1,23 +1,81 @@
 ///| RISC-V Binary Analyzer CLI
 
-///| A command-line tool for analyzing RISC-V binaries
+///|
+
+///| A comprehensive command-line tool for analyzing RISC-V binaries
 
 ///|
-/// Print usage information
-fn print_usage() -> Unit {
-  println("RISC-V Binary Analyzer v0.2.0")
-  println("")
-  println("Usage: rv-analyzer <command> [options]")
-  println("")
-  println("Commands:")
-  println("  disasm <hex>        Disassemble a single instruction (hex format)")
-  println("  analyze <file>      Analyze an ELF file and show CFG")
-  println("  disasm-file <file>  Disassemble all instructions in an ELF file")
-  println("  help                Show this help message")
-  println("")
-  println("Examples:")
-  println("  rv-analyzer disasm 0x123452B7")
-  println("  rv-analyzer analyze program.elf")
+/// CLI version
+const VERSION : String = "0.3.0"
+
+///|
+/// Command types
+pub enum Command {
+  Disasm(DisasmOptions)
+  Info(InfoOptions)
+  Symbols(SymbolsOptions)
+  Cfg(CfgOptions)
+  CallGraph(CallGraphOptions)
+  Help
+  Version
+  Demo
+} derive(Show)
+
+///|
+/// Options for disasm command
+pub struct DisasmOptions {
+  pub file_path : String
+  pub base_addr : UInt
+  pub format : OutputFormat
+  pub raw_mode : Bool // Treat as raw binary instead of ELF
+} derive(Show)
+
+///|
+/// Options for info command
+pub struct InfoOptions {
+  pub file_path : String
+  pub format : OutputFormat
+} derive(Show)
+
+///|
+/// Options for symbols command
+pub struct SymbolsOptions {
+  pub file_path : String
+  pub format : OutputFormat
+  pub show_all : Bool // Show all symbols including local
+} derive(Show)
+
+///|
+/// Options for cfg command
+pub struct CfgOptions {
+  pub file_path : String
+  pub function : String // Function name or address
+  pub format : OutputFormat
+} derive(Show)
+
+///|
+/// Options for callgraph command  
+pub struct CallGraphOptions {
+  pub file_path : String
+  pub format : OutputFormat
+} derive(Show)
+
+///|
+/// Output format
+pub enum OutputFormat {
+  Text
+  Json
+  Dot
+} derive(Show, Eq)
+
+///|
+/// Parse output format from string
+fn parse_format(s : String) -> OutputFormat {
+  match s {
+    "json" => OutputFormat::Json
+    "dot" => OutputFormat::Dot
+    _ => OutputFormat::Text
+  }
 }
 
 ///|
@@ -93,25 +151,6 @@ fn parse_number(s : String) -> UInt? {
 }
 
 ///|
-/// Disassemble a single instruction from hex string
-fn disasm_hex(hex : String) -> String {
-  match parse_number(hex) {
-    Some(code) =>
-      // Check if it's a compressed instruction
-      if @decode.is_compressed(code) {
-        let @decode.DecodeResult(inst) = @decode.decode_compressed(
-          code & 0xFFFFU,
-        )
-        @disasm.disassemble(inst)
-      } else {
-        let @decode.DecodeResult(inst) = @decode.decode(code)
-        @disasm.disassemble(inst)
-      }
-    None => "Error: Invalid instruction code: \{hex}"
-  }
-}
-
-///|
 /// Convert UInt to hex string
 fn uint_to_hex(value : UInt) -> String {
   if value == 0U {
@@ -134,94 +173,417 @@ fn uint_to_hex(value : UInt) -> String {
 }
 
 ///|
-/// Format UInt as hex
-fn format_hex_uint(value : UInt) -> String {
+/// Format UInt as hex with 0x prefix
+fn format_hex(value : UInt) -> String {
   "0x" + uint_to_hex(value)
 }
 
 ///|
-/// Analyze an ELF file and print CFG information
-/// Note: This is a placeholder - actual file I/O requires platform-specific code
-fn analyze_elf_demo() -> Unit {
-  println("")
-  println("=== ELF Analysis Demo ===")
-  println("")
-  println("To analyze an ELF file, use the high-level API:")
-  println("  let bytes = ... // read file bytes")
-  println("  match riscv_analyzer.analyze_elf(bytes) {")
-  println("    Some(cfg) => { ... }")
-  println("    None => println(\"Not a RISC-V ELF\")")
-  println("  }")
-  println("")
-  println("Or use the low-level API:")
-  println("  let elf = riscv_analyzer.parse_elf(bytes).unwrap()")
-  println("  let sections = elf.get_code_sections()")
-  println("  for (vaddr, code) in sections {")
-  println("    let cfg = riscv_analyzer.analyze_code(code, vaddr)")
-  println("    // analyze cfg...")
-  println("  }")
+/// Format UInt as padded hex (8 digits)
+fn format_hex_padded(value : UInt) -> String {
+  let hex = uint_to_hex(value)
+  let padding = 8 - hex.length()
+  let mut pad = ""
+  for i = 0; i < padding; i = i + 1 {
+    pad = pad + "0"
+  }
+  "0x" + pad + hex
 }
 
 ///|
-/// Disassemble an ELF file and print all instructions
-/// Note: This is a placeholder - actual file I/O requires platform-specific code
-fn disasm_elf_demo() -> Unit {
-  println("")
-  println("=== ELF Disassembly Demo ===")
-  println("")
-  println("To disassemble an ELF file, use:")
-  println("  let bytes = ... // read file bytes")
-  println("  let elf = riscv_analyzer.parse_elf(bytes).unwrap()")
-  println("  let sections = elf.get_code_sections()")
-  println("  for (vaddr, code) in sections {")
-  println("    let disasm = riscv_analyzer.disassemble_bytes(code, vaddr)")
-  println("    println(disasm)")
-  println("  }")
+/// Parse command line arguments
+pub fn parse_args(args : Array[String]) -> Command? {
+  if args.length() == 0 {
+    return Some(Command::Help)
+  }
+
+  let cmd = args[0]
+
+  match cmd {
+    "help" | "--help" | "-h" => Some(Command::Help)
+    "version" | "--version" | "-v" => Some(Command::Version)
+    "demo" => Some(Command::Demo)
+    "disasm" => parse_disasm_args(args)
+    "info" => parse_info_args(args)
+    "symbols" | "syms" => parse_symbols_args(args)
+    "cfg" => parse_cfg_args(args)
+    "callgraph" | "cg" => parse_callgraph_args(args)
+    _ => None
+  }
 }
 
 ///|
-/// Main entry point - demonstrates disassembly of sample instructions
-fn main {
-  // Demo: disassemble sample instructions
+/// Parse disasm command arguments
+fn parse_disasm_args(args : Array[String]) -> Command? {
+  if args.length() < 2 {
+    return None
+  }
+
+  let mut file_path = ""
+  let mut base_addr = 0U
+  let mut format = OutputFormat::Text
+  let mut raw_mode = false
+  let mut i = 1
+
+  while i < args.length() {
+    let arg = args[i]
+    if arg == "--base" || arg == "-b" {
+      if i + 1 < args.length() {
+        match parse_number(args[i + 1]) {
+          Some(addr) => base_addr = addr
+          None => return None
+        }
+        i = i + 2
+      } else {
+        return None
+      }
+    } else if arg == "--format" || arg == "-f" {
+      if i + 1 < args.length() {
+        format = parse_format(args[i + 1])
+        i = i + 2
+      } else {
+        return None
+      }
+    } else if arg == "--raw" || arg == "-r" {
+      raw_mode = true
+      i = i + 1
+    } else if arg[0] != '-' {
+      file_path = arg
+      i = i + 1
+    } else {
+      i = i + 1
+    }
+  }
+
+  if file_path == "" {
+    return None
+  }
+
+  Some(Command::Disasm({ file_path, base_addr, format, raw_mode }))
+}
+
+///|
+/// Parse info command arguments
+fn parse_info_args(args : Array[String]) -> Command? {
+  if args.length() < 2 {
+    return None
+  }
+
+  let mut file_path = ""
+  let mut format = OutputFormat::Text
+  let mut i = 1
+
+  while i < args.length() {
+    let arg = args[i]
+    if arg == "--format" || arg == "-f" {
+      if i + 1 < args.length() {
+        format = parse_format(args[i + 1])
+        i = i + 2
+      } else {
+        return None
+      }
+    } else if arg[0] != '-' {
+      file_path = arg
+      i = i + 1
+    } else {
+      i = i + 1
+    }
+  }
+
+  if file_path == "" {
+    return None
+  }
+
+  Some(Command::Info({ file_path, format }))
+}
+
+///|
+/// Parse symbols command arguments
+fn parse_symbols_args(args : Array[String]) -> Command? {
+  if args.length() < 2 {
+    return None
+  }
+
+  let mut file_path = ""
+  let mut format = OutputFormat::Text
+  let mut show_all = false
+  let mut i = 1
+
+  while i < args.length() {
+    let arg = args[i]
+    if arg == "--format" || arg == "-f" {
+      if i + 1 < args.length() {
+        format = parse_format(args[i + 1])
+        i = i + 2
+      } else {
+        return None
+      }
+    } else if arg == "--all" || arg == "-a" {
+      show_all = true
+      i = i + 1
+    } else if arg[0] != '-' {
+      file_path = arg
+      i = i + 1
+    } else {
+      i = i + 1
+    }
+  }
+
+  if file_path == "" {
+    return None
+  }
+
+  Some(Command::Symbols({ file_path, format, show_all }))
+}
+
+///|
+/// Parse cfg command arguments
+fn parse_cfg_args(args : Array[String]) -> Command? {
+  if args.length() < 2 {
+    return None
+  }
+
+  let mut file_path = ""
+  let mut function = ""
+  let mut format = OutputFormat::Dot
+  let mut i = 1
+
+  while i < args.length() {
+    let arg = args[i]
+    if arg == "--function" || arg == "-n" {
+      if i + 1 < args.length() {
+        function = args[i + 1]
+        i = i + 2
+      } else {
+        return None
+      }
+    } else if arg == "--format" || arg == "-f" {
+      if i + 1 < args.length() {
+        format = parse_format(args[i + 1])
+        i = i + 2
+      } else {
+        return None
+      }
+    } else if arg[0] != '-' {
+      file_path = arg
+      i = i + 1
+    } else {
+      i = i + 1
+    }
+  }
+
+  if file_path == "" {
+    return None
+  }
+
+  Some(Command::Cfg({ file_path, function, format }))
+}
+
+///|
+/// Parse callgraph command arguments
+fn parse_callgraph_args(args : Array[String]) -> Command? {
+  if args.length() < 2 {
+    return None
+  }
+
+  let mut file_path = ""
+  let mut format = OutputFormat::Dot
+  let mut i = 1
+
+  while i < args.length() {
+    let arg = args[i]
+    if arg == "--format" || arg == "-f" {
+      if i + 1 < args.length() {
+        format = parse_format(args[i + 1])
+        i = i + 2
+      } else {
+        return None
+      }
+    } else if arg[0] != '-' {
+      file_path = arg
+      i = i + 1
+    } else {
+      i = i + 1
+    }
+  }
+
+  if file_path == "" {
+    return None
+  }
+
+  Some(Command::CallGraph({ file_path, format }))
+}
+
+///|
+/// Print usage information
+fn print_usage() -> Unit {
+  println("RISC-V Binary Analyzer v\{VERSION}")
+  println("")
+  println("Usage: rv-analyzer <command> [options] <file>")
+  println("")
+  println("Commands:")
+  println("  disasm <file>           Disassemble a binary file")
+  println("  info <file>             Show ELF file information")
+  println("  symbols <file>          List symbols in the file")
+  println("  cfg <file>              Generate control flow graph (DOT format)")
+  println("  callgraph <file>        Generate call graph (DOT format)")
+  println("  demo                    Run demonstration")
+  println("  help                    Show this help message")
+  println("  version                 Show version information")
+  println("")
+  println("Disasm Options:")
+  println(
+    "  --base, -b <addr>       Base address for raw binaries (default: 0)",
+  )
+  println("  --raw, -r               Treat as raw binary (not ELF)")
+  println("  --format, -f <fmt>      Output format: text, json (default: text)")
+  println("")
+  println("Symbols Options:")
+  println("  --all, -a               Show all symbols including local")
+  println("  --format, -f <fmt>      Output format: text, json (default: text)")
+  println("")
+  println("CFG Options:")
+  println("  --function, -n <name>   Function name or address to analyze")
+  println(
+    "  --format, -f <fmt>      Output format: dot, text, json (default: dot)",
+  )
+  println("")
+  println("Examples:")
+  println("  rv-analyzer disasm program.elf")
+  println("  rv-analyzer disasm --raw --base 0x8000 firmware.bin")
+  println("  rv-analyzer info program.elf")
+  println("  rv-analyzer symbols program.elf")
+  println("  rv-analyzer cfg program.elf --function main")
+  println("  rv-analyzer callgraph program.elf > callgraph.dot")
+}
+
+///|
+/// Print version information
+fn print_version() -> Unit {
+  println("rv-analyzer \{VERSION}")
+  println("RISC-V Binary Analyzer")
+  println(
+    "Supported architectures: RV32I, RV32M, RV32C, RV64I, RV64M, RV32A, RV64A",
+  )
+}
+
+///|
+/// Disassemble a single instruction from hex string
+fn disasm_hex(hex : String) -> String {
+  match parse_number(hex) {
+    Some(code) =>
+      if @decode.is_compressed(code) {
+        let @decode.DecodeResult(inst) = @decode.decode_compressed(
+          code & 0xFFFFU,
+        )
+        @disasm.disassemble(inst)
+      } else {
+        let @decode.DecodeResult(inst) = @decode.decode(code)
+        @disasm.disassemble(inst)
+      }
+    None => "Error: Invalid instruction code: \{hex}"
+  }
+}
+
+///|
+/// Run demonstration
+fn run_demo() -> Unit {
   println("RISC-V Binary Analyzer - Demo")
   println("==============================")
   println("")
 
-  // LUI x5, 0x12345 (RV32I)
-  let lui_code = "0x123452B7"
-  println("\{lui_code}: \{disasm_hex(lui_code)}")
-
-  // ADD x5, x6, x7 (RV32I)
-  let add_code = "0x007302B3"
-  println("\{add_code}: \{disasm_hex(add_code)}")
-
-  // MUL x5, x6, x7 (RV32M)
-  let mul_code = "0x027302B3"
-  println("\{mul_code}: \{disasm_hex(mul_code)}")
-
-  // BEQ x5, x6, 0x10 (RV32I)
-  let beq_code = "0x00628863"
-  println("\{beq_code}: \{disasm_hex(beq_code)}")
-
-  // JAL ra, 0x100 (RV32I)
-  let jal_code = "0x100000EF"
-  println("\{jal_code}: \{disasm_hex(jal_code)}")
-
-  // C.LI x5, 1 (RV32C compressed)
-  let cli_code = "0x0505"
-  println("\{cli_code}: \{disasm_hex(cli_code)}")
-
-  // C.ADD x5, x6 (RV32C compressed)
-  let cadd_code = "0x9832"
-  println("\{cadd_code}: \{disasm_hex(cadd_code)}")
-
+  // RV32I instructions
+  println("=== RV32I Base Instructions ===")
+  let lui_addr = format_hex_padded(0x123452B7U)
+  let lui_inst = disasm_hex("0x123452B7")
+  println("\{lui_addr}: \{lui_inst}")
+  let add_addr = format_hex_padded(0x007302B3U)
+  let add_inst = disasm_hex("0x007302B3")
+  println("\{add_addr}: \{add_inst}")
+  let sub_addr = format_hex_padded(0x407302B3U)
+  let sub_inst = disasm_hex("0x407302B3")
+  println("\{sub_addr}: \{sub_inst}")
+  let beq_addr = format_hex_padded(0x00208463U)
+  let beq_inst = disasm_hex("0x00208463")
+  println("\{beq_addr}: \{beq_inst}")
+  let jal_addr = format_hex_padded(0x100000EFU)
+  let jal_inst = disasm_hex("0x100000EF")
+  println("\{jal_addr}: \{jal_inst}")
   println("")
+
+  // RV32M instructions
+  println("=== RV32M Extension ===")
+  let mul_addr = format_hex_padded(0x027302B3U)
+  let mul_inst = disasm_hex("0x027302B3")
+  println("\{mul_addr}: \{mul_inst}")
+  let div_addr = format_hex_padded(0x047302B3U)
+  let div_inst = disasm_hex("0x047302B3")
+  println("\{div_addr}: \{div_inst}")
+  println("")
+
+  // RV32C instructions
+  println("=== RV32C Compressed Instructions ===")
+  let cli_inst = disasm_hex("0x0505")
+  println("    0x0505: \{cli_inst}")
+  let cadd_inst = disasm_hex("0x9832")
+  println("    0x9832: \{cadd_inst}")
+  println("")
+
+  // RV64I instructions
+  println("=== RV64I Instructions ===")
+  let ld_addr = format_hex_padded(0x06433283U)
+  let ld_inst = disasm_hex("0x06433283")
+  println("\{ld_addr}: \{ld_inst}")
+  let addiw_addr = format_hex_padded(0x0643029BU)
+  let addiw_inst = disasm_hex("0x0643029B")
+  println("\{addiw_addr}: \{addiw_inst}")
+  println("")
+
+  // RV32A instructions
+  println("=== RV32A Atomic Instructions ===")
+  let lrw_addr = format_hex_padded(0x100322AFU)
+  let lrw_inst = disasm_hex("0x100322AF")
+  println("\{lrw_addr}: \{lrw_inst}")
+  let amoswap_addr = format_hex_padded(0x087322AFU)
+  let amoswap_inst = disasm_hex("0x087322AF")
+  println("\{amoswap_addr}: \{amoswap_inst}")
+  println("")
+
   println("=== Supported Instruction Sets ===")
-  println("- RV32I: Base integer instructions (40 instructions)")
+  println("- RV32I: Base integer instructions (40+ instructions)")
   println("- RV32M: Multiply/divide extension (8 instructions)")
   println("- RV32C: Compressed instructions (32 instructions)")
+  println("- RV64I: 64-bit base instructions (12+ instructions)")
+  println("- RV64M: 64-bit multiply/divide (5 instructions)")
+  println("- RV32A/RV64A: Atomic operations (22 instructions)")
+  println("")
+  println("=== Supported File Formats ===")
+  println("- ELF32/ELF64 (RISC-V)")
+  println("- Raw binary files")
+  println("- Intel HEX format")
+}
 
-  // Show ELF analysis and disassembly examples
-  analyze_elf_demo()
-  disasm_elf_demo()
+///|
+/// Generate JSON string for an object (simple implementation)
+fn json_string(s : String) -> String {
+  let mut result = "\""
+  for c in s {
+    match c {
+      '"' => result = result + "\\\""
+      '\\' => result = result + "\\\\"
+      '\n' => result = result + "\\n"
+      '\r' => result = result + "\\r"
+      '\t' => result = result + "\\t"
+      _ => result = result + c.to_string()
+    }
+  }
+  result + "\""
+}
+
+///|
+/// Main entry point
+fn main {
+  // For now, run demo since we can't access actual command line args
+  // In a real deployment, use: let args = ... (platform-specific)
+  run_demo()
 }

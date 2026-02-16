@@ -698,3 +698,193 @@ pub fn reachable_functions(cg : CallGraph) -> FixedArray[UInt] {
   visited.sort()
   FixedArray::from_array(visited)
 }
+
+///|
+/// Generate DOT format for CFG visualization
+pub fn cfg_to_dot(cfg : CFG, name : String) -> String {
+  let mut result = "digraph \"\{name}\" {\n"
+  result = result + "  rankdir=TB;\n"
+  result = result + "  node [shape=box];\n"
+  result = result + "  edge [fontsize=10];\n\n"
+
+  // Generate nodes (basic blocks)
+  result = result + "  // Basic blocks\n"
+  for block in cfg.blocks {
+    let addr = format_hex_uint(block.start_addr)
+    let end_addr = format_hex_uint(block.end_addr)
+    let label = "\{addr}\\n\{block.instruction_count} insts"
+    result = result + "  bb_\{addr} [label=\"\{label}\""
+    // Mark entry blocks
+    let mut is_entry = false
+    for entry in cfg.entry_points {
+      if entry == block.start_addr {
+        is_entry = true
+        break
+      }
+    }
+    if is_entry {
+      result = result + ", style=filled, fillcolor=lightgreen"
+    }
+    result = result + "];\n"
+  }
+
+  result = result + "\n  // Edges\n"
+  for edge in cfg.edges {
+    let from_addr = format_hex_uint(edge.from_block)
+    let to_addr = format_hex_uint(edge.to_block)
+    let (style, color, label) = match edge.edge_type {
+      EdgeType::FallThrough => ("solid", "black", "fall")
+      EdgeType::Jump => ("solid", "blue", "jmp")
+      EdgeType::BranchTaken => ("solid", "green", "taken")
+      EdgeType::BranchNotTaken => ("solid", "red", "not taken")
+      EdgeType::Call => ("dashed", "purple", "call")
+      EdgeType::Return => ("dotted", "gray", "ret")
+    }
+    result = result +
+      "  bb_\{from_addr} -> bb_\{to_addr} [style=\{style}, color=\{color}, label=\"\{label}\"];\n"
+  }
+
+  result = result + "}\n"
+  result
+}
+
+///|
+/// Generate DOT format for call graph visualization
+pub fn callgraph_to_dot(cg : CallGraph, name : String) -> String {
+  let mut result = "digraph \"\{name}_callgraph\" {\n"
+  result = result + "  rankdir=LR;\n"
+  result = result + "  node [shape=ellipse];\n"
+  result = result + "  edge [fontsize=10];\n\n"
+
+  // Generate nodes (functions)
+  result = result + "  // Functions\n"
+  for node in cg.nodes {
+    let addr = format_hex_uint(node.address)
+    let label = if node.name == addr { "func_\{addr}" } else { node.name }
+    result = result + "  func_\{addr} [label=\"\{label}\""
+    // Mark entry point
+    if node.address == cg.entry_point {
+      result = result + ", style=filled, fillcolor=lightgreen"
+    }
+    result = result + "];\n"
+  }
+
+  result = result + "\n  // Call edges\n"
+  for node in cg.nodes {
+    let caller_addr = format_hex_uint(node.address)
+    for callee in node.calls {
+      let callee_addr = format_hex_uint(callee)
+      result = result + "  func_\{caller_addr} -> func_\{callee_addr};\n"
+    }
+  }
+
+  result = result + "}\n"
+  result
+}
+
+///|
+/// Generate JSON format for CFG
+pub fn cfg_to_json(cfg : CFG) -> String {
+  let mut result = "{\n"
+  result = result + "  \"blocks\": [\n"
+
+  for i = 0; i < cfg.blocks.length(); i = i + 1 {
+    let block = cfg.blocks[i]
+    if i > 0 {
+      result = result + ",\n"
+    }
+    result = result + "    {\n"
+    result = result +
+      "      \"start_addr\": \"\{format_hex_uint(block.start_addr)}\",\n"
+    result = result +
+      "      \"end_addr\": \"\{format_hex_uint(block.end_addr)}\",\n"
+    result = result +
+      "      \"instruction_count\": \{block.instruction_count},\n"
+    result = result + "      \"is_terminated\": \{block.is_terminated}\n"
+    result = result + "    }"
+  }
+
+  result = result + "\n  ],\n"
+  result = result + "  \"edges\": [\n"
+
+  for i = 0; i < cfg.edges.length(); i = i + 1 {
+    let edge = cfg.edges[i]
+    if i > 0 {
+      result = result + ",\n"
+    }
+    let type_str = match edge.edge_type {
+      EdgeType::FallThrough => "FallThrough"
+      EdgeType::Jump => "Jump"
+      EdgeType::BranchTaken => "BranchTaken"
+      EdgeType::BranchNotTaken => "BranchNotTaken"
+      EdgeType::Call => "Call"
+      EdgeType::Return => "Return"
+    }
+    result = result + "    {\n"
+    result = result +
+      "      \"from\": \"\{format_hex_uint(edge.from_block)}\",\n"
+    result = result + "      \"to\": \"\{format_hex_uint(edge.to_block)}\",\n"
+    result = result + "      \"type\": \"\{type_str}\"\n"
+    result = result + "    }"
+  }
+
+  result = result + "\n  ],\n"
+  result = result + "  \"entry_points\": [\n"
+
+  for i = 0; i < cfg.entry_points.length(); i = i + 1 {
+    if i > 0 {
+      result = result + ", "
+    }
+    result = result + "\"\{format_hex_uint(cfg.entry_points[i])}\""
+  }
+
+  result = result + "\n  ]\n"
+  result = result + "}\n"
+  result
+}
+
+///|
+/// Generate JSON format for call graph
+pub fn callgraph_to_json(cg : CallGraph) -> String {
+  let mut result = "{\n"
+  result = result +
+    "  \"entry_point\": \"\{format_hex_uint(cg.entry_point)}\",\n"
+  result = result + "  \"functions\": [\n"
+
+  for i = 0; i < cg.nodes.length(); i = i + 1 {
+    let node = cg.nodes[i]
+    if i > 0 {
+      result = result + ",\n"
+    }
+    result = result + "    {\n"
+    result = result +
+      "      \"address\": \"\{format_hex_uint(node.address)}\",\n"
+    result = result + "      \"name\": \"\{node.name}\",\n"
+    result = result + "      \"size\": \{node.size.reinterpret_as_int()},\n"
+    result = result + "      \"calls\": ["
+
+    for j = 0; j < node.calls.length(); j = j + 1 {
+      if j > 0 {
+        result = result + ", "
+      }
+      result = result + "\"\{format_hex_uint(node.calls[j])}\""
+    }
+
+    result = result + "],\n"
+    result = result + "      \"called_by\": ["
+
+    for j = 0; j < node.called_by.length(); j = j + 1 {
+      if j > 0 {
+        result = result + ", "
+      }
+      result = result + "\"\{format_hex_uint(node.called_by[j])}\""
+    }
+
+    result = result + "]\n"
+    result = result + "    }"
+  }
+
+  result = result + "\n  ]\n"
+  result = result + "}\n"
+  result
+}

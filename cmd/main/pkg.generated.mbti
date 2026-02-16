@@ -2,10 +2,64 @@
 package "wzzc-dev/riscv_analyzer/cmd/main"
 
 // Values
+pub fn parse_args(Array[String]) -> Command?
 
 // Errors
 
 // Types and methods
+pub struct CallGraphOptions {
+  file_path : String
+  format : OutputFormat
+}
+pub impl Show for CallGraphOptions
+
+pub struct CfgOptions {
+  file_path : String
+  function : String
+  format : OutputFormat
+}
+pub impl Show for CfgOptions
+
+pub enum Command {
+  Disasm(DisasmOptions)
+  Info(InfoOptions)
+  Symbols(SymbolsOptions)
+  Cfg(CfgOptions)
+  CallGraph(CallGraphOptions)
+  Help
+  Version
+  Demo
+}
+pub impl Show for Command
+
+pub struct DisasmOptions {
+  file_path : String
+  base_addr : UInt
+  format : OutputFormat
+  raw_mode : Bool
+}
+pub impl Show for DisasmOptions
+
+pub struct InfoOptions {
+  file_path : String
+  format : OutputFormat
+}
+pub impl Show for InfoOptions
+
+pub enum OutputFormat {
+  Text
+  Json
+  Dot
+}
+pub impl Eq for OutputFormat
+pub impl Show for OutputFormat
+
+pub struct SymbolsOptions {
+  file_path : String
+  format : OutputFormat
+  show_all : Bool
+}
+pub impl Show for SymbolsOptions
 
 // Type aliases
 

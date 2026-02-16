@@ -12,6 +12,14 @@ pub fn build_call_graph(FixedArray[DecodedInst], CFG) -> CallGraph
 
 pub fn build_cfg(FixedArray[DecodedInst], UInt) -> CFG
 
+pub fn callgraph_to_dot(CallGraph, String) -> String
+
+pub fn callgraph_to_json(CallGraph) -> String
+
+pub fn cfg_to_dot(CFG, String) -> String
+
+pub fn cfg_to_json(CFG) -> String
+
 pub fn decode_instructions(FixedArray[Byte], UInt) -> FixedArray[DecodedInst]
 
 pub fn find_entry_points(CFG) -> FixedArray[UInt]
