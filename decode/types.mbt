@@ -211,14 +211,23 @@ pub fn Instruction::is_control_flow(self : Instruction) -> Bool {
 /// Get branch target offset (returns 0 if not a branch)
 pub fn Instruction::branch_offset(self : Instruction) -> Int {
   match self {
+    // Standard branch instructions
     BEQ(_, _, imm) => imm
     BNE(_, _, imm) => imm
     BLT(_, _, imm) => imm
     BGE(_, _, imm) => imm
     BLTU(_, _, imm) => imm
     BGEU(_, _, imm) => imm
+    // Standard jump instructions
     JAL(_, imm) => imm
     JALR(_, _, imm) => imm
+    // Compressed jump instructions
+    C_J(imm) => imm
+    C_JAL(imm) => imm
+    // Compressed branch instructions
+    C_BEQZ(_, imm) => imm
+    C_BNEZ(_, imm) => imm
+    // Others
     _ => 0
   }
 }

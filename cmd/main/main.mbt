@@ -11,10 +11,13 @@ fn print_usage() -> Unit {
   println("")
   println("Commands:")
   println("  disasm <hex>        Disassemble a single instruction (hex format)")
+  println("  analyze <file>      Analyze an ELF file and show CFG")
+  println("  disasm-file <file>  Disassemble all instructions in an ELF file")
   println("  help                Show this help message")
   println("")
   println("Examples:")
   println("  rv-analyzer disasm 0x123452B7")
+  println("  rv-analyzer analyze program.elf")
 }
 
 ///|
@@ -109,8 +112,77 @@ fn disasm_hex(hex : String) -> String {
 }
 
 ///|
+/// Convert UInt to hex string
+fn uint_to_hex(value : UInt) -> String {
+  if value == 0U {
+    "0"
+  } else {
+    let mut result = ""
+    let mut v = value
+    while v > 0U {
+      let digit = (v % 16U).reinterpret_as_int()
+      let c = if digit < 10 {
+        (digit + 48).unsafe_to_char()
+      } else {
+        (digit + 87).unsafe_to_char()
+      }
+      result = c.to_string() + result
+      v = v / 16U
+    }
+    result
+  }
+}
+
+///|
+/// Format UInt as hex
+fn format_hex_uint(value : UInt) -> String {
+  "0x" + uint_to_hex(value)
+}
+
+///|
+/// Analyze an ELF file and print CFG information
+/// Note: This is a placeholder - actual file I/O requires platform-specific code
+fn analyze_elf_demo() -> Unit {
+  println("")
+  println("=== ELF Analysis Demo ===")
+  println("")
+  println("To analyze an ELF file, use the high-level API:")
+  println("  let bytes = ... // read file bytes")
+  println("  match riscv_analyzer.analyze_elf(bytes) {")
+  println("    Some(cfg) => { ... }")
+  println("    None => println(\"Not a RISC-V ELF\")")
+  println("  }")
+  println("")
+  println("Or use the low-level API:")
+  println("  let elf = riscv_analyzer.parse_elf(bytes).unwrap()")
+  println("  let sections = elf.get_code_sections()")
+  println("  for (vaddr, code) in sections {")
+  println("    let cfg = riscv_analyzer.analyze_code(code, vaddr)")
+  println("    // analyze cfg...")
+  println("  }")
+}
+
+///|
+/// Disassemble an ELF file and print all instructions
+/// Note: This is a placeholder - actual file I/O requires platform-specific code
+fn disasm_elf_demo() -> Unit {
+  println("")
+  println("=== ELF Disassembly Demo ===")
+  println("")
+  println("To disassemble an ELF file, use:")
+  println("  let bytes = ... // read file bytes")
+  println("  let elf = riscv_analyzer.parse_elf(bytes).unwrap()")
+  println("  let sections = elf.get_code_sections()")
+  println("  for (vaddr, code) in sections {")
+  println("    let disasm = riscv_analyzer.disassemble_bytes(code, vaddr)")
+  println("    println(disasm)")
+  println("  }")
+}
+
+///|
 /// Main entry point - demonstrates disassembly of sample instructions
 fn main {
+  // Demo: disassemble sample instructions
   println("RISC-V Binary Analyzer - Demo")
   println("==============================")
   println("")
@@ -148,4 +220,8 @@ fn main {
   println("- RV32I: Base integer instructions (40 instructions)")
   println("- RV32M: Multiply/divide extension (8 instructions)")
   println("- RV32C: Compressed instructions (32 instructions)")
+
+  // Show ELF analysis and disassembly examples
+  analyze_elf_demo()
+  disasm_elf_demo()
 }
