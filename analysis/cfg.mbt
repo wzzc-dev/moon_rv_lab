@@ -61,6 +61,7 @@ pub fn CFG::new() -> CFG {
 /// Check if an instruction is a basic block terminator
 pub fn is_terminator(inst : @decode.Instruction) -> Bool {
   match inst {
+    // Standard instructions
     @decode.JAL(_, _) => true
     @decode.JALR(_, _, _) => true
     @decode.BEQ(_, _, _) => true
@@ -71,6 +72,14 @@ pub fn is_terminator(inst : @decode.Instruction) -> Bool {
     @decode.BGEU(_, _, _) => true
     @decode.ECALL => true
     @decode.EBREAK => true
+    // Compressed instructions
+    @decode.C_J(_) => true
+    @decode.C_JAL(_) => true
+    @decode.C_JR(_) => true
+    @decode.C_JALR(_) => true
+    @decode.C_BEQZ(_, _) => true
+    @decode.C_BNEZ(_, _) => true
+    @decode.C_EBREAK => true
     _ => false
   }
 }
@@ -79,6 +88,7 @@ pub fn is_terminator(inst : @decode.Instruction) -> Bool {
 /// Get branch target offset (relative offset)
 pub fn get_branch_target(inst : @decode.Instruction) -> Int {
   match inst {
+    // Standard branch/jump instructions
     @decode.BEQ(_, _, imm) => imm
     @decode.BNE(_, _, imm) => imm
     @decode.BLT(_, _, imm) => imm
@@ -87,6 +97,11 @@ pub fn get_branch_target(inst : @decode.Instruction) -> Int {
     @decode.BGEU(_, _, imm) => imm
     @decode.JAL(_, imm) => imm
     @decode.JALR(_, _, imm) => imm
+    // Compressed branch/jump instructions
+    @decode.C_J(imm) => imm
+    @decode.C_JAL(imm) => imm
+    @decode.C_BEQZ(_, imm) => imm
+    @decode.C_BNEZ(_, imm) => imm
     _ => 0
   }
 }
@@ -95,12 +110,16 @@ pub fn get_branch_target(inst : @decode.Instruction) -> Int {
 /// Check if instruction is a conditional branch
 pub fn is_conditional_branch(inst : @decode.Instruction) -> Bool {
   match inst {
+    // Standard conditional branches
     @decode.BEQ(_, _, _) => true
     @decode.BNE(_, _, _) => true
     @decode.BLT(_, _, _) => true
     @decode.BGE(_, _, _) => true
     @decode.BLTU(_, _, _) => true
     @decode.BGEU(_, _, _) => true
+    // Compressed conditional branches
+    @decode.C_BEQZ(_, _) => true
+    @decode.C_BNEZ(_, _) => true
     _ => false
   }
 }
@@ -109,8 +128,14 @@ pub fn is_conditional_branch(inst : @decode.Instruction) -> Bool {
 /// Check if instruction is an unconditional jump
 pub fn is_unconditional_jump(inst : @decode.Instruction) -> Bool {
   match inst {
+    // Standard unconditional jumps
     @decode.JAL(_, _) => true
     @decode.JALR(_, _, _) => true
+    // Compressed unconditional jumps
+    @decode.C_J(_) => true
+    @decode.C_JAL(_) => true
+    @decode.C_JR(_) => true
+    @decode.C_JALR(_) => true
     _ => false
   }
 }
@@ -143,10 +168,13 @@ pub struct DecodedInst {
   addr : UInt
   inst : @decode.Instruction
   code : UInt
+  /// Instruction length in bytes (2 for compressed, 4 for standard)
+  length : Int
 } derive(Show)
 
 ///|
 /// Decode instructions from bytes starting at a given address
+/// Supports both 16-bit compressed (RV32C) and 32-bit standard instructions
 pub fn decode_instructions(
   bytes : FixedArray[Byte],
   start_addr : UInt,
@@ -155,16 +183,37 @@ pub fn decode_instructions(
   let len = bytes.length()
   let mut addr = start_addr
   let mut i = 0
-  while i + 3 < len {
-    // Read 4 bytes as little-endian 32-bit instruction
-    let code = bytes[i].to_uint() |
-      (bytes[i + 1].to_uint() << 8) |
-      (bytes[i + 2].to_uint() << 16) |
-      (bytes[i + 3].to_uint() << 24)
-    let @decode.DecodeResult(inst) = @decode.decode(code)
-    result.push(DecodedInst::{ addr, inst, code })
-    i = i + 4
-    addr = addr + 4U
+  while i < len {
+    // Check if this is a compressed instruction (16-bit)
+    // Compressed instructions have lowest 2 bits != 0b11
+    if i + 1 < len {
+      let low_byte = bytes[i].to_uint()
+      let quadrant = low_byte & 0x3U
+
+      if quadrant != 0x3U {
+        // Compressed instruction (16-bit)
+        let code16 = bytes[i].to_uint() | (bytes[i + 1].to_uint() << 8)
+        let @decode.DecodeResult(inst) = @decode.decode_compressed(code16)
+        result.push(DecodedInst::{ addr, inst, code: code16, length: 2 })
+        i = i + 2
+        addr = addr + 2U
+      } else if i + 3 < len {
+        // Standard instruction (32-bit)
+        let code = bytes[i].to_uint() |
+          (bytes[i + 1].to_uint() << 8) |
+          (bytes[i + 2].to_uint() << 16) |
+          (bytes[i + 3].to_uint() << 24)
+        let @decode.DecodeResult(inst) = @decode.decode(code)
+        result.push(DecodedInst::{ addr, inst, code, length: 4 })
+        i = i + 4
+        addr = addr + 4U
+      } else {
+        // Not enough bytes for 32-bit instruction
+        break
+      }
+    } else {
+      break
+    }
   }
   FixedArray::from_array(result)
 }
@@ -222,7 +271,8 @@ pub fn build_cfg(
     let addr = inst_info.addr
     if is_terminator(inst_info.inst) {
       // The instruction after a terminator starts a new block
-      let next_addr = addr + 4U
+      let inst_len = inst_info.length.reinterpret_as_uint()
+      let next_addr = addr + inst_len
       leaders.push(next_addr)
       // Branch target is also a leader
       if is_conditional_branch(inst_info.inst) ||
@@ -243,11 +293,14 @@ pub fn build_cfg(
 
   for i = 0; i < sorted_leaders.length(); i = i + 1 {
     let start_addr = sorted_leaders[i]
-    // Find the end of this block (next leader - 4 or terminator)
-    let end_addr = if i + 1 < sorted_leaders.length() {
-      sorted_leaders[i + 1] - 4U
+    // Find the end of this block (next leader - instruction_size or terminator)
+    // We'll find the actual end while scanning instructions
+    let max_end_addr = if i + 1 < sorted_leaders.length() {
+      sorted_leaders[i + 1] - 2U // Minimum instruction size is 2 bytes
     } else {
-      instructions[instructions.length() - 1].addr
+      instructions[instructions.length() - 1].addr +
+      instructions[instructions.length() - 1].length.reinterpret_as_uint() -
+      1U
     }
 
     // Find instructions in this block
@@ -256,11 +309,12 @@ pub fn build_cfg(
     let mut actual_end = start_addr
 
     for inst_info in instructions {
-      if inst_info.addr >= start_addr && inst_info.addr <= end_addr {
+      if inst_info.addr >= start_addr && inst_info.addr <= max_end_addr {
         inst_count = inst_count + 1
         actual_end = inst_info.addr
         if is_terminator(inst_info.inst) {
           is_terminated = true
+          let inst_len = inst_info.length.reinterpret_as_uint()
           // Add edges based on terminator type
           if is_conditional_branch(inst_info.inst) {
             let target_offset = get_branch_target(inst_info.inst)
@@ -271,7 +325,7 @@ pub fn build_cfg(
               edge_type: EdgeType::BranchTaken,
             })
             // Fall-through edge
-            let fallthrough_addr = inst_info.addr + 4U
+            let fallthrough_addr = inst_info.addr + inst_len
             edges.push(Edge::{
               from_block: start_addr,
               to_block: fallthrough_addr,
@@ -446,7 +500,7 @@ pub fn CallGraph::new() -> CallGraph {
 
 ///|
 /// Function info from analysis
-struct FuncInfo {
+priv struct FuncInfo {
   addr : UInt
   name : String
   size : UInt
@@ -512,7 +566,7 @@ pub fn build_call_graph(
       unique_starts[i + 1]
     } else {
       let last_inst = instructions[instructions.length() - 1]
-      last_inst.addr + 4U
+      last_inst.addr + last_inst.length.reinterpret_as_uint()
     }
 
     // Find symbol name

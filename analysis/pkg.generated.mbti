@@ -73,6 +73,7 @@ pub struct DecodedInst {
   addr : UInt
   inst : @decode.Instruction
   code : UInt
+  length : Int
 }
 pub impl Show for DecodedInst
 
@@ -93,8 +94,6 @@ pub enum EdgeType {
 }
 pub impl Eq for EdgeType
 pub impl Show for EdgeType
-
-type FuncInfo
 
 // Type aliases
 

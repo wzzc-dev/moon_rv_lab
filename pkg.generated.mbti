@@ -1,13 +1,93 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "wzzc-dev/riscv_analyzer"
 
+import {
+  "wzzc-dev/riscv_analyzer/analysis",
+  "wzzc-dev/riscv_analyzer/decode",
+  "wzzc-dev/riscv_analyzer/format",
+}
+
 // Values
+pub fn analyze_code(FixedArray[Byte], UInt) -> @analysis.CFG
+
+pub fn analyze_elf(FixedArray[Byte]) -> @analysis.CFG?
+
+pub fn build_call_graph(FixedArray[@analysis.DecodedInst], @analysis.CFG) -> @analysis.CallGraph
+
+pub fn build_cfg(FixedArray[@analysis.DecodedInst], UInt) -> @analysis.CFG
+
+pub fn decode(UInt) -> @decode.DecodeResult
+
+pub fn decode_compressed(UInt) -> @decode.DecodeResult
+
+pub fn decode_instructions(FixedArray[Byte], UInt) -> FixedArray[@analysis.DecodedInst]
+
+pub fn disassemble(@decode.Instruction) -> String
+
+pub fn disassemble_bytes(FixedArray[Byte], UInt) -> String
+
+pub fn disassemble_with_addr(@decode.Instruction, UInt) -> String
+
+pub fn get_branch_target(@decode.Instruction) -> Int
+
+pub fn get_elf_class(FixedArray[Byte]) -> @format.ElfClass
+
+pub fn instruction_length(UInt) -> Int
+
+pub fn is_call(@decode.Instruction) -> Bool
+
+pub fn is_compressed(UInt) -> Bool
+
+pub fn is_conditional_branch(@decode.Instruction) -> Bool
+
+pub fn is_elf(FixedArray[Byte]) -> Bool
+
+pub fn is_return(@decode.Instruction) -> Bool
+
+pub fn is_terminator(@decode.Instruction) -> Bool
+
+pub fn is_unconditional_jump(@decode.Instruction) -> Bool
+
+pub fn parse_elf(FixedArray[Byte]) -> @format.ElfFile?
+
+pub fn reachable_functions(@analysis.CallGraph) -> FixedArray[UInt]
+
+pub fn reg_name(UInt) -> String
 
 // Errors
 
 // Types and methods
 
 // Type aliases
+pub using @analysis {type BasicBlock}
+
+pub using @analysis {type CFG}
+
+pub using @analysis {type CallGraph}
+
+pub using @analysis {type CallGraphNode}
+
+pub using @decode {type DecodeResult}
+
+pub using @analysis {type DecodedInst}
+
+pub using @analysis {type Edge}
+
+pub using @analysis {type EdgeType}
+
+pub using @format {type ElfClass}
+
+pub using @format {type ElfFile}
+
+pub using @decode {type Instruction}
+
+pub using @decode {type InstructionCategory}
+
+pub using @format {type Symbol}
+
+pub using @format {type SymbolBinding}
+
+pub using @format {type SymbolType}
 
 // Traits
 

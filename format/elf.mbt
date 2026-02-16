@@ -582,7 +582,7 @@ pub struct Symbol {
 ///|
 /// Get symbol type from st_info
 pub fn Symbol::type_from_info(info : Byte) -> SymbolType {
-  let typ = (info.to_uint() & 0xFU).to_int()
+  let typ = (info.to_uint() & 0xFU).reinterpret_as_int()
   match typ {
     0 => SymbolType::NoType
     1 => SymbolType::Object
@@ -596,7 +596,7 @@ pub fn Symbol::type_from_info(info : Byte) -> SymbolType {
 ///|
 /// Get symbol binding from st_info
 pub fn Symbol::binding_from_info(info : Byte) -> SymbolBinding {
-  let bind = ((info.to_uint() >> 4) & 0xFU).to_int()
+  let bind = ((info.to_uint() >> 4) & 0xFU).reinterpret_as_int()
   match bind {
     0 => SymbolBinding::Local
     1 => SymbolBinding::Global
