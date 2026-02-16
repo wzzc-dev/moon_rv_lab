@@ -636,3 +636,466 @@ test "instruction_length" {
   // 32-bit instruction
   inspect(instruction_length(0x00400013U), content="4")
 }
+
+// ========== RV64I Instruction Tests ==========
+
+///|
+test "decode_ld" {
+  // LD x5, 100(x6) - load doubleword
+  // I-type: imm[11:0] | rs1 | funct3 | rd | opcode
+  // imm=100=0x064, rs1=6, funct3=3 (LD), rd=5, opcode=0x03
+  // Hex: 0x06433283
+  let code = 0x06433283U
+  let DecodeResult(result) = decode(code)
+  match result {
+    LD(rd, rs1, imm) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(imm, content="100")
+    }
+    _ => inspect(result, content="LD(_, _, _)")
+  }
+}
+
+///|
+test "decode_sd" {
+  // SD x5, 100(x6) - store doubleword
+  // S-type: imm[11:5] | rs2 | rs1 | funct3 | imm[4:0] | opcode
+  // Hex: 0x06533223
+  let code = 0x06533223U
+  let DecodeResult(result) = decode(code)
+  match result {
+    SD(rs1, rs2, imm) => {
+      inspect(rs1, content="6")
+      inspect(rs2, content="5")
+      inspect(imm, content="100")
+    }
+    _ => inspect(result, content="SD(_, _, _)")
+  }
+}
+
+///|
+test "decode_lwu" {
+  // LWU x13, 100(x12) - load word unsigned
+  // I-type: imm=100, rs1=12, funct3=6 (LWU), rd=13, opcode=0x03
+  // Hex: 0x06466683
+  let code = 0x06466683U
+  let DecodeResult(result) = decode(code)
+  match result {
+    LWU(rd, rs1, imm) => {
+      inspect(rd, content="13")
+      inspect(rs1, content="12")
+      inspect(imm, content="100")
+    }
+    _ => inspect(result, content="LWU(_, _, _)")
+  }
+}
+
+///|
+test "decode_addiw" {
+  // ADDIW x5, x6, 100 - add immediate word (RV64I)
+  // I-type: imm=100, rs1=6, funct3=0, rd=5, opcode=0x1B (OP_IMM_32)
+  // Hex: 0x0643029B
+  let code = 0x0643029BU
+  let DecodeResult(result) = decode(code)
+  match result {
+    ADDIW(rd, rs1, imm) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(imm, content="100")
+    }
+    _ => inspect(result, content="ADDIW(_, _, _)")
+  }
+}
+
+///|
+test "decode_slliw" {
+  // SLLIW x5, x6, 5 - shift left logical immediate word
+  // I-type: shamt=5, rs1=6, funct3=1, rd=5, opcode=0x1B
+  // funct7=0x00 for SLLIW
+  // Binary: 0000000 | 00101 | 00110 | 001 | 00101 | 0011011
+  //         funct7   shamt   rs1     f3    rd      opcode
+  // Hex: 0x0053129B
+  let code = 0x0053129BU
+  let DecodeResult(result) = decode(code)
+  match result {
+    SLLIW(rd, rs1, shamt) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(shamt, content="5")
+    }
+    _ => inspect(result, content="SLLIW(_, _, _)")
+  }
+}
+
+///|
+test "decode_srliw" {
+  // SRLIW x5, x6, 5 - shift right logical immediate word
+  // I-type: shamt=5, rs1=6, funct3=5, rd=5, opcode=0x1B
+  // funct7=0x00 for SRLIW
+  // Binary: 0000000 | 00101 | 00110 | 101 | 00101 | 0011011
+  // Hex: 0x0053529B
+  let code = 0x0053529BU
+  let DecodeResult(result) = decode(code)
+  match result {
+    SRLIW(rd, rs1, shamt) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(shamt, content="5")
+    }
+    _ => inspect(result, content="SRLIW(_, _, _)")
+  }
+}
+
+///|
+test "decode_sraiw" {
+  // SRAIW x5, x6, 5 - shift right arithmetic immediate word
+  // funct7=0x20 for SRAIW
+  // Binary: 0100000 | 00101 | 00110 | 101 | 00101 | 0011011
+  // Hex: 0x4053529B
+  let code = 0x4053529BU
+  let DecodeResult(result) = decode(code)
+  match result {
+    SRAIW(rd, rs1, shamt) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(shamt, content="5")
+    }
+    _ => inspect(result, content="SRAIW(_, _, _)")
+  }
+}
+
+///|
+test "decode_addw" {
+  // ADDW x5, x6, x7 - add word (RV64I)
+  // R-type: funct7=0x00, rs2=7, rs1=6, funct3=0, rd=5, opcode=0x3B (OP_32)
+  // Binary: 0000000 | 00111 | 00110 | 000 | 00101 | 0111011
+  // Hex: 0x007302BB
+  let code = 0x007302BBU
+  let DecodeResult(result) = decode(code)
+  match result {
+    ADDW(rd, rs1, rs2) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(rs2, content="7")
+    }
+    _ => inspect(result, content="ADDW(_, _, _)")
+  }
+}
+
+///|
+test "decode_subw" {
+  // SUBW x5, x6, x7 - subtract word
+  // R-type: funct7=0x20 for SUBW
+  // Binary: 0100000 | 00111 | 00110 | 000 | 00101 | 0111011
+  // Hex: 0x407302BB
+  let code = 0x407302BBU
+  let DecodeResult(result) = decode(code)
+  match result {
+    SUBW(rd, rs1, rs2) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(rs2, content="7")
+    }
+    _ => inspect(result, content="SUBW(_, _, _)")
+  }
+}
+
+///|
+test "decode_mulw" {
+  // MULW x5, x6, x7 - multiply word (RV64M)
+  // R-type: funct7=0x01 for MUL extension
+  // Binary: 0000001 | 00111 | 00110 | 000 | 00101 | 0111011
+  // Hex: 0x027302BB
+  let code = 0x027302BBU
+  let DecodeResult(result) = decode(code)
+  match result {
+    MULW(rd, rs1, rs2) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(rs2, content="7")
+    }
+    _ => inspect(result, content="MULW(_, _, _)")
+  }
+}
+
+///|
+test "decode_divw" {
+  // DIVW x5, x6, x7 - divide word signed (RV64M)
+  // R-type: funct7=0x01, funct3=4 for DIVW
+  // Binary: 0000001 | 00111 | 00110 | 100 | 00101 | 0111011
+  // Hex: 0x027342BB
+  let code = 0x027342BBU
+  let DecodeResult(result) = decode(code)
+  match result {
+    DIVW(rd, rs1, rs2) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(rs2, content="7")
+    }
+    _ => inspect(result, content="DIVW(_, _, _)")
+  }
+}
+
+// ========== RV32A Atomic Instruction Tests ==========
+
+///|
+test "decode_lr_w" {
+  // LR.W x5, (x6) - load-reserved word
+  // R-type: funct5=0x02 (LR.W), aq=0, rl=0, rs2=0, rs1=6, funct3=2, rd=5, opcode=0x2F
+  // Binary: 00010 | 0 | 0 | 00000 | 00110 | 010 | 00101 | 0101111
+  //         f5     aq  rl  rs2     rs1     f3    rd      opcode
+  // funct7 = 0b00010000 = 0x10
+  // Hex: 0x100322AF
+  let code = 0x100322AFU
+  let DecodeResult(result) = decode(code)
+  match result {
+    LR_W(rd, rs1, aq, rl) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(aq, content="0")
+      inspect(rl, content="0")
+    }
+    _ => inspect(result, content="LR_W(_, _, _, _)")
+  }
+}
+
+///|
+test "decode_lr_w_aqrl" {
+  // LR.W.AQRL x5, (x6) - load-reserved word with aq=1, rl=1
+  // funct7 = 0b00010110 = 0x16
+  // Hex: 0x160322AF
+  let code = 0x160322AFU
+  let DecodeResult(result) = decode(code)
+  match result {
+    LR_W(rd, rs1, aq, rl) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(aq, content="1")
+      inspect(rl, content="1")
+    }
+    _ => inspect(result, content="LR_W(_, _, _, _)")
+  }
+}
+
+///|
+test "decode_sc_w" {
+  // SC.W x5, x7, (x6) - store-conditional word
+  // R-type: funct5=0x03 (SC.W), aq=0, rl=0, rs2=7, rs1=6, funct3=2, rd=5
+  // funct7 = 0b00011000 = 0x18
+  // Binary: 00011 | 0 | 0 | 00111 | 00110 | 010 | 00101 | 0101111
+  // Hex: 0x187322AF
+  let code = 0x187322AFU
+  let DecodeResult(result) = decode(code)
+  match result {
+    SC_W(rd, rs1, rs2, aq, rl) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(rs2, content="7")
+      inspect(aq, content="0")
+      inspect(rl, content="0")
+    }
+    _ => inspect(result, content="SC_W(_, _, _, _, _)")
+  }
+}
+
+///|
+test "decode_amoswap_w" {
+  // AMOSWAP.W x5, x7, (x6) - atomic swap word
+  // funct5=0x01 (AMOSWAP), funct7 = 0b00001000 = 0x08
+  // Binary: 00001 | 0 | 0 | 00111 | 00110 | 010 | 00101 | 0101111
+  // Hex: 0x087322AF
+  let code = 0x087322AFU
+  let DecodeResult(result) = decode(code)
+  match result {
+    AMOSWAP_W(rd, rs1, rs2, aq, rl) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(rs2, content="7")
+      inspect(aq, content="0")
+      inspect(rl, content="0")
+    }
+    _ => inspect(result, content="AMOSWAP_W(_, _, _, _, _)")
+  }
+}
+
+///|
+test "decode_amoadd_w" {
+  // AMOADD.W x5, x7, (x6) - atomic add word
+  // funct5=0x00 (AMOADD), funct7 = 0b00000000 = 0x00
+  // Binary: 00000 | 0 | 0 | 00111 | 00110 | 010 | 00101 | 0101111
+  // Hex: 0x007322AF
+  let code = 0x007322AFU
+  let DecodeResult(result) = decode(code)
+  match result {
+    AMOADD_W(rd, rs1, rs2, aq, rl) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(rs2, content="7")
+      inspect(aq, content="0")
+      inspect(rl, content="0")
+    }
+    _ => inspect(result, content="AMOADD_W(_, _, _, _, _)")
+  }
+}
+
+///|
+test "decode_amoxor_w" {
+  // AMOXOR.W x5, x7, (x6) - atomic xor word
+  // funct5=0x04 (AMOXOR), funct7 = 0b00100000 = 0x20
+  // Binary: 00100 | 0 | 0 | 00111 | 00110 | 010 | 00101 | 0101111
+  // Hex: 0x207322AF
+  let code = 0x207322AFU
+  let DecodeResult(result) = decode(code)
+  match result {
+    AMOXOR_W(rd, rs1, rs2, aq, rl) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(rs2, content="7")
+      inspect(aq, content="0")
+      inspect(rl, content="0")
+    }
+    _ => inspect(result, content="AMOXOR_W(_, _, _, _, _)")
+  }
+}
+
+///|
+test "decode_amoand_w" {
+  // AMOAND.W x5, x7, (x6) - atomic and word
+  // funct5=0x0C (AMOAND), funct7 = 0b01100000 = 0x60
+  // Binary: 01100 | 0 | 0 | 00111 | 00110 | 010 | 00101 | 0101111
+  // Hex: 0x607322AF
+  let code = 0x607322AFU
+  let DecodeResult(result) = decode(code)
+  match result {
+    AMOAND_W(rd, rs1, rs2, aq, rl) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(rs2, content="7")
+      inspect(aq, content="0")
+      inspect(rl, content="0")
+    }
+    _ => inspect(result, content="AMOAND_W(_, _, _, _, _)")
+  }
+}
+
+///|
+test "decode_amoor_w" {
+  // AMOOR.W x5, x7, (x6) - atomic or word
+  // funct5=0x08 (AMOOR), funct7 = 0b01000000 = 0x40
+  // Binary: 01000 | 0 | 0 | 00111 | 00110 | 010 | 00101 | 0101111
+  // Hex: 0x407322AF
+  let code = 0x407322AFU
+  let DecodeResult(result) = decode(code)
+  match result {
+    AMOOR_W(rd, rs1, rs2, aq, rl) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(rs2, content="7")
+      inspect(aq, content="0")
+      inspect(rl, content="0")
+    }
+    _ => inspect(result, content="AMOOR_W(_, _, _, _, _)")
+  }
+}
+
+///|
+test "decode_amomin_w" {
+  // AMOMIN.W x5, x7, (x6) - atomic min word (signed)
+  // funct5=0x10 (AMOMIN), funct7 = 0b10000000 = 0x80
+  // Binary: 10000 | 0 | 0 | 00111 | 00110 | 010 | 00101 | 0101111
+  // Hex: 0x807322AF
+  let code = 0x807322AFU
+  let DecodeResult(result) = decode(code)
+  match result {
+    AMOMIN_W(rd, rs1, rs2, aq, rl) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(rs2, content="7")
+      inspect(aq, content="0")
+      inspect(rl, content="0")
+    }
+    _ => inspect(result, content="AMOMIN_W(_, _, _, _, _)")
+  }
+}
+
+///|
+test "decode_amomax_w" {
+  // AMOMAX.W x5, x7, (x6) - atomic max word (signed)
+  // funct5=0x14 (AMOMAX), funct7 = 0b10100000 = 0xA0
+  // Binary: 10100 | 0 | 0 | 00111 | 00110 | 010 | 00101 | 0101111
+  // Hex: 0xA07322AF
+  let code = 0xA07322AFU
+  let DecodeResult(result) = decode(code)
+  match result {
+    AMOMAX_W(rd, rs1, rs2, aq, rl) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(rs2, content="7")
+      inspect(aq, content="0")
+      inspect(rl, content="0")
+    }
+    _ => inspect(result, content="AMOMAX_W(_, _, _, _, _)")
+  }
+}
+
+// ========== RV64A Atomic Instruction Tests ==========
+
+///|
+test "decode_lr_d" {
+  // LR.D x5, (x6) - load-reserved doubleword
+  // funct5=0x02 (LR), funct3=3 (D), funct7 = 0b00010000 = 0x10
+  // Binary: 00010 | 0 | 0 | 00000 | 00110 | 011 | 00101 | 0101111
+  // Hex: 0x100332AF
+  let code = 0x100332AFU
+  let DecodeResult(result) = decode(code)
+  match result {
+    LR_D(rd, rs1, aq, rl) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(aq, content="0")
+      inspect(rl, content="0")
+    }
+    _ => inspect(result, content="LR_D(_, _, _, _)")
+  }
+}
+
+///|
+test "decode_sc_d" {
+  // SC.D x5, x7, (x6) - store-conditional doubleword
+  // funct5=0x03 (SC), funct3=3 (D), funct7 = 0b00011000 = 0x18
+  // Binary: 00011 | 0 | 0 | 00111 | 00110 | 011 | 00101 | 0101111
+  // Hex: 0x187332AF
+  let code = 0x187332AFU
+  let DecodeResult(result) = decode(code)
+  match result {
+    SC_D(rd, rs1, rs2, aq, rl) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(rs2, content="7")
+      inspect(aq, content="0")
+      inspect(rl, content="0")
+    }
+    _ => inspect(result, content="SC_D(_, _, _, _, _)")
+  }
+}
+
+///|
+test "decode_amoadd_d" {
+  // AMOADD.D x5, x7, (x6) - atomic add doubleword
+  // funct5=0x00 (AMOADD), funct3=3 (D), funct7 = 0x00
+  // Binary: 00000 | 0 | 0 | 00111 | 00110 | 011 | 00101 | 0101111
+  // Hex: 0x007332AF
+  let code = 0x007332AFU
+  let DecodeResult(result) = decode(code)
+  match result {
+    AMOADD_D(rd, rs1, rs2, aq, rl) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(rs2, content="7")
+      inspect(aq, content="0")
+      inspect(rl, content="0")
+    }
+    _ => inspect(result, content="AMOADD_D(_, _, _, _, _)")
+  }
+}

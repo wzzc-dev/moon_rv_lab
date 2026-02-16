@@ -171,8 +171,10 @@ pub fn decode(code : UInt) -> DecodeResult {
         0b000 => DecodeResult(LB(rd, rs1, imm))
         0b001 => DecodeResult(LH(rd, rs1, imm))
         0b010 => DecodeResult(LW(rd, rs1, imm))
+        0b011 => DecodeResult(LD(rd, rs1, imm)) // RV64I: load doubleword
         0b100 => DecodeResult(LBU(rd, rs1, imm))
         0b101 => DecodeResult(LHU(rd, rs1, imm))
+        0b110 => DecodeResult(LWU(rd, rs1, imm)) // RV64I: load word unsigned
         _ => DecodeResult(Invalid(code))
       }
     }
@@ -183,6 +185,7 @@ pub fn decode(code : UInt) -> DecodeResult {
         0b000 => DecodeResult(SB(rs1, rs2, imm))
         0b001 => DecodeResult(SH(rs1, rs2, imm))
         0b010 => DecodeResult(SW(rs1, rs2, imm))
+        0b011 => DecodeResult(SD(rs1, rs2, imm)) // RV64I: store doubleword
         _ => DecodeResult(Invalid(code))
       }
     }
@@ -293,6 +296,132 @@ pub fn decode(code : UInt) -> DecodeResult {
         0b001 => DecodeResult(FENCE_I)
         _ => DecodeResult(Invalid(code))
       }
+    // OP_IMM_32 (RV64I: 32-bit immediate arithmetic)
+    0b0011011 =>
+      match f3 {
+        0b000 => {
+          let imm = decode_i_imm(code)
+          DecodeResult(ADDIW(rd, rs1, imm))
+        }
+        0b001 => {
+          let shamt = extract_bits(code, 24, 20)
+          DecodeResult(SLLIW(rd, rs1, shamt))
+        }
+        0b101 => {
+          let shamt = extract_bits(code, 24, 20)
+          match f7 {
+            0b0000000 => DecodeResult(SRLIW(rd, rs1, shamt))
+            0b0100000 => DecodeResult(SRAIW(rd, rs1, shamt))
+            _ => DecodeResult(Invalid(code))
+          }
+        }
+        _ => DecodeResult(Invalid(code))
+      }
+    // OP_32 (RV64I/RV64M: 32-bit register arithmetic)
+    0b0111011 =>
+      match f3 {
+        0b000 =>
+          match f7 {
+            0b0000000 => DecodeResult(ADDW(rd, rs1, rs2))
+            0b0100000 => DecodeResult(SUBW(rd, rs1, rs2))
+            0b0000001 => DecodeResult(MULW(rd, rs1, rs2))
+            _ => DecodeResult(Invalid(code))
+          }
+        0b001 =>
+          match f7 {
+            0b0000000 => DecodeResult(SLLW(rd, rs1, rs2))
+            _ => DecodeResult(Invalid(code))
+          }
+        0b100 =>
+          match f7 {
+            0b0000001 => DecodeResult(DIVW(rd, rs1, rs2))
+            _ => DecodeResult(Invalid(code))
+          }
+        0b101 =>
+          match f7 {
+            0b0000000 => DecodeResult(SRLW(rd, rs1, rs2))
+            0b0100000 => DecodeResult(SRAW(rd, rs1, rs2))
+            0b0000001 => DecodeResult(DIVUW(rd, rs1, rs2))
+            _ => DecodeResult(Invalid(code))
+          }
+        0b110 =>
+          match f7 {
+            0b0000001 => DecodeResult(REMW(rd, rs1, rs2))
+            _ => DecodeResult(Invalid(code))
+          }
+        0b111 =>
+          match f7 {
+            0b0000001 => DecodeResult(REMUW(rd, rs1, rs2))
+            _ => DecodeResult(Invalid(code))
+          }
+        _ => DecodeResult(Invalid(code))
+      }
+    // AMO (RV32A/RV64A: Atomic Memory Operations)
+    0b0101111 => {
+      // f7 = bits[31:25] = funct5[4:0] | aq | rl
+      // funct5 = bits[31:27], aq = bit 26, rl = bit 25
+      let f5 = f7 >> 2 // bits 31:27
+      let aq = (f7 >> 1) & 0x1U // bit 26
+      let rl = f7 & 0x1U // bit 25
+
+      match f3 {
+        // Word-size atomics (RV32A/RV64A)
+        0b010 =>
+          match f5 {
+            // LR.W
+            0b00010 => DecodeResult(LR_W(rd, rs1, aq, rl))
+            // SC.W
+            0b00011 => DecodeResult(SC_W(rd, rs1, rs2, aq, rl))
+            // AMOSWAP.W
+            0b00001 => DecodeResult(AMOSWAP_W(rd, rs1, rs2, aq, rl))
+            // AMOADD.W
+            0b00000 => DecodeResult(AMOADD_W(rd, rs1, rs2, aq, rl))
+            // AMOXOR.W
+            0b00100 => DecodeResult(AMOXOR_W(rd, rs1, rs2, aq, rl))
+            // AMOAND.W
+            0b01100 => DecodeResult(AMOAND_W(rd, rs1, rs2, aq, rl))
+            // AMOOR.W
+            0b01000 => DecodeResult(AMOOR_W(rd, rs1, rs2, aq, rl))
+            // AMOMIN.W
+            0b10000 => DecodeResult(AMOMIN_W(rd, rs1, rs2, aq, rl))
+            // AMOMAX.W
+            0b10100 => DecodeResult(AMOMAX_W(rd, rs1, rs2, aq, rl))
+            // AMOMINU.W
+            0b11000 => DecodeResult(AMOMINU_W(rd, rs1, rs2, aq, rl))
+            // AMOMAXU.W
+            0b11100 => DecodeResult(AMOMAXU_W(rd, rs1, rs2, aq, rl))
+            _ => DecodeResult(Invalid(code))
+          }
+        // Doubleword-size atomics (RV64A only)
+        0b011 =>
+          match f5 {
+            // LR.D
+            0b00010 => DecodeResult(LR_D(rd, rs1, aq, rl))
+            // SC.D
+            0b00011 => DecodeResult(SC_D(rd, rs1, rs2, aq, rl))
+            // AMOSWAP.D
+            0b00001 => DecodeResult(AMOSWAP_D(rd, rs1, rs2, aq, rl))
+            // AMOADD.D
+            0b00000 => DecodeResult(AMOADD_D(rd, rs1, rs2, aq, rl))
+            // AMOXOR.D
+            0b00100 => DecodeResult(AMOXOR_D(rd, rs1, rs2, aq, rl))
+            // AMOAND.D
+            0b01100 => DecodeResult(AMOAND_D(rd, rs1, rs2, aq, rl))
+            // AMOOR.D
+            0b01000 => DecodeResult(AMOOR_D(rd, rs1, rs2, aq, rl))
+            // AMOMIN.D
+            0b10000 => DecodeResult(AMOMIN_D(rd, rs1, rs2, aq, rl))
+            // AMOMAX.D
+            0b10100 => DecodeResult(AMOMAX_D(rd, rs1, rs2, aq, rl))
+            // AMOMINU.D
+            0b11000 => DecodeResult(AMOMINU_D(rd, rs1, rs2, aq, rl))
+            // AMOMAXU.D
+            0b11100 => DecodeResult(AMOMAXU_D(rd, rs1, rs2, aq, rl))
+            _ => DecodeResult(Invalid(code))
+          }
+        _ => DecodeResult(Invalid(code))
+      }
+    }
     // SYSTEM
     0b1110011 =>
       match f3 {

@@ -59,6 +59,54 @@ pub enum Instruction {
   DIVU(UInt, UInt, UInt) // rd, rs1, rs2 - divide unsigned
   REM(UInt, UInt, UInt) // rd, rs1, rs2 - remainder signed
   REMU(UInt, UInt, UInt) // rd, rs1, rs2 - remainder unsigned
+  // RV64I base instruction set (64-bit specific)
+  // Load/Store 64-bit
+  LD(UInt, UInt, Int) // rd, rs1, imm - load doubleword
+  SD(UInt, UInt, Int) // rs1, rs2, imm - store doubleword
+  LWU(UInt, UInt, Int) // rd, rs1, imm - load word unsigned
+  // Immediate arithmetic 64-bit (W = word, 32-bit operations)
+  ADDIW(UInt, UInt, Int) // rd, rs1, imm - add immediate word
+  SLLIW(UInt, UInt, UInt) // rd, rs1, shamt - shift left logical immediate word
+  SRLIW(UInt, UInt, UInt) // rd, rs1, shamt - shift right logical immediate word
+  SRAIW(UInt, UInt, UInt) // rd, rs1, shamt - shift right arithmetic immediate word
+  // Register arithmetic 64-bit (W = word, 32-bit operations)
+  ADDW(UInt, UInt, UInt) // rd, rs1, rs2 - add word
+  SUBW(UInt, UInt, UInt) // rd, rs1, rs2 - subtract word
+  SLLW(UInt, UInt, UInt) // rd, rs1, rs2 - shift left logical word
+  SRLW(UInt, UInt, UInt) // rd, rs1, rs2 - shift right logical word
+  SRAW(UInt, UInt, UInt) // rd, rs1, rs2 - shift right arithmetic word
+  // RV64M extension (multiply/divide word)
+  MULW(UInt, UInt, UInt) // rd, rs1, rs2 - multiply word
+  DIVW(UInt, UInt, UInt) // rd, rs1, rs2 - divide word signed
+  DIVUW(UInt, UInt, UInt) // rd, rs1, rs2 - divide word unsigned
+  REMW(UInt, UInt, UInt) // rd, rs1, rs2 - remainder word signed
+  REMUW(UInt, UInt, UInt) // rd, rs1, rs2 - remainder word unsigned
+  // RV32A extension (atomic operations)
+  // Load-Reserved/Store-Conditional
+  LR_W(UInt, UInt, UInt, UInt) // rd, rs1, aq, rl - load-reserved word
+  SC_W(UInt, UInt, UInt, UInt, UInt) // rd, rs1, rs2, aq, rl - store-conditional word
+  // Atomic Memory Operations (AMO)
+  AMOSWAP_W(UInt, UInt, UInt, UInt, UInt) // rd, rs1, rs2, aq, rl
+  AMOADD_W(UInt, UInt, UInt, UInt, UInt) // rd, rs1, rs2, aq, rl
+  AMOXOR_W(UInt, UInt, UInt, UInt, UInt) // rd, rs1, rs2, aq, rl
+  AMOAND_W(UInt, UInt, UInt, UInt, UInt) // rd, rs1, rs2, aq, rl
+  AMOOR_W(UInt, UInt, UInt, UInt, UInt) // rd, rs1, rs2, aq, rl
+  AMOMIN_W(UInt, UInt, UInt, UInt, UInt) // rd, rs1, rs2, aq, rl
+  AMOMAX_W(UInt, UInt, UInt, UInt, UInt) // rd, rs1, rs2, aq, rl
+  AMOMINU_W(UInt, UInt, UInt, UInt, UInt) // rd, rs1, rs2, aq, rl
+  AMOMAXU_W(UInt, UInt, UInt, UInt, UInt) // rd, rs1, rs2, aq, rl
+  // RV64A extension (64-bit atomic operations)
+  LR_D(UInt, UInt, UInt, UInt) // rd, rs1, aq, rl - load-reserved doubleword
+  SC_D(UInt, UInt, UInt, UInt, UInt) // rd, rs1, rs2, aq, rl - store-conditional doubleword
+  AMOSWAP_D(UInt, UInt, UInt, UInt, UInt) // rd, rs1, rs2, aq, rl
+  AMOADD_D(UInt, UInt, UInt, UInt, UInt) // rd, rs1, rs2, aq, rl
+  AMOXOR_D(UInt, UInt, UInt, UInt, UInt) // rd, rs1, rs2, aq, rl
+  AMOAND_D(UInt, UInt, UInt, UInt, UInt) // rd, rs1, rs2, aq, rl
+  AMOOR_D(UInt, UInt, UInt, UInt, UInt) // rd, rs1, rs2, aq, rl
+  AMOMIN_D(UInt, UInt, UInt, UInt, UInt) // rd, rs1, rs2, aq, rl
+  AMOMAX_D(UInt, UInt, UInt, UInt, UInt) // rd, rs1, rs2, aq, rl
+  AMOMINU_D(UInt, UInt, UInt, UInt, UInt) // rd, rs1, rs2, aq, rl
+  AMOMAXU_D(UInt, UInt, UInt, UInt, UInt) // rd, rs1, rs2, aq, rl
   // Fence instructions
   FENCE(UInt, UInt) // pred, succ
   FENCE_I
@@ -150,6 +198,45 @@ pub fn Instruction::category(self : Instruction) -> InstructionCategory {
     | REMU(_, _, _) => InstructionCategory::Arithmetic
     XOR(_, _, _) | SRL(_, _, _) | SRA(_, _, _) | OR(_, _, _) | AND(_, _, _) =>
       InstructionCategory::Logical
+    // RV64I instructions
+    LD(_, _, _) | LWU(_, _, _) => InstructionCategory::Load
+    SD(_, _, _) => InstructionCategory::Store
+    ADDIW(_, _, _)
+    | SLLIW(_, _, _)
+    | SRLIW(_, _, _)
+    | SRAIW(_, _, _)
+    | ADDW(_, _, _)
+    | SUBW(_, _, _)
+    | SLLW(_, _, _)
+    | SRLW(_, _, _)
+    | SRAW(_, _, _) => InstructionCategory::Arithmetic
+    // RV64M instructions
+    MULW(_, _, _)
+    | DIVW(_, _, _)
+    | DIVUW(_, _, _)
+    | REMW(_, _, _)
+    | REMUW(_, _, _) => InstructionCategory::Arithmetic
+    // RV32A/RV64A atomic instructions
+    LR_W(_, _, _, _) | LR_D(_, _, _, _) => InstructionCategory::Load
+    SC_W(_, _, _, _, _) | SC_D(_, _, _, _, _) => InstructionCategory::Store
+    AMOSWAP_W(_, _, _, _, _)
+    | AMOADD_W(_, _, _, _, _)
+    | AMOXOR_W(_, _, _, _, _)
+    | AMOAND_W(_, _, _, _, _)
+    | AMOOR_W(_, _, _, _, _)
+    | AMOMIN_W(_, _, _, _, _)
+    | AMOMAX_W(_, _, _, _, _)
+    | AMOMINU_W(_, _, _, _, _)
+    | AMOMAXU_W(_, _, _, _, _)
+    | AMOSWAP_D(_, _, _, _, _)
+    | AMOADD_D(_, _, _, _, _)
+    | AMOXOR_D(_, _, _, _, _)
+    | AMOAND_D(_, _, _, _, _)
+    | AMOOR_D(_, _, _, _, _)
+    | AMOMIN_D(_, _, _, _, _)
+    | AMOMAX_D(_, _, _, _, _)
+    | AMOMINU_D(_, _, _, _, _)
+    | AMOMAXU_D(_, _, _, _, _) => InstructionCategory::Arithmetic
     FENCE(_, _) | FENCE_I => InstructionCategory::System
     ECALL | EBREAK => InstructionCategory::System
     // RV32C compressed instructions
