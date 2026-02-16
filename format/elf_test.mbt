@@ -144,3 +144,308 @@ test "symbol_binding_from_info" {
   inspect(Symbol::binding_from_info(b'\x10'), content="Global")
   inspect(Symbol::binding_from_info(b'\x20'), content="Weak")
 }
+
+///|
+/// Test ELF with program headers (code sections)
+test "parse_elf_with_code_section" {
+  // Create ELF32 with a program header for executable segment
+  let bytes : FixedArray[Byte] = FixedArray::make(128, b'\x00')
+  // ELF header
+  bytes[0] = b'\x7f'
+  bytes[1] = b'E'
+  bytes[2] = b'L'
+  bytes[3] = b'F'
+  bytes[4] = b'\x01' // 32-bit
+  bytes[5] = b'\x01' // Little endian
+  bytes[6] = b'\x01' // Version
+  // e_type = ET_EXEC (2)
+  bytes[16] = 0x02U.to_byte()
+  bytes[17] = 0x00U.to_byte()
+  // e_machine = EM_RISCV (243 = 0xF3)
+  bytes[18] = 0xF3U.to_byte()
+  bytes[19] = 0x00U.to_byte()
+  // e_version = 1
+  bytes[20] = 0x01U.to_byte()
+  bytes[21] = 0x00U.to_byte()
+  bytes[22] = 0x00U.to_byte()
+  bytes[23] = 0x00U.to_byte()
+  // e_entry = 0x1000
+  bytes[24] = 0x00U.to_byte()
+  bytes[25] = 0x10U.to_byte()
+  bytes[26] = 0x00U.to_byte()
+  bytes[27] = 0x00U.to_byte()
+  // e_phoff = 52 (program header offset, right after ELF header)
+  bytes[28] = 0x34U.to_byte()
+  bytes[29] = 0x00U.to_byte()
+  bytes[30] = 0x00U.to_byte()
+  bytes[31] = 0x00U.to_byte()
+  // e_shoff = 0 (no section headers for now)
+  // e_flags = 0
+  // e_ehsize = 52
+  bytes[40] = 0x34U.to_byte()
+  bytes[41] = 0x00U.to_byte()
+  // e_phentsize = 32
+  bytes[42] = 0x20U.to_byte()
+  bytes[43] = 0x00U.to_byte()
+  // e_phnum = 1
+  bytes[44] = 0x01U.to_byte()
+  bytes[45] = 0x00U.to_byte()
+
+  // Program header at offset 52 (PT_LOAD, executable)
+  // p_type = PT_LOAD (1)
+  bytes[52] = 0x01U.to_byte()
+  bytes[53] = 0x00U.to_byte()
+  bytes[54] = 0x00U.to_byte()
+  bytes[55] = 0x00U.to_byte()
+  // p_offset = 0x1000 (where code starts in file)
+  bytes[56] = 0x00U.to_byte()
+  bytes[57] = 0x10U.to_byte()
+  bytes[58] = 0x00U.to_byte()
+  bytes[59] = 0x00U.to_byte()
+  // p_vaddr = 0x1000 (virtual address)
+  bytes[60] = 0x00U.to_byte()
+  bytes[61] = 0x10U.to_byte()
+  bytes[62] = 0x00U.to_byte()
+  bytes[63] = 0x00U.to_byte()
+  // p_paddr = 0x1000 (physical address)
+  bytes[64] = 0x00U.to_byte()
+  bytes[65] = 0x10U.to_byte()
+  bytes[66] = 0x00U.to_byte()
+  bytes[67] = 0x00U.to_byte()
+  // p_filesz = 4 (4 bytes of code)
+  bytes[68] = 0x04U.to_byte()
+  bytes[69] = 0x00U.to_byte()
+  bytes[70] = 0x00U.to_byte()
+  bytes[71] = 0x00U.to_byte()
+  // p_memsz = 4
+  bytes[72] = 0x04U.to_byte()
+  bytes[73] = 0x00U.to_byte()
+  bytes[74] = 0x00U.to_byte()
+  bytes[75] = 0x00U.to_byte()
+  // p_flags = PF_X (1) - executable
+  bytes[76] = 0x01U.to_byte()
+  bytes[77] = 0x00U.to_byte()
+  bytes[78] = 0x00U.to_byte()
+  bytes[79] = 0x00U.to_byte()
+  // p_align = 0x1000
+  bytes[80] = 0x00U.to_byte()
+  bytes[81] = 0x10U.to_byte()
+  bytes[82] = 0x00U.to_byte()
+  bytes[83] = 0x00U.to_byte()
+
+  // Code at offset 0x1000 (4096) - but our buffer is only 128 bytes
+  // Let's adjust: put code right after program headers
+  // Change p_offset to 84 (after program header)
+  bytes[56] = 0x54U.to_byte() // 84
+  bytes[57] = 0x00U.to_byte()
+  bytes[58] = 0x00U.to_byte()
+  bytes[59] = 0x00U.to_byte()
+
+  // Code: NOP (ADDI x0, x0, 0) = 0x00000013
+  bytes[84] = 0x13U.to_byte()
+  bytes[85] = 0x00U.to_byte()
+  bytes[86] = 0x00U.to_byte()
+  bytes[87] = 0x00U.to_byte()
+
+  match parse_elf(bytes) {
+    Some(elf) => {
+      assert_false(elf.is_64bit)
+      assert_true(elf.is_riscv())
+      inspect(elf.program_count(), content="1")
+
+      // Get code sections
+      let code_sections = elf.get_code_sections()
+      inspect(code_sections.length(), content="1")
+
+      // Check the code section
+      let (vaddr, code) = code_sections[0]
+      inspect(vaddr, content="4096")
+      inspect(code.length(), content="4")
+    }
+    None => inspect("failed", content="should_not_fail")
+  }
+}
+
+///|
+/// Test ELF file with no code sections
+test "parse_elf_no_code_sections" {
+  let bytes = make_minimal_elf32_header()
+
+  match parse_elf(bytes) {
+    Some(elf) => {
+      let code_sections = elf.get_code_sections()
+      inspect(code_sections.length(), content="0")
+    }
+    None => inspect("failed", content="should_not_fail")
+  }
+}
+
+///|
+/// Test non-RISC-V ELF
+test "parse_elf_non_riscv" {
+  let bytes : FixedArray[Byte] = FixedArray::make(64, b'\x00')
+  // ELF magic
+  bytes[0] = b'\x7f'
+  bytes[1] = b'E'
+  bytes[2] = b'L'
+  bytes[3] = b'F'
+  bytes[4] = b'\x01' // 32-bit
+  bytes[5] = b'\x01' // Little endian
+  // e_type = ET_EXEC
+  bytes[16] = 0x02U.to_byte()
+  bytes[17] = 0x00U.to_byte()
+  // e_machine = x86 (3) instead of RISC-V
+  bytes[18] = 0x03U.to_byte()
+  bytes[19] = 0x00U.to_byte()
+
+  match parse_elf(bytes) {
+    Some(elf) => assert_false(elf.is_riscv())
+    None => inspect("failed", content="should_not_fail")
+  }
+}
+
+///|
+/// Test ELF64 entry point parsing
+test "parse_elf64_entry_point" {
+  let bytes = make_minimal_elf64_header()
+
+  match parse_elf(bytes) {
+    Some(elf) => {
+      assert_true(elf.is_64bit)
+      let entry = elf.entry_point()
+      // Entry point should be 0x10000 (65536)
+      inspect(entry, content="65536")
+    }
+    None => inspect("failed", content="should_not_fail")
+  }
+}
+
+///|
+/// Test invalid ELF (wrong magic)
+test "parse_invalid_elf_magic" {
+  let bytes : FixedArray[Byte] = FixedArray::make(16, b'\x00')
+  bytes[0] = b'\x7f'
+  bytes[1] = b'E'
+  bytes[2] = b'L'
+  // Wrong byte - should be 'F'
+  bytes[3] = b'G'
+
+  let result = parse_elf(bytes)
+  inspect(result, content="None")
+}
+
+///|
+/// Test ELF with unknown class
+test "parse_elf_unknown_class" {
+  let bytes : FixedArray[Byte] = FixedArray::make(16, b'\x00')
+  bytes[0] = b'\x7f'
+  bytes[1] = b'E'
+  bytes[2] = b'L'
+  bytes[3] = b'F'
+  bytes[4] = b'\x03' // Unknown class (not 1 or 2)
+
+  let result = parse_elf(bytes)
+  inspect(result, content="None")
+}
+
+///|
+/// Test section count with no sections
+test "elf_section_count_empty" {
+  let bytes = make_minimal_elf32_header()
+
+  match parse_elf(bytes) {
+    Some(elf) => inspect(elf.section_count(), content="0")
+    None => inspect("failed", content="should_not_fail")
+  }
+}
+
+///|
+/// Test get_section with invalid index
+test "elf_get_section_invalid" {
+  let bytes = make_minimal_elf32_header()
+
+  match parse_elf(bytes) {
+    Some(elf) => {
+      let section = elf.get_section(0)
+      inspect(section, content="None")
+    }
+    None => inspect("failed", content="should_not_fail")
+  }
+}
+
+///|
+/// Test extract_bytes API
+test "elf_extract_bytes" {
+  let bytes = make_minimal_elf32_header()
+
+  match parse_elf(bytes) {
+    Some(elf) => {
+      // Extract first 4 bytes
+      match elf.extract_bytes(0U, 4U) {
+        Some(data) => {
+          inspect(data.length(), content="4")
+          // Should be ELF magic
+          inspect(
+            data[0],
+            content=(
+              #|b'\x7F'
+            ),
+          ) // 0x7f
+          inspect(
+            data[1],
+            content=(
+              #|b'\x45'
+            ),
+          ) // 'E'
+          inspect(
+            data[2],
+            content=(
+              #|b'\x4C'
+            ),
+          ) // 'L'
+          inspect(
+            data[3],
+            content=(
+              #|b'\x46'
+            ),
+          ) // 'F'
+        }
+        None => inspect("failed", content="should_not_fail")
+      }
+
+      // Try to extract beyond file size
+      let beyond = elf.extract_bytes(1000U, 4U)
+      inspect(beyond, content="None")
+    }
+    None => inspect("failed", content="should_not_fail")
+  }
+}
+
+///|
+/// Test empty bytes handling
+test "is_elf_empty" {
+  let empty : FixedArray[Byte] = FixedArray::make(0, b'\x00')
+  assert_false(is_elf(empty))
+}
+
+///|
+/// Test short bytes handling
+test "is_elf_too_short_for_class" {
+  // is_elf requires at least 16 bytes, so 4 bytes should return false
+  let short : FixedArray[Byte] = FixedArray::make(4, b'\x00')
+  short[0] = b'\x7f'
+  short[1] = b'E'
+  short[2] = b'L'
+  short[3] = b'F'
+  // Too short to be a valid ELF
+  assert_false(is_elf(short))
+
+  // But get_elf_class only needs 5 bytes
+  let enough_for_class : FixedArray[Byte] = FixedArray::make(5, b'\x00')
+  enough_for_class[0] = b'\x7f'
+  enough_for_class[1] = b'E'
+  enough_for_class[2] = b'L'
+  enough_for_class[3] = b'F'
+  enough_for_class[4] = b'\x00' // Invalid class
+  inspect(get_elf_class(enough_for_class), content="Unknown")
+}
