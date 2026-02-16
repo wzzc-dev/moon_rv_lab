@@ -6,6 +6,14 @@ import {
 }
 
 // Values
+pub fn analyze_code(FixedArray[Byte], UInt) -> CFG
+
+pub fn build_cfg(FixedArray[DecodedInst], UInt) -> CFG
+
+pub fn decode_instructions(FixedArray[Byte], UInt) -> FixedArray[DecodedInst]
+
+pub fn find_entry_points(CFG) -> FixedArray[UInt]
+
 pub fn get_branch_target(@decode.Instruction) -> Int
 
 pub fn is_call(@decode.Instruction) -> Bool
@@ -17,6 +25,8 @@ pub fn is_return(@decode.Instruction) -> Bool
 pub fn is_terminator(@decode.Instruction) -> Bool
 
 pub fn is_unconditional_jump(@decode.Instruction) -> Bool
+
+pub fn print_cfg(CFG) -> Unit
 
 // Errors
 
@@ -36,6 +46,13 @@ pub struct CFG {
 }
 pub fn CFG::new() -> Self
 pub impl Show for CFG
+
+pub struct DecodedInst {
+  addr : UInt
+  inst : @decode.Instruction
+  code : UInt
+}
+pub impl Show for DecodedInst
 
 pub struct Edge {
   from_block : UInt

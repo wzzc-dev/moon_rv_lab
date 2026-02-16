@@ -168,8 +168,12 @@ pub struct ElfFile {
   raw_data : FixedArray[Byte]
 }
 pub fn ElfFile::entry_point(Self) -> UInt
+pub fn ElfFile::extract_bytes(Self, UInt, UInt) -> FixedArray[Byte]?
 pub fn ElfFile::get_code_sections(Self) -> Array[(UInt, FixedArray[Byte])]
+pub fn ElfFile::get_section(Self, Int) -> (UInt, UInt, UInt)?
 pub fn ElfFile::is_riscv(Self) -> Bool
+pub fn ElfFile::program_count(Self) -> Int
+pub fn ElfFile::section_count(Self) -> Int
 pub impl Show for ElfFile
 
 // Type aliases

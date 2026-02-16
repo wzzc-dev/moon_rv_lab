@@ -6,10 +6,7 @@
 /// Print usage information
 fn print_usage() -> Unit {
   println("RISC-V Binary Analyzer")
-  println("Usage: rv-disasm [options] <hex_code>")
-  println("")
-  println("Options:")
-  println("  -h, --help    Show this help message")
+  println("Usage: rv-disasm [hex_code]")
   println("")
   println("Examples:")
   println("  rv-disasm 0x123452B7    # Decode a single instruction")
@@ -22,7 +19,6 @@ fn parse_hex(s : String) -> UInt? {
   if s.length() >= 2 && s[0] == '0' && s[1] == 'x' {
     // Skip "0x" prefix
     let mut result : UInt = 0U
-    let mut valid = true
     for i = 2; i < s.length(); i = i + 1 {
       let c = s[i]
       let digit = match c {
@@ -46,49 +42,13 @@ fn parse_hex(s : String) -> UInt? {
       }
       match digit {
         Some(d) => result = result * 16U + d
-        None => {
-          valid = false
-          ignore(valid) // use valid
-          return None
-        }
+        None => return None
       }
     }
     Some(result)
   } else {
     None
   }
-}
-
-///|
-/// Parse hex digits to UInt
-fn parse_uint_hex(s : String) -> UInt? {
-  let mut result : UInt = 0U
-  for c in s {
-    let digit = match c {
-      '0' => Some(0U)
-      '1' => Some(1U)
-      '2' => Some(2U)
-      '3' => Some(3U)
-      '4' => Some(4U)
-      '5' => Some(5U)
-      '6' => Some(6U)
-      '7' => Some(7U)
-      '8' => Some(8U)
-      '9' => Some(9U)
-      'a' | 'A' => Some(10U)
-      'b' | 'B' => Some(11U)
-      'c' | 'C' => Some(12U)
-      'd' | 'D' => Some(13U)
-      'e' | 'E' => Some(14U)
-      'f' | 'F' => Some(15U)
-      _ => None
-    }
-    match digit {
-      Some(d) => result = result * 16U + d
-      None => return None
-    }
-  }
-  Some(result)
 }
 
 ///|
@@ -131,8 +91,8 @@ fn parse_number(s : String) -> UInt? {
 pub fn disasm_hex(hex : String) -> String {
   match parse_number(hex) {
     Some(code) => {
-      let result = @decode.decode(code)
-      @disasm.disassemble(result.0)
+      let @decode.DecodeResult(inst) = @decode.decode(code)
+      @disasm.disassemble(inst)
     }
     None => "Error: Invalid instruction code: \{hex}"
   }
@@ -141,7 +101,6 @@ pub fn disasm_hex(hex : String) -> String {
 ///|
 /// Main entry point - demonstrates disassembly of sample instructions
 fn main {
-  // Demo: disassemble some sample instructions
   println("RISC-V Binary Analyzer - Demo")
   println("==============================")
   println("")
