@@ -406,13 +406,20 @@ pub fn decode(code : UInt) -> DecodeResult {
         }
         0b001 => {
           let shamt = extract_bits(code, 24, 20)
-          DecodeResult(SLLIW(rd, rs1, shamt))
+          match f7 {
+            0b0000000 => DecodeResult(SLLIW(rd, rs1, shamt))
+            // Zba RV64: SLLI.UW
+            0b0000100 => DecodeResult(SLLI_UW(rd, rs1, shamt))
+            _ => DecodeResult(Invalid(code))
+          }
         }
         0b101 => {
           let shamt = extract_bits(code, 24, 20)
           match f7 {
             0b0000000 => DecodeResult(SRLIW(rd, rs1, shamt))
             0b0100000 => DecodeResult(SRAIW(rd, rs1, shamt))
+            // Zbb RV64: RORIW
+            0b0110000 => DecodeResult(RORIW(rd, rs1, shamt))
             _ => DecodeResult(Invalid(code))
           }
         }
@@ -426,16 +433,35 @@ pub fn decode(code : UInt) -> DecodeResult {
             0b0000000 => DecodeResult(ADDW(rd, rs1, rs2))
             0b0100000 => DecodeResult(SUBW(rd, rs1, rs2))
             0b0000001 => DecodeResult(MULW(rd, rs1, rs2))
+            // Zba RV64: ADD.UW
+            0b0000100 => DecodeResult(ADD_UW(rd, rs1, rs2))
             _ => DecodeResult(Invalid(code))
           }
         0b001 =>
           match f7 {
             0b0000000 => DecodeResult(SLLW(rd, rs1, rs2))
+            // Zbb RV64: CLZW/CTZW/CPOPW/ROLW
+            0b0110000 =>
+              match rs2 {
+                0b00000 => DecodeResult(CLZW(rd, rs1))
+                0b00001 => DecodeResult(CTZW(rd, rs1))
+                0b00010 => DecodeResult(CPOPW(rd, rs1))
+                _ => DecodeResult(ROLW(rd, rs1, rs2))
+              }
             _ => DecodeResult(Invalid(code))
           }
+        0b010 =>
+          match f7 {
+            // Zba RV64: SH1ADD.UW
+            0b0010000 => DecodeResult(SH1ADD_UW(rd, rs1, rs2))
+            _ => DecodeResult(Invalid(code))
+          }
+        0b011 => DecodeResult(Invalid(code))
         0b100 =>
           match f7 {
             0b0000001 => DecodeResult(DIVW(rd, rs1, rs2))
+            // Zba RV64: SH2ADD.UW
+            0b0010000 => DecodeResult(SH2ADD_UW(rd, rs1, rs2))
             _ => DecodeResult(Invalid(code))
           }
         0b101 =>
@@ -443,11 +469,15 @@ pub fn decode(code : UInt) -> DecodeResult {
             0b0000000 => DecodeResult(SRLW(rd, rs1, rs2))
             0b0100000 => DecodeResult(SRAW(rd, rs1, rs2))
             0b0000001 => DecodeResult(DIVUW(rd, rs1, rs2))
+            // Zbb RV64: RORW
+            0b0110000 => DecodeResult(RORW(rd, rs1, rs2))
             _ => DecodeResult(Invalid(code))
           }
         0b110 =>
           match f7 {
             0b0000001 => DecodeResult(REMW(rd, rs1, rs2))
+            // Zba RV64: SH3ADD.UW
+            0b0010000 => DecodeResult(SH3ADD_UW(rd, rs1, rs2))
             _ => DecodeResult(Invalid(code))
           }
         0b111 =>

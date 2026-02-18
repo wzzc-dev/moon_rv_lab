@@ -407,6 +407,49 @@ pub fn get_operands(inst : @decode.Instruction) -> InstOperands {
         })
       }
     }
+    // Zba RV64 extension
+    @decode.SH1ADD_UW(rd, rs1, rs2)
+    | @decode.SH2ADD_UW(rd, rs1, rs2)
+    | @decode.SH3ADD_UW(rd, rs1, rs2)
+    | @decode.ADD_UW(rd, rs1, rs2) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    @decode.SLLI_UW(rd, rs1, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
     // Zbb extension
     @decode.CLZ(rd, rs1)
     | @decode.CTZ(rd, rs1)
@@ -463,6 +506,62 @@ pub fn get_operands(inst : @decode.Instruction) -> InstOperands {
       }
     }
     @decode.RORI(rd, rs1, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Zbb RV64 extension
+    @decode.CLZW(rd, rs1) | @decode.CTZW(rd, rs1) | @decode.CPOPW(rd, rs1) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    @decode.ROLW(rd, rs1, rs2) | @decode.RORW(rd, rs1, rs2) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    @decode.RORIW(rd, rs1, _) => {
       if rd != 0U {
         ops.push(RegOperand::{
           reg: rd,

@@ -1224,6 +1224,181 @@ test "decode_sh3add" {
 }
 
 ///|
+/// Tests for Zba RV64 extension (address generation 64-bit)
+test "decode_sh1add_uw" {
+  // SH1ADD.UW x5, x6, x7 - opcode=OP_32(0x3B), f3=010, f7=0010000
+  // R-type: 16 << 25 | 7 << 20 | 6 << 15 | 2 << 12 | 5 << 7 | 0x3B = 0x207322BB
+  let code = 0x207322BBU
+  let DecodeResult(result) = decode(code)
+  match result {
+    SH1ADD_UW(rd, rs1, rs2) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(rs2, content="7")
+    }
+    _ => inspect(result, content="SH1ADD_UW(_, _, _)")
+  }
+}
+
+///|
+test "decode_sh2add_uw" {
+  // SH2ADD.UW x5, x6, x7 - opcode=OP_32(0x3B), f3=100, f7=0010000
+  // R-type: 16 << 25 | 7 << 20 | 6 << 15 | 4 << 12 | 5 << 7 | 0x3B = 0x207342BB
+  let code = 0x207342BBU
+  let DecodeResult(result) = decode(code)
+  match result {
+    SH2ADD_UW(rd, rs1, rs2) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(rs2, content="7")
+    }
+    _ => inspect(result, content="SH2ADD_UW(_, _, _)")
+  }
+}
+
+///|
+test "decode_sh3add_uw" {
+  // SH3ADD.UW x5, x6, x7 - opcode=OP_32(0x3B), f3=110, f7=0010000
+  // R-type: 16 << 25 | 7 << 20 | 6 << 15 | 6 << 12 | 5 << 7 | 0x3B = 0x207362BB
+  let code = 0x207362BBU
+  let DecodeResult(result) = decode(code)
+  match result {
+    SH3ADD_UW(rd, rs1, rs2) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(rs2, content="7")
+    }
+    _ => inspect(result, content="SH3ADD_UW(_, _, _)")
+  }
+}
+
+///|
+test "decode_add_uw" {
+  // ADD.UW x5, x6, x7 - opcode=OP_32(0x3B), f3=000, f7=0000100
+  // R-type: 4 << 25 | 7 << 20 | 6 << 15 | 0 << 12 | 5 << 7 | 0x3B = 0x087302BB
+  let code = 0x087302BBU
+  let DecodeResult(result) = decode(code)
+  match result {
+    ADD_UW(rd, rs1, rs2) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(rs2, content="7")
+    }
+    _ => inspect(result, content="ADD_UW(_, _, _)")
+  }
+}
+
+///|
+test "decode_slli_uw" {
+  // SLLI.UW x5, x6, 7 - opcode=OP_IMM_32(0x1B), f3=001, f7=0000100
+  // I-type: 4 << 25 | 7 << 20 | 6 << 15 | 1 << 12 | 5 << 7 | 0x1B = 0x0873129B
+  let code = 0x0873129BU
+  let DecodeResult(result) = decode(code)
+  match result {
+    SLLI_UW(rd, rs1, shamt) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(shamt, content="7")
+    }
+    _ => inspect(result, content="SLLI_UW(_, _, _)")
+  }
+}
+
+///|
+/// Tests for Zbb RV64 extension (basic bit manipulation 64-bit)
+test "decode_clzw" {
+  // CLZW x5, x6 - opcode=OP_32(0x3B), f3=001, f7=0110000, rs2=00000
+  // R-type: 48 << 25 | 0 << 20 | 6 << 15 | 1 << 12 | 5 << 7 | 0x3B = 0x600312BB
+  let code = 0x600312BBU
+  let DecodeResult(result) = decode(code)
+  match result {
+    CLZW(rd, rs1) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+    }
+    _ => inspect(result, content="CLZW(_, _)")
+  }
+}
+
+///|
+test "decode_ctzw" {
+  // CTZW x5, x6 - opcode=OP_32(0x3B), f3=001, f7=0110000, rs2=00001
+  // R-type: 48 << 25 | 1 << 20 | 6 << 15 | 1 << 12 | 5 << 7 | 0x3B = 0x601312BB
+  let code = 0x601312BBU
+  let DecodeResult(result) = decode(code)
+  match result {
+    CTZW(rd, rs1) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+    }
+    _ => inspect(result, content="CTZW(_, _)")
+  }
+}
+
+///|
+test "decode_cpopw" {
+  // CPOPW x5, x6 - opcode=OP_32(0x3B), f3=001, f7=0110000, rs2=00010
+  // R-type: 48 << 25 | 2 << 20 | 6 << 15 | 1 << 12 | 5 << 7 | 0x3B = 0x602312BB
+  let code = 0x602312BBU
+  let DecodeResult(result) = decode(code)
+  match result {
+    CPOPW(rd, rs1) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+    }
+    _ => inspect(result, content="CPOPW(_, _)")
+  }
+}
+
+///|
+test "decode_rolw" {
+  // ROLW x5, x6, x7 - opcode=OP_32(0x3B), f3=001, f7=0110000
+  // R-type: 48 << 25 | 7 << 20 | 6 << 15 | 1 << 12 | 5 << 7 | 0x3B = 0x607312BB
+  let code = 0x607312BBU
+  let DecodeResult(result) = decode(code)
+  match result {
+    ROLW(rd, rs1, rs2) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(rs2, content="7")
+    }
+    _ => inspect(result, content="ROLW(_, _, _)")
+  }
+}
+
+///|
+test "decode_rorw" {
+  // RORW x5, x6, x7 - opcode=OP_32(0x3B), f3=101, f7=0110000
+  // R-type: 48 << 25 | 7 << 20 | 6 << 15 | 5 << 12 | 5 << 7 | 0x3B = 0x607352BB
+  let code = 0x607352BBU
+  let DecodeResult(result) = decode(code)
+  match result {
+    RORW(rd, rs1, rs2) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(rs2, content="7")
+    }
+    _ => inspect(result, content="RORW(_, _, _)")
+  }
+}
+
+///|
+test "decode_roriw" {
+  // RORIW x5, x6, 7 - opcode=OP_IMM_32(0x1B), f3=101, f7=0110000
+  // I-type: 48 << 25 | 7 << 20 | 6 << 15 | 5 << 12 | 5 << 7 | 0x1B = 0x6073529B
+  let code = 0x6073529BU
+  let DecodeResult(result) = decode(code)
+  match result {
+    RORIW(rd, rs1, shamt) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(shamt, content="7")
+    }
+    _ => inspect(result, content="RORIW(_, _, _)")
+  }
+}
+
+///|
 /// Tests for Zbb extension (basic bit manipulation)
 test "decode_clz" {
   // CLZ x5, x6 - f3=001, f7=0110000, rs2=0

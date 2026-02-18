@@ -377,6 +377,18 @@ pub fn disassemble(inst : @decode.Instruction) -> String {
     @decode.SH3ADD(rd, rs1, rs2) =>
       "sh3add \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}, \{@decode.reg_name(rs2)}"
 
+    // Zba RV64 extension (address generation 64-bit)
+    @decode.SH1ADD_UW(rd, rs1, rs2) =>
+      "sh1add.uw \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.SH2ADD_UW(rd, rs1, rs2) =>
+      "sh2add.uw \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.SH3ADD_UW(rd, rs1, rs2) =>
+      "sh3add.uw \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.ADD_UW(rd, rs1, rs2) =>
+      "add.uw \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.SLLI_UW(rd, rs1, shamt) =>
+      "slli.uw \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}, \{shamt.reinterpret_as_int()}"
+
     // Zbb extension (basic bit manipulation)
     @decode.ANDN(rd, rs1, rs2) =>
       "andn \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}, \{@decode.reg_name(rs2)}"
@@ -414,6 +426,20 @@ pub fn disassemble(inst : @decode.Instruction) -> String {
       "orc.b \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}"
     @decode.REV8(rd, rs1) =>
       "rev8 \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}"
+
+    // Zbb RV64 extension (basic bit manipulation 64-bit)
+    @decode.CLZW(rd, rs1) =>
+      "clzw \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}"
+    @decode.CTZW(rd, rs1) =>
+      "ctzw \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}"
+    @decode.CPOPW(rd, rs1) =>
+      "cpopw \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}"
+    @decode.ROLW(rd, rs1, rs2) =>
+      "rolw \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.RORW(rd, rs1, rs2) =>
+      "rorw \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.RORIW(rd, rs1, shamt) =>
+      "roriw \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}, \{shamt.reinterpret_as_int()}"
 
     // Zbc extension (carry-less multiplication)
     @decode.CLMUL(rd, rs1, rs2) =>

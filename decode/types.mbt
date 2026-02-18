@@ -152,6 +152,12 @@ pub enum Instruction {
   SH1ADD(UInt, UInt, UInt) // rd, rs1, rs2 - shift left by 1 and add
   SH2ADD(UInt, UInt, UInt) // rd, rs1, rs2 - shift left by 2 and add
   SH3ADD(UInt, UInt, UInt) // rd, rs1, rs2 - shift left by 3 and add
+  // Zba RV64 extension (address generation 64-bit)
+  SH1ADD_UW(UInt, UInt, UInt) // rd, rs1, rs2 - shift left by 1 and add (unsigned word)
+  SH2ADD_UW(UInt, UInt, UInt) // rd, rs1, rs2 - shift left by 2 and add (unsigned word)
+  SH3ADD_UW(UInt, UInt, UInt) // rd, rs1, rs2 - shift left by 3 and add (unsigned word)
+  ADD_UW(UInt, UInt, UInt) // rd, rs1, rs2 - add unsigned word
+  SLLI_UW(UInt, UInt, UInt) // rd, rs1, shamt - shift left logical immediate unsigned word
   // Zbb extension (basic bit manipulation)
   ANDN(UInt, UInt, UInt) // rd, rs1, rs2 - AND with inverted rs2
   ORN(UInt, UInt, UInt) // rd, rs1, rs2 - OR with inverted rs2
@@ -171,6 +177,13 @@ pub enum Instruction {
   RORI(UInt, UInt, UInt) // rd, rs1, shamt - rotate right immediate
   ORC_B(UInt, UInt) // rd, rs1 - OR combine bytes
   REV8(UInt, UInt) // rd, rs1 - byte reverse
+  // Zbb RV64 extension (basic bit manipulation 64-bit)
+  CLZW(UInt, UInt) // rd, rs1 - count leading zeros word
+  CTZW(UInt, UInt) // rd, rs1 - count trailing zeros word
+  CPOPW(UInt, UInt) // rd, rs1 - count population word
+  ROLW(UInt, UInt, UInt) // rd, rs1, rs2 - rotate left word
+  RORW(UInt, UInt, UInt) // rd, rs1, rs2 - rotate right word
+  RORIW(UInt, UInt, UInt) // rd, rs1, shamt - rotate right immediate word
   // Zbc extension (carry-less multiplication)
   CLMUL(UInt, UInt, UInt) // rd, rs1, rs2 - carry-less multiply low
   CLMULH(UInt, UInt, UInt) // rd, rs1, rs2 - carry-less multiply high
@@ -423,6 +436,12 @@ pub fn Instruction::category(self : Instruction) -> InstructionCategory {
     // Zba extension (address generation)
     SH1ADD(_, _, _) | SH2ADD(_, _, _) | SH3ADD(_, _, _) =>
       InstructionCategory::Arithmetic
+    // Zba RV64 extension
+    SH1ADD_UW(_, _, _)
+    | SH2ADD_UW(_, _, _)
+    | SH3ADD_UW(_, _, _)
+    | ADD_UW(_, _, _)
+    | SLLI_UW(_, _, _) => InstructionCategory::Arithmetic
     // Zbb extension (basic bit manipulation)
     ANDN(_, _, _)
     | ORN(_, _, _)
@@ -442,6 +461,13 @@ pub fn Instruction::category(self : Instruction) -> InstructionCategory {
     | RORI(_, _, _)
     | ORC_B(_, _)
     | REV8(_, _) => InstructionCategory::Logical
+    // Zbb RV64 extension
+    CLZW(_, _)
+    | CTZW(_, _)
+    | CPOPW(_, _)
+    | ROLW(_, _, _)
+    | RORW(_, _, _)
+    | RORIW(_, _, _) => InstructionCategory::Logical
     // Zbc extension (carry-less multiplication)
     CLMUL(_, _, _) | CLMULH(_, _, _) | CLMULR(_, _, _) =>
       InstructionCategory::Arithmetic
