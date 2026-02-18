@@ -249,6 +249,55 @@ pub enum Instruction {
   FCVT_D_L(UInt, UInt, UInt) // rd, rs1, rm - convert long to double (signed)
   FCVT_D_LU(UInt, UInt, UInt) // rd, rs1, rm - convert long to double (unsigned)
   FMV_D_X(UInt, UInt) // rd, rs1 - move bits from int to double
+  // RV32Q extension (quad-precision floating-point, 128-bit)
+  // Load/Store
+  FLQ(UInt, UInt, Int) // rd, rs1, imm - load quad-precision
+  FSQ(UInt, UInt, Int) // rs1, rs2, imm - store quad-precision
+  // Computational
+  FADD_Q(UInt, UInt, UInt) // rd, rs1, rs2 - add quad
+  FSUB_Q(UInt, UInt, UInt) // rd, rs1, rs2 - subtract quad
+  FMUL_Q(UInt, UInt, UInt) // rd, rs1, rs2 - multiply quad
+  FDIV_Q(UInt, UInt, UInt) // rd, rs1, rs2 - divide quad
+  FSQRT_Q(UInt, UInt) // rd, rs1 - square root quad
+  FMIN_Q(UInt, UInt, UInt) // rd, rs1, rs2 - minimum quad
+  FMAX_Q(UInt, UInt, UInt) // rd, rs1, rs2 - maximum quad
+  // Sign injection
+  FSGNJ_Q(UInt, UInt, UInt) // rd, rs1, rs2 - sign inject quad
+  FSGNJN_Q(UInt, UInt, UInt) // rd, rs1, rs2 - sign inject neg quad
+  FSGNJX_Q(UInt, UInt, UInt) // rd, rs1, rs2 - sign inject xor quad
+  // Conversion
+  FCVT_S_Q(UInt, UInt, UInt) // rd, rs1, rm - convert quad to single
+  FCVT_Q_S(UInt, UInt, UInt) // rd, rs1, rm - convert single to quad
+  FCVT_D_Q(UInt, UInt, UInt) // rd, rs1, rm - convert quad to double
+  FCVT_Q_D(UInt, UInt, UInt) // rd, rs1, rm - convert double to quad
+  // Compare
+  FEQ_Q(UInt, UInt, UInt) // rd, rs1, rs2 - equal
+  FLT_Q(UInt, UInt, UInt) // rd, rs1, rs2 - less than
+  FLE_Q(UInt, UInt, UInt) // rd, rs1, rs2 - less than or equal
+  FCLASS_Q(UInt, UInt) // rd, rs1 - classify quad
+  // Integer conversion
+  FCVT_W_Q(UInt, UInt, UInt) // rd, rs1, rm - convert quad to int (signed)
+  FCVT_WU_Q(UInt, UInt, UInt) // rd, rs1, rm - convert quad to int (unsigned)
+  FCVT_Q_W(UInt, UInt, UInt) // rd, rs1, rm - convert int to quad (signed)
+  FCVT_Q_WU(UInt, UInt, UInt) // rd, rs1, rm - convert int to quad (unsigned)
+  // RV64Q extension (64-bit specific conversions)
+  FCVT_L_Q(UInt, UInt, UInt) // rd, rs1, rm - convert quad to long (signed)
+  FCVT_LU_Q(UInt, UInt, UInt) // rd, rs1, rm - convert quad to long (unsigned)
+  FCVT_Q_L(UInt, UInt, UInt) // rd, rs1, rm - convert long to quad (signed)
+  FCVT_Q_LU(UInt, UInt, UInt) // rd, rs1, rm - convert long to quad (unsigned)
+  // Move between GPR and FPR
+  FMV_X_Q(UInt, UInt) // rd, rs1 - move bits from quad to int
+  FMV_Q_X(UInt, UInt) // rd, rs1 - move bits from int to quad
+  // Zcf extension (single-precision floating-point compressed instructions)
+  C_FLW(UInt, UInt, UInt) // rd', rs1', imm - load single (compressed)
+  C_FSW(UInt, UInt, UInt) // rs2', rs1', imm - store single (compressed)
+  C_FLWSP(UInt, UInt) // rd, imm - load single from SP (compressed)
+  C_FSWSP(UInt, UInt) // rs2, imm - store single to SP (compressed)
+  // Zcd extension (double-precision floating-point compressed instructions)
+  C_FLD(UInt, UInt, UInt) // rd', rs1', imm - load double (compressed)
+  C_FSD(UInt, UInt, UInt) // rs2', rs1', imm - store double (compressed)
+  C_FLDSP(UInt, UInt) // rd, imm - load double from SP (compressed)
+  C_FSDSP(UInt, UInt) // rs2, imm - store double to SP (compressed)
   // Unknown/invalid instruction
   Invalid(UInt) // code
 } derive(Show)
@@ -455,10 +504,46 @@ pub fn Instruction::category(self : Instruction) -> InstructionCategory {
     | FMV_X_D(_, _)
     | FCVT_D_L(_, _, _)
     | FCVT_D_LU(_, _, _)
-    | FMV_D_X(_, _) => InstructionCategory::Float
+    | FMV_D_X(_, _)
+    | FMV_X_Q(_, _)
+    | FMV_Q_X(_, _) => InstructionCategory::Float
     FEQ_D(_, _, _) | FLT_D(_, _, _) | FLE_D(_, _, _) =>
       InstructionCategory::Compare
     FCLASS_D(_, _) => InstructionCategory::Float
+    // RV32Q extension (quad-precision floating-point)
+    FLQ(_, _, _) => InstructionCategory::Load
+    FSQ(_, _, _) => InstructionCategory::Store
+    FADD_Q(_, _, _)
+    | FSUB_Q(_, _, _)
+    | FMUL_Q(_, _, _)
+    | FDIV_Q(_, _, _)
+    | FSQRT_Q(_, _)
+    | FMIN_Q(_, _, _)
+    | FMAX_Q(_, _, _)
+    | FSGNJ_Q(_, _, _)
+    | FSGNJN_Q(_, _, _)
+    | FSGNJX_Q(_, _, _)
+    | FCVT_S_Q(_, _, _)
+    | FCVT_Q_S(_, _, _)
+    | FCVT_D_Q(_, _, _)
+    | FCVT_Q_D(_, _, _)
+    | FCVT_W_Q(_, _, _)
+    | FCVT_WU_Q(_, _, _)
+    | FCVT_Q_W(_, _, _)
+    | FCVT_Q_WU(_, _, _)
+    | FCVT_L_Q(_, _, _)
+    | FCVT_LU_Q(_, _, _)
+    | FCVT_Q_L(_, _, _)
+    | FCVT_Q_LU(_, _, _) => InstructionCategory::Float
+    FEQ_Q(_, _, _) | FLT_Q(_, _, _) | FLE_Q(_, _, _) =>
+      InstructionCategory::Compare
+    FCLASS_Q(_, _) => InstructionCategory::Float
+    // Zcf extension (single-precision compressed)
+    C_FLW(_, _, _) | C_FLWSP(_, _) => InstructionCategory::Load
+    C_FSW(_, _, _) | C_FSWSP(_, _) => InstructionCategory::Store
+    // Zcd extension (double-precision compressed)
+    C_FLD(_, _, _) | C_FLDSP(_, _) => InstructionCategory::Load
+    C_FSD(_, _, _) | C_FSDSP(_, _) => InstructionCategory::Store
     Invalid(_) => InstructionCategory::Unknown
   }
 }
@@ -596,5 +681,37 @@ pub fn freg_name(reg : UInt) -> String {
     30U => "ft10"
     31U => "ft11"
     _ => "funknown"
+  }
+}
+
+///|
+/// Compressed floating-point register name lookup (fd', fs', ft' for f8-f15)
+pub fn creg_name(reg : UInt) -> String {
+  match reg {
+    8U => "ft0'"
+    9U => "ft1'"
+    10U => "fa0'"
+    11U => "fa1'"
+    12U => "fa2'"
+    13U => "fa3'"
+    14U => "fa4'"
+    15U => "fa5'"
+    16U => "fa6'"
+    17U => "fa7'"
+    18U => "fs2'"
+    19U => "fs3'"
+    20U => "fs4'"
+    21U => "fs5'"
+    22U => "fs6'"
+    23U => "fs7'"
+    24U => "fs8'"
+    25U => "fs9'"
+    26U => "fs10'"
+    27U => "fs11'"
+    28U => "ft8'"
+    29U => "ft9'"
+    30U => "ft10'"
+    31U => "ft11'"
+    _ => "fc\{reg}" // For f0-f7, show as fc0, fc1, etc.
   }
 }

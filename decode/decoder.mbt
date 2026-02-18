@@ -179,12 +179,13 @@ pub fn decode(code : UInt) -> DecodeResult {
         _ => DecodeResult(Invalid(code))
       }
     }
-    // LOAD-FP (RV32F/RV32D: floating-point load)
+    // LOAD-FP (RV32F/RV32D/RV32Q: floating-point load)
     0b0000111 => {
       let imm = decode_i_imm(code)
       match f3 {
         0b010 => DecodeResult(FLW(rd, rs1, imm)) // RV32F: load single
         0b011 => DecodeResult(FLD(rd, rs1, imm)) // RV32D: load double
+        0b100 => DecodeResult(FLQ(rd, rs1, imm)) // RV32Q: load quad
         _ => DecodeResult(Invalid(code))
       }
     }
@@ -199,12 +200,13 @@ pub fn decode(code : UInt) -> DecodeResult {
         _ => DecodeResult(Invalid(code))
       }
     }
-    // STORE-FP (RV32F/RV32D: floating-point store)
+    // STORE-FP (RV32F/RV32D/RV32Q: floating-point store)
     0b0100111 => {
       let imm = decode_s_imm(code)
       match f3 {
         0b010 => DecodeResult(FSW(rs1, rs2, imm)) // RV32F: store single
         0b011 => DecodeResult(FSD(rs1, rs2, imm)) // RV32D: store double
+        0b100 => DecodeResult(FSQ(rs1, rs2, imm)) // RV32Q: store quad
         _ => DecodeResult(Invalid(code))
       }
     }
@@ -544,6 +546,14 @@ pub fn decode(code : UInt) -> DecodeResult {
         0b0001001 => DecodeResult(FMUL_D(rd, rs1, rs2))
         // FDIV.D
         0b0001101 => DecodeResult(FDIV_D(rd, rs1, rs2))
+        // FADD.Q (quad-precision)
+        0b0000011 => DecodeResult(FADD_Q(rd, rs1, rs2))
+        // FSUB.Q
+        0b0000111 => DecodeResult(FSUB_Q(rd, rs1, rs2))
+        // FMUL.Q
+        0b0001011 => DecodeResult(FMUL_Q(rd, rs1, rs2))
+        // FDIV.Q
+        0b0001111 => DecodeResult(FDIV_Q(rd, rs1, rs2))
         // FSQRT.S (rs2 must be 0)
         0b0101100 =>
           if rs2 == 0U {
@@ -555,6 +565,13 @@ pub fn decode(code : UInt) -> DecodeResult {
         0b0101101 =>
           if rs2 == 0U {
             DecodeResult(FSQRT_D(rd, rs1))
+          } else {
+            DecodeResult(Invalid(code))
+          }
+        // FSQRT.Q (rs2 must be 0)
+        0b0101111 =>
+          if rs2 == 0U {
+            DecodeResult(FSQRT_Q(rd, rs1))
           } else {
             DecodeResult(Invalid(code))
           }
@@ -574,6 +591,14 @@ pub fn decode(code : UInt) -> DecodeResult {
             0b00010 => DecodeResult(FSGNJX_D(rd, rs1, rs2))
             _ => DecodeResult(Invalid(code))
           }
+        // FSGNJ.Q / FSGNJN.Q / FSGNJX.Q
+        0b0010011 =>
+          match rs2 {
+            0b00000 => DecodeResult(FSGNJ_Q(rd, rs1, rs2))
+            0b00001 => DecodeResult(FSGNJN_Q(rd, rs1, rs2))
+            0b00010 => DecodeResult(FSGNJX_Q(rd, rs1, rs2))
+            _ => DecodeResult(Invalid(code))
+          }
         // FMIN.S / FMAX.S
         0b0010100 =>
           match rs2 {
@@ -586,6 +611,13 @@ pub fn decode(code : UInt) -> DecodeResult {
           match rs2 {
             0b00000 => DecodeResult(FMIN_D(rd, rs1, rs2))
             0b00001 => DecodeResult(FMAX_D(rd, rs1, rs2))
+            _ => DecodeResult(Invalid(code))
+          }
+        // FMIN.Q / FMAX.Q
+        0b0010111 =>
+          match rs2 {
+            0b00000 => DecodeResult(FMIN_Q(rd, rs1, rs2))
+            0b00001 => DecodeResult(FMAX_Q(rd, rs1, rs2))
             _ => DecodeResult(Invalid(code))
           }
         // FCVT.W.S / FCVT.WU.S / FCVT.L.S / FCVT.LU.S (convert float to int)
@@ -606,6 +638,15 @@ pub fn decode(code : UInt) -> DecodeResult {
             0b00011 => DecodeResult(FCVT_LU_D(rd, rs1, rm)) // RV64D
             _ => DecodeResult(Invalid(code))
           }
+        // FCVT.W.Q / FCVT.WU.Q / FCVT.L.Q / FCVT.LU.Q (convert quad to int)
+        0b1100011 =>
+          match rs2 {
+            0b00000 => DecodeResult(FCVT_W_Q(rd, rs1, rm))
+            0b00001 => DecodeResult(FCVT_WU_Q(rd, rs1, rm))
+            0b00010 => DecodeResult(FCVT_L_Q(rd, rs1, rm)) // RV64Q
+            0b00011 => DecodeResult(FCVT_LU_Q(rd, rs1, rm)) // RV64Q
+            _ => DecodeResult(Invalid(code))
+          }
         // FCVT.S.W / FCVT.S.WU / FCVT.S.L / FCVT.S.LU (convert int to float)
         0b1101000 =>
           match rs2 {
@@ -624,6 +665,15 @@ pub fn decode(code : UInt) -> DecodeResult {
             0b00011 => DecodeResult(FCVT_D_LU(rd, rs1, rm)) // RV64D
             _ => DecodeResult(Invalid(code))
           }
+        // FCVT.Q.W / FCVT.Q.WU / FCVT.Q.L / FCVT.Q.LU (convert int to quad)
+        0b1101011 =>
+          match rs2 {
+            0b00000 => DecodeResult(FCVT_Q_W(rd, rs1, rm))
+            0b00001 => DecodeResult(FCVT_Q_WU(rd, rs1, rm))
+            0b00010 => DecodeResult(FCVT_Q_L(rd, rs1, rm)) // RV64Q
+            0b00011 => DecodeResult(FCVT_Q_LU(rd, rs1, rm)) // RV64Q
+            _ => DecodeResult(Invalid(code))
+          }
         // FCVT.S.D (convert double to single)
         0b0100000 =>
           if rs2 == 0b00001U {
@@ -637,6 +687,20 @@ pub fn decode(code : UInt) -> DecodeResult {
             DecodeResult(FCVT_D_S(rd, rs1, rm))
           } else {
             DecodeResult(Invalid(code))
+          }
+        // FCVT.S.Q (convert quad to single) / FCVT.Q.S (convert single to quad)
+        0b0100011 =>
+          match rs2 {
+            0b00001 => DecodeResult(FCVT_S_Q(rd, rs1, rm))
+            0b00000 => DecodeResult(FCVT_Q_S(rd, rs1, rm))
+            _ => DecodeResult(Invalid(code))
+          }
+        // FCVT.D.Q (convert quad to double) / FCVT.Q.D (convert double to quad)
+        0b0101011 =>
+          match rs2 {
+            0b00001 => DecodeResult(FCVT_D_Q(rd, rs1, rm))
+            0b00000 => DecodeResult(FCVT_Q_D(rd, rs1, rm))
+            _ => DecodeResult(Invalid(code))
           }
         // FEQ.S / FLT.S / FLE.S
         0b1010000 =>
@@ -654,6 +718,14 @@ pub fn decode(code : UInt) -> DecodeResult {
             0b00000 => DecodeResult(FLE_D(rd, rs1, rs2))
             _ => DecodeResult(Invalid(code))
           }
+        // FEQ.Q / FLT.Q / FLE.Q
+        0b1010011 =>
+          match rs2 {
+            0b00010 => DecodeResult(FEQ_Q(rd, rs1, rs2))
+            0b00001 => DecodeResult(FLT_Q(rd, rs1, rs2))
+            0b00000 => DecodeResult(FLE_Q(rd, rs1, rs2))
+            _ => DecodeResult(Invalid(code))
+          }
         // FCLASS.S / FMV.X.W
         0b1110000 =>
           match rs2 {
@@ -668,6 +740,13 @@ pub fn decode(code : UInt) -> DecodeResult {
             0b10000 => DecodeResult(FMV_X_D(rd, rs1))
             _ => DecodeResult(Invalid(code))
           }
+        // FCLASS.Q
+        0b1110011 =>
+          if rs2 == 0b00000U {
+            DecodeResult(FCLASS_Q(rd, rs1))
+          } else {
+            DecodeResult(Invalid(code))
+          }
         // FMV.W.X
         0b1111000 =>
           if rs2 == 0b00000U {
@@ -679,6 +758,20 @@ pub fn decode(code : UInt) -> DecodeResult {
         0b1111001 =>
           if rs2 == 0b00000U {
             DecodeResult(FMV_D_X(rd, rs1))
+          } else {
+            DecodeResult(Invalid(code))
+          }
+        // FMV.X.Q (RV64Q: move bits from quad to int)
+        0b1111011 =>
+          if rs2 == 0b00000U {
+            DecodeResult(FMV_X_Q(rd, rs1))
+          } else {
+            DecodeResult(Invalid(code))
+          }
+        // FMV.Q.X (RV64Q: move bits from int to quad)
+        0b1111010 =>
+          if rs2 == 0b00000U {
+            DecodeResult(FMV_Q_X(rd, rs1))
           } else {
             DecodeResult(Invalid(code))
           }
@@ -815,6 +908,15 @@ pub fn decode_compressed(code16 : UInt) -> DecodeResult {
             DecodeResult(C_ADDI4SPN(rd, nzuimm))
           }
         }
+        // C.FLD (Zcd: load double)
+        0b001 => {
+          let rd = c_reg_to_full((code16 >> 2) & 0x7U)
+          let rs1 = c_reg_to_full((code16 >> 7) & 0x7U)
+          let imm = (((code16 >> 10) & 0x3U) << 3) |
+            (((code16 >> 6) & 0x1U) << 6) |
+            (((code16 >> 5) & 0x1U) << 5)
+          DecodeResult(C_FLD(rd, rs1, imm))
+        }
         // C.LW
         0b010 => {
           let rd = c_reg_to_full((code16 >> 2) & 0x7U)
@@ -825,6 +927,25 @@ pub fn decode_compressed(code16 : UInt) -> DecodeResult {
             (((code16 >> 11) & 0x3U) << 3)
           DecodeResult(C_LW(rd, rs1, imm))
         }
+        // C.FLW (Zcf: load single)
+        0b011 => {
+          let rd = c_reg_to_full((code16 >> 2) & 0x7U)
+          let rs1 = c_reg_to_full((code16 >> 7) & 0x7U)
+          let imm = (((code16 >> 10) & 0x1U) << 2) |
+            (((code16 >> 6) & 0x1U) << 6) |
+            (((code16 >> 5) & 0x1U) << 5) |
+            (((code16 >> 11) & 0x3U) << 3)
+          DecodeResult(C_FLW(rd, rs1, imm))
+        }
+        // C.FSD (Zcd: store double)
+        0b101 => {
+          let rs2 = c_reg_to_full((code16 >> 2) & 0x7U)
+          let rs1 = c_reg_to_full((code16 >> 7) & 0x7U)
+          let imm = (((code16 >> 10) & 0x3U) << 3) |
+            (((code16 >> 6) & 0x1U) << 6) |
+            (((code16 >> 5) & 0x1U) << 5)
+          DecodeResult(C_FSD(rs2, rs1, imm))
+        }
         // C.SW
         0b110 => {
           let rs2 = c_reg_to_full((code16 >> 2) & 0x7U)
@@ -834,6 +955,16 @@ pub fn decode_compressed(code16 : UInt) -> DecodeResult {
             (((code16 >> 5) & 0x1U) << 5) |
             (((code16 >> 11) & 0x3U) << 3)
           DecodeResult(C_SW(rs2, rs1, imm))
+        }
+        // C.FSW (Zcf: store single)
+        0b111 => {
+          let rs2 = c_reg_to_full((code16 >> 2) & 0x7U)
+          let rs1 = c_reg_to_full((code16 >> 7) & 0x7U)
+          let imm = (((code16 >> 10) & 0x1U) << 2) |
+            (((code16 >> 6) & 0x1U) << 6) |
+            (((code16 >> 5) & 0x1U) << 5) |
+            (((code16 >> 11) & 0x3U) << 3)
+          DecodeResult(C_FSW(rs2, rs1, imm))
         }
         _ => DecodeResult(Invalid(code16))
       }
@@ -987,13 +1118,34 @@ pub fn decode_compressed(code16 : UInt) -> DecodeResult {
           let shamt = (((code16 >> 12) & 0x1U) << 5) | ((code16 >> 2) & 0x1FU)
           DecodeResult(C_SLLI(rd, shamt))
         }
-        // C.LWSP
+        // C.LWSP / C.FLWSP (Zcf)
         0b010 => {
           let rd = (code16 >> 7) & 0x1FU
           let imm = (((code16 >> 12) & 0x1U) << 5) |
             (((code16 >> 4) & 0x7U) << 2) |
             (((code16 >> 2) & 0x3U) << 6)
-          DecodeResult(C_LWSP(rd, imm))
+          // C.FLWSP: immediate must be non-zero (bits [12,6:2] != 0)
+          // C.LWSP: immediate can be zero
+          // Also check if it's actually a hint (rs1'=0 is reserved for hints)
+          let rs1_prime = (code16 >> 7) & 0x7U // bits [9:7]
+          if imm != 0U && rs1_prime != 0U {
+            // Could be C.FLWSP - treat as C.FLWSP for floating point registers
+            DecodeResult(C_FLWSP(rd, imm))
+          } else {
+            DecodeResult(C_LWSP(rd, imm))
+          }
+        }
+        // C.FLDSP (Zcd: load double from SP)
+        0b001 => {
+          let rd = (code16 >> 7) & 0x1FU
+          let imm = (((code16 >> 12) & 0x1U) << 5) |
+            (((code16 >> 10) & 0x3U) << 3) |
+            (((code16 >> 5) & 0x3U) << 6)
+          if imm != 0U {
+            DecodeResult(C_FLDSP(rd, imm))
+          } else {
+            DecodeResult(Invalid(code16))
+          }
         }
         // C.JR, C.MV, C.EBREAK, C.JALR, C.ADD
         0b100 => {
@@ -1022,11 +1174,26 @@ pub fn decode_compressed(code16 : UInt) -> DecodeResult {
             }
           }
         }
-        // C.SWSP
+        // C.SWSP / C.FSWSP (Zcf)
         0b110 => {
           let rs2 = (code16 >> 2) & 0x1FU
           let imm = (((code16 >> 9) & 0x3FU) << 2) | ((code16 >> 7) & 0x3U)
-          DecodeResult(C_SWSP(rs2, imm))
+          // C.FSWSP: rs2' (bits [4:2]) must be non-zero when rs2 in 8-15
+          // C.SWSP: can have rs2'=0
+          let rs2_prime = (code16 >> 2) & 0x7U // bits [4:2]
+          if rs2 >= 8U && rs2 <= 15U && rs2_prime != 0U {
+            // C.FSWSP
+            DecodeResult(C_FSWSP(rs2, imm))
+          } else {
+            DecodeResult(C_SWSP(rs2, imm))
+          }
+        }
+        // C.FSDSP (Zcd: store double to SP)
+        0b011 => {
+          let rs2 = (code16 >> 2) & 0x1FU
+          let imm = (((code16 >> 10) & 0x7U) << 3) |
+            (((code16 >> 7) & 0x7U) << 6)
+          DecodeResult(C_FSDSP(rs2, imm))
         }
         _ => DecodeResult(Invalid(code16))
       }

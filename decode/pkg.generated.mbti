@@ -2,6 +2,8 @@
 package "wzzc-dev/riscv_analyzer/decode"
 
 // Values
+pub fn creg_name(UInt) -> String
+
 pub fn decode(UInt) -> DecodeResult
 
 pub fn decode_compressed(UInt) -> DecodeResult
@@ -235,6 +237,44 @@ pub enum Instruction {
   FCVT_D_L(UInt, UInt, UInt)
   FCVT_D_LU(UInt, UInt, UInt)
   FMV_D_X(UInt, UInt)
+  FLQ(UInt, UInt, Int)
+  FSQ(UInt, UInt, Int)
+  FADD_Q(UInt, UInt, UInt)
+  FSUB_Q(UInt, UInt, UInt)
+  FMUL_Q(UInt, UInt, UInt)
+  FDIV_Q(UInt, UInt, UInt)
+  FSQRT_Q(UInt, UInt)
+  FMIN_Q(UInt, UInt, UInt)
+  FMAX_Q(UInt, UInt, UInt)
+  FSGNJ_Q(UInt, UInt, UInt)
+  FSGNJN_Q(UInt, UInt, UInt)
+  FSGNJX_Q(UInt, UInt, UInt)
+  FCVT_S_Q(UInt, UInt, UInt)
+  FCVT_Q_S(UInt, UInt, UInt)
+  FCVT_D_Q(UInt, UInt, UInt)
+  FCVT_Q_D(UInt, UInt, UInt)
+  FEQ_Q(UInt, UInt, UInt)
+  FLT_Q(UInt, UInt, UInt)
+  FLE_Q(UInt, UInt, UInt)
+  FCLASS_Q(UInt, UInt)
+  FCVT_W_Q(UInt, UInt, UInt)
+  FCVT_WU_Q(UInt, UInt, UInt)
+  FCVT_Q_W(UInt, UInt, UInt)
+  FCVT_Q_WU(UInt, UInt, UInt)
+  FCVT_L_Q(UInt, UInt, UInt)
+  FCVT_LU_Q(UInt, UInt, UInt)
+  FCVT_Q_L(UInt, UInt, UInt)
+  FCVT_Q_LU(UInt, UInt, UInt)
+  FMV_X_Q(UInt, UInt)
+  FMV_Q_X(UInt, UInt)
+  C_FLW(UInt, UInt, UInt)
+  C_FSW(UInt, UInt, UInt)
+  C_FLWSP(UInt, UInt)
+  C_FSWSP(UInt, UInt)
+  C_FLD(UInt, UInt, UInt)
+  C_FSD(UInt, UInt, UInt)
+  C_FLDSP(UInt, UInt)
+  C_FSDSP(UInt, UInt)
   Invalid(UInt)
 }
 pub fn Instruction::branch_offset(Self) -> Int

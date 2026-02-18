@@ -956,6 +956,181 @@ pub fn get_operands(inst : @decode.Instruction) -> InstOperands {
         })
       }
     }
+    // RV32Q extension (quad-precision floating-point)
+    @decode.FLQ(rd, rs1, _) => {
+      ops.push(RegOperand::{ reg: rd, is_float: true, role: OperandRole::Def })
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    @decode.FSQ(rs1, rs2, _) => {
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      ops.push(RegOperand::{ reg: rs2, is_float: true, role: OperandRole::Use })
+    }
+    @decode.FADD_Q(rd, rs1, rs2)
+    | @decode.FSUB_Q(rd, rs1, rs2)
+    | @decode.FMUL_Q(rd, rs1, rs2)
+    | @decode.FDIV_Q(rd, rs1, rs2)
+    | @decode.FMIN_Q(rd, rs1, rs2)
+    | @decode.FMAX_Q(rd, rs1, rs2)
+    | @decode.FSGNJ_Q(rd, rs1, rs2)
+    | @decode.FSGNJN_Q(rd, rs1, rs2)
+    | @decode.FSGNJX_Q(rd, rs1, rs2) => {
+      ops.push(RegOperand::{ reg: rd, is_float: true, role: OperandRole::Def })
+      ops.push(RegOperand::{ reg: rs1, is_float: true, role: OperandRole::Use })
+      ops.push(RegOperand::{ reg: rs2, is_float: true, role: OperandRole::Use })
+    }
+    @decode.FSQRT_Q(rd, rs1) => {
+      ops.push(RegOperand::{ reg: rd, is_float: true, role: OperandRole::Def })
+      ops.push(RegOperand::{ reg: rs1, is_float: true, role: OperandRole::Use })
+    }
+    @decode.FCVT_Q_S(rd, rs1, _)
+    | @decode.FCVT_Q_D(rd, rs1, _)
+    | @decode.FCVT_S_Q(rd, rs1, _)
+    | @decode.FCVT_D_Q(rd, rs1, _) => {
+      ops.push(RegOperand::{ reg: rd, is_float: true, role: OperandRole::Def })
+      ops.push(RegOperand::{ reg: rs1, is_float: true, role: OperandRole::Use })
+    }
+    @decode.FEQ_Q(rd, rs1, rs2)
+    | @decode.FLT_Q(rd, rs1, rs2)
+    | @decode.FLE_Q(rd, rs1, rs2) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      ops.push(RegOperand::{ reg: rs1, is_float: true, role: OperandRole::Use })
+      ops.push(RegOperand::{ reg: rs2, is_float: true, role: OperandRole::Use })
+    }
+    @decode.FCLASS_Q(rd, rs1) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      ops.push(RegOperand::{ reg: rs1, is_float: true, role: OperandRole::Use })
+    }
+    @decode.FCVT_W_Q(rd, rs1, _)
+    | @decode.FCVT_WU_Q(rd, rs1, _)
+    | @decode.FCVT_L_Q(rd, rs1, _)
+    | @decode.FCVT_LU_Q(rd, rs1, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      ops.push(RegOperand::{ reg: rs1, is_float: true, role: OperandRole::Use })
+    }
+    @decode.FCVT_Q_W(rd, rs1, _)
+    | @decode.FCVT_Q_WU(rd, rs1, _)
+    | @decode.FCVT_Q_L(rd, rs1, _)
+    | @decode.FCVT_Q_LU(rd, rs1, _) => {
+      ops.push(RegOperand::{ reg: rd, is_float: true, role: OperandRole::Def })
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    @decode.FMV_X_Q(rd, rs1) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      ops.push(RegOperand::{ reg: rs1, is_float: true, role: OperandRole::Use })
+    }
+    @decode.FMV_Q_X(rd, rs1) => {
+      ops.push(RegOperand::{ reg: rd, is_float: true, role: OperandRole::Def })
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Zcf/Zcd compressed floating point
+    @decode.C_FLD(rd, rs1, _) => {
+      ops.push(RegOperand::{ reg: rd, is_float: true, role: OperandRole::Def })
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    @decode.C_FLDSP(rd, _) => {
+      ops.push(RegOperand::{ reg: rd, is_float: true, role: OperandRole::Def })
+      // sp is always used
+      ops.push(RegOperand::{ reg: 2U, is_float: false, role: OperandRole::Use })
+    }
+    @decode.C_FLW(rd, rs1, _) => {
+      ops.push(RegOperand::{ reg: rd, is_float: true, role: OperandRole::Def })
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    @decode.C_FLWSP(rd, _) => {
+      ops.push(RegOperand::{ reg: rd, is_float: true, role: OperandRole::Def })
+      // sp is always used
+      ops.push(RegOperand::{ reg: 2U, is_float: false, role: OperandRole::Use })
+    }
+    @decode.C_FSD(rs1, rs2, _) => {
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      ops.push(RegOperand::{ reg: rs2, is_float: true, role: OperandRole::Use })
+    }
+    @decode.C_FSDSP(rs2, _) => {
+      // sp is always used
+      ops.push(RegOperand::{ reg: 2U, is_float: false, role: OperandRole::Use })
+      ops.push(RegOperand::{ reg: rs2, is_float: true, role: OperandRole::Use })
+    }
+    @decode.C_FSW(rs1, rs2, _) => {
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      ops.push(RegOperand::{ reg: rs2, is_float: true, role: OperandRole::Use })
+    }
+    @decode.C_FSWSP(rs2, _) => {
+      // sp is always used
+      ops.push(RegOperand::{ reg: 2U, is_float: false, role: OperandRole::Use })
+      ops.push(RegOperand::{ reg: rs2, is_float: true, role: OperandRole::Use })
+    }
     // System instructions
     @decode.ECALL | @decode.EBREAK | @decode.FENCE(_, _) | @decode.FENCE_I =>
       ignore(())
