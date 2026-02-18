@@ -258,12 +258,13 @@ test "disassemble_c_sub" {
 
 ///|
 test "disassemble_c_xor" {
+  // C.XOR x8, x8 (s0, s0) - 0x8C21
   let @decode.DecodeResult(inst) = @decode.decode_compressed(0x8C21U)
   let result = disassemble(inst)
   inspect(
     result,
     content=(
-      #|c.sub s0, s0
+      #|c.xor s0, s0
     ),
   )
 }

@@ -384,6 +384,53 @@ pub fn analyze_code(bytes : FixedArray[Byte], start_addr : UInt) -> CFG {
 }
 
 ///|
+/// Pad a string with leading zeros to reach target length
+fn pad_zero(s : String, target_len : Int) -> String {
+  let current_len = s.length()
+  if current_len >= target_len {
+    s
+  } else {
+    let mut result = ""
+    let mut i = 0
+    while i < target_len - current_len {
+      result = result + "0"
+      i = i + 1
+    }
+    result + s
+  }
+}
+
+///|
+/// Escape a string for JSON output
+/// Handles: backslash, double quote, and control characters
+fn json_escape(s : String) -> String {
+  let mut result = ""
+  for c in s {
+    match c {
+      '\\' => result = result + "\\\\"
+      '"' => result = result + "\\\""
+      '\n' => result = result + "\\n"
+      '\r' => result = result + "\\r"
+      '\t' => result = result + "\\t"
+      _ => {
+        // Handle other control characters
+        let code = c.to_int()
+        if code < 32 {
+          result = result +
+            "\\u" +
+            pad_zero(uint_to_hex(code.reinterpret_as_uint()), 4)
+        } else {
+          result = result + c.to_string()
+        }
+      }
+    }
+  } nobreak {
+    ignore(())
+  }
+  result
+}
+
+///|
 /// Convert UInt to hex string (without 0x prefix)
 fn uint_to_hex(value : UInt) -> String {
   if value == 0U {
@@ -702,7 +749,8 @@ pub fn reachable_functions(cg : CallGraph) -> FixedArray[UInt] {
 ///|
 /// Generate DOT format for CFG visualization
 pub fn cfg_to_dot(cfg : CFG, name : String) -> String {
-  let mut result = "digraph \"\{name}\" {\n"
+  let escaped_name = json_escape(name)
+  let mut result = "digraph \"\{escaped_name}\" {\n"
   result = result + "  rankdir=TB;\n"
   result = result + "  node [shape=box];\n"
   result = result + "  edge [fontsize=10];\n\n"
@@ -751,7 +799,8 @@ pub fn cfg_to_dot(cfg : CFG, name : String) -> String {
 ///|
 /// Generate DOT format for call graph visualization
 pub fn callgraph_to_dot(cg : CallGraph, name : String) -> String {
-  let mut result = "digraph \"\{name}_callgraph\" {\n"
+  let escaped_name = json_escape(name)
+  let mut result = "digraph \"\{escaped_name}_callgraph\" {\n"
   result = result + "  rankdir=LR;\n"
   result = result + "  node [shape=ellipse];\n"
   result = result + "  edge [fontsize=10];\n\n"
@@ -760,7 +809,12 @@ pub fn callgraph_to_dot(cg : CallGraph, name : String) -> String {
   result = result + "  // Functions\n"
   for node in cg.nodes {
     let addr = format_hex_uint(node.address)
-    let label = if node.name == addr { "func_\{addr}" } else { node.name }
+    let escaped_node_name = json_escape(node.name)
+    let label = if node.name == addr {
+      "func_\{addr}"
+    } else {
+      escaped_node_name
+    }
     result = result + "  func_\{addr} [label=\"\{label}\""
     // Mark entry point
     if node.address == cg.entry_point {
@@ -859,7 +913,7 @@ pub fn callgraph_to_json(cg : CallGraph) -> String {
     result = result + "    {\n"
     result = result +
       "      \"address\": \"\{format_hex_uint(node.address)}\",\n"
-    result = result + "      \"name\": \"\{node.name}\",\n"
+    result = result + "      \"name\": \"\{json_escape(node.name)}\",\n"
     result = result + "      \"size\": \{node.size.reinterpret_as_int()},\n"
     result = result + "      \"calls\": ["
 

@@ -503,55 +503,66 @@ test "decode_c_srai" {
 
 ///|
 test "decode_c_sub" {
-  // C.SUB x8, x9 - Quadrant 1, f3=100, f2=11, f1=0
-  let code = 0x8C01U
+  // C.SUB x8, x9 - Quadrant 1, f3=100, f2=11, bit12=0, bit5=0
+  // Encoding: |f3|b12|f2|rs1'|b5|rs2'|q|
+  //           |100|0|11|000|0|001|01| = 0x8C05
+  let code = 0x8C05U
   let DecodeResult(result) = decode_compressed(code)
   match result {
     C_SUB(rd, rs2) => {
       inspect(rd, content="8")
-      inspect(
-        rs2,
-        content=(
-          #|8
-        ),
-      )
+      inspect(rs2, content="9")
     }
-    _ => inspect(result, content="C_SUB(_, _)")
+    _ => inspect(result, content="C_SUB(8, 9)")
   }
 }
 
 ///|
 test "decode_c_xor" {
-  // C.XOR x8, x9 - Quadrant 1, f3=100, f2=11, f1=1
-  let code = 0x8C21U
+  // C.XOR x8, x9 - Quadrant 1, f3=100, f2=11, bit12=0, bit5=1
+  // Encoding: |f3|b12|f2|rs1'|b5|rs2'|q|
+  //           |100|0|11|000|1|001|01| = 0x8C25
+  let code = 0x8C25U
   let DecodeResult(result) = decode_compressed(code)
   match result {
     C_XOR(rd, rs2) => {
       inspect(rd, content="8")
       inspect(rs2, content="9")
     }
-    _ =>
-      inspect(
-        result,
-        content=(
-          #|C_SUB(8, 8)
-        ),
-      )
+    _ => inspect(result, content="C_XOR(8, 9)")
   }
 }
 
 ///|
 test "decode_c_or" {
-  // C.OR x8, x9 - Quadrant 1, f3=100, f2=11
-  // Note: C.OR and C.AND not fully implemented in decoder, skip for now
-  inspect(true, content="true")
+  // C.OR x8, x9 - Quadrant 1, f3=100, f2=11, bit12=1, bit5=0
+  // Encoding: |f3|b12|f2|rs1'|b5|rs2'|q|
+  //           |100|1|11|000|0|001|01| = 0x9C05
+  let code = 0x9C05U
+  let DecodeResult(result) = decode_compressed(code)
+  match result {
+    C_OR(rd, rs2) => {
+      inspect(rd, content="8")
+      inspect(rs2, content="9")
+    }
+    _ => inspect(result, content="C_OR(8, 9)")
+  }
 }
 
 ///|
 test "decode_c_and" {
-  // C.AND x8, x9 - Quadrant 1, f3=100, f2=11
-  // Note: C.OR and C.AND not fully implemented in decoder, skip for now
-  inspect(true, content="true")
+  // C.AND x8, x9 - Quadrant 1, f3=100, f2=11, bit12=1, bit5=1
+  // Encoding: |f3|b12|f2|rs1'|b5|rs2'|q|
+  //           |100|1|11|000|1|001|01| = 0x9C25
+  let code = 0x9C25U
+  let DecodeResult(result) = decode_compressed(code)
+  match result {
+    C_AND(rd, rs2) => {
+      inspect(rd, content="8")
+      inspect(rs2, content="9")
+    }
+    _ => inspect(result, content="C_AND(8, 9)")
+  }
 }
 
 ///|

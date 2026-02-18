@@ -723,12 +723,20 @@ pub fn decode_compressed(code16 : UInt) -> DecodeResult {
               DecodeResult(C_ANDI(rs1, imm_signed))
             }
             // C.SUB, C.XOR, C.OR, C.AND
+            // Encoding: bit 12 and bit 5 determine the instruction
+            // C.SUB: bit12=0, bit5=0
+            // C.XOR: bit12=0, bit5=1
+            // C.OR:  bit12=1, bit5=0
+            // C.AND: bit12=1, bit5=1
             0b11 => {
               let rs2 = c_reg_to_full((code16 >> 2) & 0x7U)
-              let f1 = (code16 >> 12) & 0x1U
-              match f1 {
-                0b0 => DecodeResult(C_SUB(rs1, rs2))
-                0b1 => DecodeResult(C_XOR(rs1, rs2))
+              let bit12 = (code16 >> 12) & 0x1U
+              let bit5 = (code16 >> 5) & 0x1U
+              match (bit12, bit5) {
+                (0b0, 0b0) => DecodeResult(C_SUB(rs1, rs2))
+                (0b0, 0b1) => DecodeResult(C_XOR(rs1, rs2))
+                (0b1, 0b0) => DecodeResult(C_OR(rs1, rs2))
+                (0b1, 0b1) => DecodeResult(C_AND(rs1, rs2))
                 _ => DecodeResult(Invalid(code16))
               }
             }
