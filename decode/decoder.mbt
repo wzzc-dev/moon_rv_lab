@@ -37,7 +37,7 @@ fn sign_extend_13(value : UInt) -> Int {
 
 ///|
 /// Sign extend 20-bit value (for U-type immediate, as upper 20 bits)
-fn sign_extend_20(value : UInt) -> Int {
+fn _sign_extend_20(value : UInt) -> Int {
   let sign_bit = (value >> 19).reinterpret_as_int()
   if sign_bit == 1 {
     // Negative: set upper 12 bits to 1
@@ -258,14 +258,18 @@ pub fn decode(code : UInt) -> DecodeResult {
           match f7 {
             0b0000000 => DecodeResult(SLL(rd, rs1, rs2))
             0b0000001 => DecodeResult(MULH(rd, rs1, rs2))
-            // Zbb: CLZ/CTZ/CPOP/ROL
+            // Zbb: CLZ/CTZ/CPOP/ROL/SEXT_B/SEXT_H
             0b0110000 =>
               match rs2 {
                 0b00000 => DecodeResult(CLZ(rd, rs1))
                 0b00001 => DecodeResult(CTZ(rd, rs1))
                 0b00010 => DecodeResult(CPOP(rd, rs1))
+                0b00100 => DecodeResult(SEXT_B(rd, rs1))
+                0b00101 => DecodeResult(SEXT_H(rd, rs1))
                 _ => DecodeResult(ROL(rd, rs1, rs2))
               }
+            // Zbc: CLMULR
+            0b0000101 => DecodeResult(CLMULR(rd, rs1, rs2))
             _ => DecodeResult(Invalid(code))
           }
         0b010 =>
@@ -320,8 +324,20 @@ pub fn decode(code : UInt) -> DecodeResult {
             0b0000101 => DecodeResult(CLMULH(rd, rs1, rs2))
             // Zbs: BEXT
             0b0100101 => DecodeResult(BEXT(rd, rs1, rs2))
-            // Zbs: BINV
-            0b0110100 => DecodeResult(BINV(rd, rs1, rs2))
+            // Zbs: BINV or Zbb: REV8 (rs2=11000=24)
+            0b0110100 =>
+              if rs2 == 0b11000U {
+                DecodeResult(REV8(rd, rs1))
+              } else {
+                DecodeResult(BINV(rd, rs1, rs2))
+              }
+            // Zbs: BSET or Zbb: ORC_B (rs2=00111=7)
+            0b0010100 =>
+              if rs2 == 0b00111U {
+                DecodeResult(ORC_B(rd, rs1))
+              } else {
+                DecodeResult(BSET(rd, rs1, rs2))
+              }
             _ => DecodeResult(Invalid(code))
           }
         0b110 =>
@@ -561,7 +577,7 @@ fn sign_extend_6(value : UInt) -> Int {
 
 ///|
 /// Sign extend a 8-bit value to signed Int
-fn sign_extend_8(value : UInt) -> Int {
+fn _sign_extend_8(value : UInt) -> Int {
   let sign_bit = (value >> 7).reinterpret_as_int()
   if sign_bit == 1 {
     value.reinterpret_as_int() - 256
@@ -801,20 +817,23 @@ pub fn decode_compressed(code16 : UInt) -> DecodeResult {
         0b100 => {
           let rd = (code16 >> 7) & 0x1FU
           let rs2 = (code16 >> 2) & 0x1FU
-          let rs1 = rd
+          let bit12 = (code16 >> 12) & 0x1U
           if rs2 == 0U {
-            // C.JR or C.EBREAK
+            // C.JR, C.JALR, or C.EBREAK
             if rd == 0U {
               DecodeResult(C_EBREAK)
-            } else {
+            } else if bit12 == 0U {
+              // C.JR: bit12=0, rs2=0, rd!=0
               DecodeResult(C_JR(rd))
+            } else {
+              // C.JALR: bit12=1, rs2=0, rd!=0
+              DecodeResult(C_JALR(rd))
             }
             // C.MV or C.ADD
           } else if rd == 0U {
             DecodeResult(Invalid(code16))
           } else {
-            let f1 = (code16 >> 12) & 0x1U
-            match f1 {
+            match bit12 {
               0b0 => DecodeResult(C_MV(rd, rs2))
               0b1 => DecodeResult(C_ADD(rd, rs2))
               _ => DecodeResult(Invalid(code16))

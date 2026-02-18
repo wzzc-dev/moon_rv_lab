@@ -399,18 +399,13 @@ test "decode_c_jr" {
 
 ///|
 test "decode_c_jalr" {
-  // C.JALR x1 (ra) - Quadrant 2, f3=100, rd=1, rs2=0, bit12=1
+  // C.JALR x2 (sp) - Quadrant 2, f3=100, rd=2, rs2=0, bit12=1
+  // Encoding: |f3|b12|rd|rs2|q| = |100|1|00010|00000|10| = 0x9102
   let code = 0x9102U
   let DecodeResult(result) = decode_compressed(code)
   match result {
-    C_JALR(rs1) => inspect(rs1, content="1")
-    _ =>
-      inspect(
-        result,
-        content=(
-          #|C_JR(2)
-        ),
-      )
+    C_JALR(rs1) => inspect(rs1, content="2")
+    _ => inspect(result, content="C_JALR(2)")
   }
 }
 

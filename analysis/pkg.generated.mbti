@@ -93,7 +93,6 @@ pub struct Edge {
 pub impl Show for Edge
 
 pub enum EdgeType {
-  FallThrough
   Jump
   BranchTaken
   BranchNotTaken

@@ -18,8 +18,6 @@ pub struct BasicBlock {
 ///|
 /// Control flow edge type
 pub enum EdgeType {
-  /// Sequential fall-through
-  FallThrough
   /// Unconditional jump
   Jump
   /// Conditional branch (taken)
@@ -502,7 +500,6 @@ pub fn print_cfg(cfg : CFG) -> Unit {
   println("Edges: \{cfg.edges.length()}")
   for edge in cfg.edges {
     let type_str = match edge.edge_type {
-      FallThrough => "FallThrough"
       Jump => "Jump"
       BranchTaken => "BranchTaken"
       BranchNotTaken => "BranchNotTaken"
@@ -759,7 +756,7 @@ pub fn cfg_to_dot(cfg : CFG, name : String) -> String {
   result = result + "  // Basic blocks\n"
   for block in cfg.blocks {
     let addr = format_hex_uint(block.start_addr)
-    let end_addr = format_hex_uint(block.end_addr)
+    let _end_addr = format_hex_uint(block.end_addr)
     let label = "\{addr}\\n\{block.instruction_count} insts"
     result = result + "  bb_\{addr} [label=\"\{label}\""
     // Mark entry blocks
@@ -781,7 +778,6 @@ pub fn cfg_to_dot(cfg : CFG, name : String) -> String {
     let from_addr = format_hex_uint(edge.from_block)
     let to_addr = format_hex_uint(edge.to_block)
     let (style, color, label) = match edge.edge_type {
-      EdgeType::FallThrough => ("solid", "black", "fall")
       EdgeType::Jump => ("solid", "blue", "jmp")
       EdgeType::BranchTaken => ("solid", "green", "taken")
       EdgeType::BranchNotTaken => ("solid", "red", "not taken")
@@ -867,7 +863,6 @@ pub fn cfg_to_json(cfg : CFG) -> String {
       result = result + ",\n"
     }
     let type_str = match edge.edge_type {
-      EdgeType::FallThrough => "FallThrough"
       EdgeType::Jump => "Jump"
       EdgeType::BranchTaken => "BranchTaken"
       EdgeType::BranchNotTaken => "BranchNotTaken"

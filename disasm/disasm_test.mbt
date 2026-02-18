@@ -182,12 +182,13 @@ test "disassemble_c_jr" {
 
 ///|
 test "disassemble_c_jalr" {
+  // C.JALR x2 (sp) - 0x9102
   let @decode.DecodeResult(inst) = @decode.decode_compressed(0x9102U)
   let result = disassemble(inst)
   inspect(
     result,
     content=(
-      #|c.jr sp
+      #|c.jalr sp
     ),
   )
 }

@@ -219,18 +219,13 @@ pub fn Instruction::category(self : Instruction) -> InstructionCategory {
     LB(_, _, _) | LH(_, _, _) | LW(_, _, _) | LBU(_, _, _) | LHU(_, _, _) =>
       InstructionCategory::Load
     SB(_, _, _) | SH(_, _, _) | SW(_, _, _) => InstructionCategory::Store
-    ADDI(_, _, _)
-    | SLTI(_, _, _)
-    | SLTIU(_, _, _)
-    | SLLI(_, _, _)
-    | SRLI(_, _, _)
-    | SRAI(_, _, _) => InstructionCategory::Arithmetic
+    ADDI(_, _, _) | SLLI(_, _, _) | SRLI(_, _, _) | SRAI(_, _, _) =>
+      InstructionCategory::Arithmetic
+    SLTI(_, _, _) | SLTIU(_, _, _) => InstructionCategory::Compare
     XORI(_, _, _) | ORI(_, _, _) | ANDI(_, _, _) => InstructionCategory::Logical
     ADD(_, _, _)
     | SUB(_, _, _)
     | SLL(_, _, _)
-    | SLT(_, _, _)
-    | SLTU(_, _, _)
     | MUL(_, _, _)
     | MULH(_, _, _)
     | MULHSU(_, _, _)
@@ -239,6 +234,7 @@ pub fn Instruction::category(self : Instruction) -> InstructionCategory {
     | DIVU(_, _, _)
     | REM(_, _, _)
     | REMU(_, _, _) => InstructionCategory::Arithmetic
+    SLT(_, _, _) | SLTU(_, _, _) => InstructionCategory::Compare
     XOR(_, _, _) | SRL(_, _, _) | SRA(_, _, _) | OR(_, _, _) | AND(_, _, _) =>
       InstructionCategory::Logical
     // RV64I instructions

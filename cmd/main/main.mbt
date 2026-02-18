@@ -24,40 +24,40 @@ pub enum Command {
 ///|
 /// Options for disasm command
 pub struct DisasmOptions {
-  pub file_path : String
-  pub base_addr : UInt
-  pub format : OutputFormat
-  pub raw_mode : Bool // Treat as raw binary instead of ELF
+  file_path : String
+  base_addr : UInt
+  format : OutputFormat
+  raw_mode : Bool // Treat as raw binary instead of ELF
 } derive(Show)
 
 ///|
 /// Options for info command
 pub struct InfoOptions {
-  pub file_path : String
-  pub format : OutputFormat
+  file_path : String
+  format : OutputFormat
 } derive(Show)
 
 ///|
 /// Options for symbols command
 pub struct SymbolsOptions {
-  pub file_path : String
-  pub format : OutputFormat
-  pub show_all : Bool // Show all symbols including local
+  file_path : String
+  format : OutputFormat
+  show_all : Bool // Show all symbols including local
 } derive(Show)
 
 ///|
 /// Options for cfg command
 pub struct CfgOptions {
-  pub file_path : String
-  pub function : String // Function name or address
-  pub format : OutputFormat
+  file_path : String
+  function : String // Function name or address
+  format : OutputFormat
 } derive(Show)
 
 ///|
-/// Options for callgraph command  
+/// Options for callgraph command
 pub struct CallGraphOptions {
-  pub file_path : String
-  pub format : OutputFormat
+  file_path : String
+  format : OutputFormat
 } derive(Show)
 
 ///|
@@ -174,7 +174,7 @@ fn uint_to_hex(value : UInt) -> String {
 
 ///|
 /// Format UInt as hex with 0x prefix
-fn format_hex(value : UInt) -> String {
+fn _format_hex(value : UInt) -> String {
   "0x" + uint_to_hex(value)
 }
 
@@ -416,7 +416,7 @@ fn parse_callgraph_args(args : Array[String]) -> Command? {
 
 ///|
 /// Print usage information
-fn print_usage() -> Unit {
+fn _print_usage() -> Unit {
   println("RISC-V Binary Analyzer v\{VERSION}")
   println("")
   println("Usage: rv-analyzer <command> [options] <file>")
@@ -459,7 +459,7 @@ fn print_usage() -> Unit {
 
 ///|
 /// Print version information
-fn print_version() -> Unit {
+fn _print_version() -> Unit {
   println("rv-analyzer \{VERSION}")
   println("RISC-V Binary Analyzer")
   println(
@@ -561,23 +561,6 @@ fn run_demo() -> Unit {
   println("- ELF32/ELF64 (RISC-V)")
   println("- Raw binary files")
   println("- Intel HEX format")
-}
-
-///|
-/// Generate JSON string for an object (simple implementation)
-fn json_string(s : String) -> String {
-  let mut result = "\""
-  for c in s {
-    match c {
-      '"' => result = result + "\\\""
-      '\\' => result = result + "\\\\"
-      '\n' => result = result + "\\n"
-      '\r' => result = result + "\\r"
-      '\t' => result = result + "\\t"
-      _ => result = result + c.to_string()
-    }
-  }
-  result + "\""
 }
 
 ///|
