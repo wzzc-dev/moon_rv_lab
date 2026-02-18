@@ -129,6 +129,7 @@ pub fn decode(code : UInt) -> DecodeResult {
   let rs1 = extract_bits(code, 19, 15)
   let rs2 = extract_bits(code, 24, 20)
   let f7 = extract_bits(code, 31, 25)
+  let csr = extract_bits(code, 31, 20) // CSR address for Zicsr instructions
 
   match op {
     // LUI
@@ -189,7 +190,7 @@ pub fn decode(code : UInt) -> DecodeResult {
         _ => DecodeResult(Invalid(code))
       }
     }
-    // OP_IMM (Immediate arithmetic/logical)
+    // OP_IMM (Immediate arithmetic/logical) - includes Zbb/Zbs immediate extensions
     0b0010011 =>
       match f3 {
         0b000 => {
@@ -218,19 +219,32 @@ pub fn decode(code : UInt) -> DecodeResult {
         }
         0b001 => {
           let shamt = extract_bits(code, 24, 20)
-          DecodeResult(SLLI(rd, rs1, shamt))
+          match f7 {
+            0b0000000 => DecodeResult(SLLI(rd, rs1, shamt))
+            // Zbs: BSETI
+            0b0010100 => DecodeResult(BSETI(rd, rs1, shamt))
+            // Zbs: BCLRI
+            0b0100100 => DecodeResult(BCLRI(rd, rs1, shamt))
+            _ => DecodeResult(Invalid(code))
+          }
         }
         0b101 => {
           let shamt = extract_bits(code, 24, 20)
           match f7 {
             0b0000000 => DecodeResult(SRLI(rd, rs1, shamt))
             0b0100000 => DecodeResult(SRAI(rd, rs1, shamt))
+            // Zbb: RORI
+            0b0110000 => DecodeResult(RORI(rd, rs1, shamt))
+            // Zbs: BEXTI
+            0b0100100 => DecodeResult(BEXTI(rd, rs1, shamt))
+            // Zbs: BINVI
+            0b0110100 => DecodeResult(BINVI(rd, rs1, shamt))
             _ => DecodeResult(Invalid(code))
           }
         }
         _ => DecodeResult(Invalid(code))
       }
-    // OP (Register arithmetic/logical)
+    // OP (Register arithmetic/logical) - includes Zba/Zbb/Zbc/Zbs extensions
     0b0110011 =>
       match f3 {
         0b000 =>
@@ -244,24 +258,55 @@ pub fn decode(code : UInt) -> DecodeResult {
           match f7 {
             0b0000000 => DecodeResult(SLL(rd, rs1, rs2))
             0b0000001 => DecodeResult(MULH(rd, rs1, rs2))
+            // Zbb: CLZ/CTZ/CPOP/ROL
+            0b0110000 =>
+              match rs2 {
+                0b00000 => DecodeResult(CLZ(rd, rs1))
+                0b00001 => DecodeResult(CTZ(rd, rs1))
+                0b00010 => DecodeResult(CPOP(rd, rs1))
+                _ => DecodeResult(ROL(rd, rs1, rs2))
+              }
             _ => DecodeResult(Invalid(code))
           }
         0b010 =>
           match f7 {
             0b0000000 => DecodeResult(SLT(rd, rs1, rs2))
             0b0000001 => DecodeResult(MULHSU(rd, rs1, rs2))
+            // Zba: SH1ADD
+            0b0010000 => DecodeResult(SH1ADD(rd, rs1, rs2))
+            // Zbb: MIN
+            0b0000101 => DecodeResult(MIN(rd, rs1, rs2))
             _ => DecodeResult(Invalid(code))
           }
         0b011 =>
           match f7 {
             0b0000000 => DecodeResult(SLTU(rd, rs1, rs2))
             0b0000001 => DecodeResult(MULHU(rd, rs1, rs2))
+            // Zbb: MINU
+            0b0000101 => DecodeResult(MINU(rd, rs1, rs2))
             _ => DecodeResult(Invalid(code))
           }
         0b100 =>
           match f7 {
             0b0000000 => DecodeResult(XOR(rd, rs1, rs2))
             0b0000001 => DecodeResult(DIV(rd, rs1, rs2))
+            // Zba: SH2ADD
+            0b0010000 => DecodeResult(SH2ADD(rd, rs1, rs2))
+            // Zbb: ZEXT_H (rs2 = 0)
+            0b0000100 =>
+              if rs2 == 0U {
+                DecodeResult(ZEXT_H(rd, rs1))
+              } else {
+                DecodeResult(Invalid(code))
+              }
+            // Zbb: XNOR
+            0b0100000 => DecodeResult(XNOR(rd, rs1, rs2))
+            // Zbc: CLMUL
+            0b0000101 => DecodeResult(CLMUL(rd, rs1, rs2))
+            // Zbs: BCLR
+            0b0100100 => DecodeResult(BCLR(rd, rs1, rs2))
+            // Zbs: BEXT
+            0b0100101 => DecodeResult(BEXT(rd, rs1, rs2))
             _ => DecodeResult(Invalid(code))
           }
         0b101 =>
@@ -269,18 +314,38 @@ pub fn decode(code : UInt) -> DecodeResult {
             0b0000000 => DecodeResult(SRL(rd, rs1, rs2))
             0b0100000 => DecodeResult(SRA(rd, rs1, rs2))
             0b0000001 => DecodeResult(DIVU(rd, rs1, rs2))
+            // Zbb: ROR
+            0b0110000 => DecodeResult(ROR(rd, rs1, rs2))
+            // Zbc: CLMULH
+            0b0000101 => DecodeResult(CLMULH(rd, rs1, rs2))
+            // Zbs: BEXT
+            0b0100101 => DecodeResult(BEXT(rd, rs1, rs2))
+            // Zbs: BINV
+            0b0110100 => DecodeResult(BINV(rd, rs1, rs2))
             _ => DecodeResult(Invalid(code))
           }
         0b110 =>
           match f7 {
             0b0000000 => DecodeResult(OR(rd, rs1, rs2))
             0b0000001 => DecodeResult(REM(rd, rs1, rs2))
+            // Zba: SH3ADD
+            0b0010000 => DecodeResult(SH3ADD(rd, rs1, rs2))
+            // Zbb: ORN
+            0b0100000 => DecodeResult(ORN(rd, rs1, rs2))
+            // Zbb: MAX
+            0b0000101 => DecodeResult(MAX(rd, rs1, rs2))
+            // Zbs: BSET
+            0b0010100 => DecodeResult(BSET(rd, rs1, rs2))
             _ => DecodeResult(Invalid(code))
           }
         0b111 =>
           match f7 {
             0b0000000 => DecodeResult(AND(rd, rs1, rs2))
             0b0000001 => DecodeResult(REMU(rd, rs1, rs2))
+            // Zbb: ANDN
+            0b0100000 => DecodeResult(ANDN(rd, rs1, rs2))
+            // Zbb: MAXU
+            0b0000101 => DecodeResult(MAXU(rd, rs1, rs2))
             _ => DecodeResult(Invalid(code))
           }
         _ => DecodeResult(Invalid(code))
@@ -422,7 +487,7 @@ pub fn decode(code : UInt) -> DecodeResult {
         _ => DecodeResult(Invalid(code))
       }
     }
-    // SYSTEM
+    // SYSTEM (including Zicsr)
     0b1110011 =>
       match f3 {
         0b000 =>
@@ -433,6 +498,13 @@ pub fn decode(code : UInt) -> DecodeResult {
           } else {
             DecodeResult(Invalid(code))
           }
+        // Zicsr instructions
+        0b001 => DecodeResult(CSRRW(rd, csr, rs1)) // CSRRW
+        0b010 => DecodeResult(CSRRS(rd, csr, rs1)) // CSRRS
+        0b011 => DecodeResult(CSRRC(rd, csr, rs1)) // CSRRC
+        0b101 => DecodeResult(CSRRWI(rd, csr, rs1)) // CSRRWI (rs1 field is uimm)
+        0b110 => DecodeResult(CSRRSI(rd, csr, rs1)) // CSRRSI (rs1 field is uimm)
+        0b111 => DecodeResult(CSRRCI(rd, csr, rs1)) // CSRRCI (rs1 field is uimm)
         _ => DecodeResult(Invalid(code))
       }
     _ => DecodeResult(Invalid(code))

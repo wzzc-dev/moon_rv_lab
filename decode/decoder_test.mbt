@@ -1099,3 +1099,455 @@ test "decode_amoadd_d" {
     _ => inspect(result, content="AMOADD_D(_, _, _, _, _)")
   }
 }
+
+///|
+/// Tests for Zicsr instructions
+test "decode_csrrw" {
+  // CSRRW x5, 0x001 (fflags), x6 - f3=001
+  // csr=0x001, rd=5, rs1=6
+  let code = 0x001312F3U
+  let DecodeResult(result) = decode(code)
+  match result {
+    CSRRW(rd, csr, rs1) => {
+      inspect(rd, content="5")
+      inspect(csr, content="1")
+      inspect(rs1, content="6")
+    }
+    _ => inspect(result, content="CSRRW(_, _, _)")
+  }
+}
+
+///|
+test "decode_csrrs" {
+  // CSRRS x5, 0x001 (fflags), x6 - f3=010
+  // Encoding: csr=1, rs1=6, f3=010, rd=5, opcode=0x73
+  // Binary: csr[31:20] | rs1[19:15] | f3[14:12] | rd[11:7] | opcode[6:0]
+  // = 0x001 << 20 | 6 << 15 | 2 << 12 | 5 << 7 | 0x73
+  // = 0x100000 | 0x30000 | 0x2000 | 0x280 | 0x73 = 0x1322F3
+  let code = 0x001322F3U
+  let DecodeResult(result) = decode(code)
+  match result {
+    CSRRS(rd, csr, rs1) => {
+      inspect(rd, content="5")
+      inspect(csr, content="1")
+      inspect(rs1, content="6")
+    }
+    _ => inspect(result, content="CSRRS(_, _, _)")
+  }
+}
+
+///|
+test "decode_csrrc" {
+  // CSRRC x5, 0x001 (fflags), x6 - f3=011
+  // = 0x001 << 20 | 6 << 15 | 3 << 12 | 5 << 7 | 0x73 = 0x1332F3
+  let code = 0x001332F3U
+  let DecodeResult(result) = decode(code)
+  match result {
+    CSRRC(rd, csr, rs1) => {
+      inspect(rd, content="5")
+      inspect(csr, content="1")
+      inspect(rs1, content="6")
+    }
+    _ => inspect(result, content="CSRRC(_, _, _)")
+  }
+}
+
+///|
+test "decode_csrrwi" {
+  // CSRRWI x5, 0x001 (fflags), 3 - f3=101
+  let code = 0x0011D2F3U
+  let DecodeResult(result) = decode(code)
+  match result {
+    CSRRWI(rd, csr, uimm) => {
+      inspect(rd, content="5")
+      inspect(csr, content="1")
+      inspect(uimm, content="3")
+    }
+    _ => inspect(result, content="CSRRWI(_, _, _)")
+  }
+}
+
+///|
+/// Tests for Zba extension (address generation)
+test "decode_sh1add" {
+  // SH1ADD x5, x6, x7 - f3=010, f7=0010000
+  // R-type: f7[31:25] | rs2[24:20] | rs1[19:15] | f3[14:12] | rd[11:7] | opcode[6:0]
+  // = 16 << 25 | 7 << 20 | 6 << 15 | 2 << 12 | 5 << 7 | 0x33 = 0x207322B3
+  let code = 0x207322B3U
+  let DecodeResult(result) = decode(code)
+  match result {
+    SH1ADD(rd, rs1, rs2) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(rs2, content="7")
+    }
+    _ => inspect(result, content="SH1ADD(_, _, _)")
+  }
+}
+
+///|
+test "decode_sh2add" {
+  // SH2ADD x5, x6, x7 - f3=100, f7=0010000
+  // R-type: = 16 << 25 | 7 << 20 | 6 << 15 | 4 << 12 | 5 << 7 | 0x33 = 0x207342B3
+  let code = 0x207342B3U
+  let DecodeResult(result) = decode(code)
+  match result {
+    SH2ADD(rd, rs1, rs2) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(rs2, content="7")
+    }
+    _ => inspect(result, content="SH2ADD(_, _, _)")
+  }
+}
+
+///|
+test "decode_sh3add" {
+  // SH3ADD x5, x6, x7 - f3=110, f7=0010000
+  // R-type: = 16 << 25 | 7 << 20 | 6 << 15 | 6 << 12 | 5 << 7 | 0x33 = 0x207362B3
+  let code = 0x207362B3U
+  let DecodeResult(result) = decode(code)
+  match result {
+    SH3ADD(rd, rs1, rs2) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(rs2, content="7")
+    }
+    _ => inspect(result, content="SH3ADD(_, _, _)")
+  }
+}
+
+///|
+/// Tests for Zbb extension (basic bit manipulation)
+test "decode_clz" {
+  // CLZ x5, x6 - f3=001, f7=0110000, rs2=0
+  // R-type: = 48 << 25 | 0 << 20 | 6 << 15 | 1 << 12 | 5 << 7 | 0x33 = 0x600312B3
+  let code = 0x600312B3U
+  let DecodeResult(result) = decode(code)
+  match result {
+    CLZ(rd, rs1) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+    }
+    _ => inspect(result, content="CLZ(_, _)")
+  }
+}
+
+///|
+test "decode_ctz" {
+  // CTZ x5, x6 - f3=001, f7=0110000, rs2=1
+  // R-type: = 48 << 25 | 1 << 20 | 6 << 15 | 1 << 12 | 5 << 7 | 0x33 = 0x601312B3
+  let code = 0x601312B3U
+  let DecodeResult(result) = decode(code)
+  match result {
+    CTZ(rd, rs1) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+    }
+    _ => inspect(result, content="CTZ(_, _)")
+  }
+}
+
+///|
+test "decode_cpop" {
+  // CPOP x5, x6 - f3=001, f7=0110000, rs2=2
+  // R-type: = 48 << 25 | 2 << 20 | 6 << 15 | 1 << 12 | 5 << 7 | 0x33 = 0x602312B3
+  let code = 0x602312B3U
+  let DecodeResult(result) = decode(code)
+  match result {
+    CPOP(rd, rs1) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+    }
+    _ => inspect(result, content="CPOP(_, _)")
+  }
+}
+
+///|
+test "decode_andn" {
+  // ANDN x5, x6, x7 - f3=111, f7=0100000
+  // = 0x407372B3
+  let code = 0x407372B3U
+  let DecodeResult(result) = decode(code)
+  match result {
+    ANDN(rd, rs1, rs2) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(rs2, content="7")
+    }
+    _ => inspect(result, content="ANDN(_, _, _)")
+  }
+}
+
+///|
+test "decode_orn" {
+  // ORN x5, x6, x7 - f3=110, f7=0100000
+  // = 0x407362B3
+  let code = 0x407362B3U
+  let DecodeResult(result) = decode(code)
+  match result {
+    ORN(rd, rs1, rs2) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(rs2, content="7")
+    }
+    _ => inspect(result, content="ORN(_, _, _)")
+  }
+}
+
+///|
+test "decode_xnor" {
+  // XNOR x5, x6, x7 - f3=100, f7=0100000
+  // = 0x407342B3
+  let code = 0x407342B3U
+  let DecodeResult(result) = decode(code)
+  match result {
+    XNOR(rd, rs1, rs2) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(rs2, content="7")
+    }
+    _ => inspect(result, content="XNOR(_, _, _)")
+  }
+}
+
+///|
+test "decode_min" {
+  // MIN x5, x6, x7 - f3=010, f7=0000101
+  // = 0x0A7322B3
+  let code = 0x0A7322B3U
+  let DecodeResult(result) = decode(code)
+  match result {
+    MIN(rd, rs1, rs2) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(rs2, content="7")
+    }
+    _ => inspect(result, content="MIN(_, _, _)")
+  }
+}
+
+///|
+test "decode_max" {
+  // MAX x5, x6, x7 - f3=110, f7=0000101
+  // = 0x0A7362B3
+  let code = 0x0A7362B3U
+  let DecodeResult(result) = decode(code)
+  match result {
+    MAX(rd, rs1, rs2) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(rs2, content="7")
+    }
+    _ => inspect(result, content="MAX(_, _, _)")
+  }
+}
+
+///|
+test "decode_minu" {
+  // MINU x5, x6, x7 - f3=011, f7=0000101
+  // = 0x0A7332B3
+  let code = 0x0A7332B3U
+  let DecodeResult(result) = decode(code)
+  match result {
+    MINU(rd, rs1, rs2) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(rs2, content="7")
+    }
+    _ => inspect(result, content="MINU(_, _, _)")
+  }
+}
+
+///|
+test "decode_maxu" {
+  // MAXU x5, x6, x7 - f3=111, f7=0000101
+  // = 0x0A7372B3
+  let code = 0x0A7372B3U
+  let DecodeResult(result) = decode(code)
+  match result {
+    MAXU(rd, rs1, rs2) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(rs2, content="7")
+    }
+    _ => inspect(result, content="MAXU(_, _, _)")
+  }
+}
+
+///|
+test "decode_rol" {
+  // ROL x5, x6, x7 - f3=001, f7=0110000
+  // R-type: = 48 << 25 | 7 << 20 | 6 << 15 | 1 << 12 | 5 << 7 | 0x33 = 0x607312B3
+  let code = 0x607312B3U
+  let DecodeResult(result) = decode(code)
+  match result {
+    ROL(rd, rs1, rs2) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(rs2, content="7")
+    }
+    _ => inspect(result, content="ROL(_, _, _)")
+  }
+}
+
+///|
+test "decode_ror" {
+  // ROR x5, x6, x7 - f3=101, f7=0110000
+  // = 0x607352B3
+  let code = 0x607352B3U
+  let DecodeResult(result) = decode(code)
+  match result {
+    ROR(rd, rs1, rs2) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(rs2, content="7")
+    }
+    _ => inspect(result, content="ROR(_, _, _)")
+  }
+}
+
+///|
+test "decode_rori" {
+  // RORI x5, x6, 5 - f3=101, f7=0110000, shamt=5
+  // I-type: = 48 << 25 | 5 << 20 | 6 << 15 | 5 << 12 | 5 << 7 | 0x13 = 0x60535293
+  let code = 0x60535293U
+  let DecodeResult(result) = decode(code)
+  match result {
+    RORI(rd, rs1, shamt) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(shamt, content="5")
+    }
+    _ => inspect(result, content="RORI(_, _, _)")
+  }
+}
+
+///|
+/// Tests for Zbs extension (single bit instructions)
+test "decode_bset" {
+  // BSET x5, x6, x7 - f3=110, f7=0010100
+  // = 0x287362B3
+  let code = 0x287362B3U
+  let DecodeResult(result) = decode(code)
+  match result {
+    BSET(rd, rs1, rs2) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(rs2, content="7")
+    }
+    _ => inspect(result, content="BSET(_, _, _)")
+  }
+}
+
+///|
+test "decode_bclr" {
+  // BCLR x5, x6, x7 - f3=100, f7=0100100
+  // = 0x487342B3
+  let code = 0x487342B3U
+  let DecodeResult(result) = decode(code)
+  match result {
+    BCLR(rd, rs1, rs2) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(rs2, content="7")
+    }
+    _ => inspect(result, content="BCLR(_, _, _)")
+  }
+}
+
+///|
+test "decode_bext" {
+  // BEXT x5, x6, x7 - f3=101, f7=0100101
+  // = 0x4A7352B3
+  let code = 0x4A7352B3U
+  let DecodeResult(result) = decode(code)
+  match result {
+    BEXT(rd, rs1, rs2) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(rs2, content="7")
+    }
+    _ => inspect(result, content="BEXT(_, _, _)")
+  }
+}
+
+///|
+test "decode_binv" {
+  // BINV x5, x6, x7 - f3=101, f7=0110100
+  // = 0x687352B3
+  let code = 0x687352B3U
+  let DecodeResult(result) = decode(code)
+  match result {
+    BINV(rd, rs1, rs2) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(rs2, content="7")
+    }
+    _ => inspect(result, content="BINV(_, _, _)")
+  }
+}
+
+///|
+test "decode_bseti" {
+  // BSETI x5, x6, 5 - f3=001, f7=0010100, shamt=5
+  // I-type: = 20 << 25 | 5 << 20 | 6 << 15 | 1 << 12 | 5 << 7 | 0x13 = 0x28531293
+  let code = 0x28531293U
+  let DecodeResult(result) = decode(code)
+  match result {
+    BSETI(rd, rs1, shamt) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(shamt, content="5")
+    }
+    _ => inspect(result, content="BSETI(_, _, _)")
+  }
+}
+
+///|
+test "decode_bclri" {
+  // BCLRI x5, x6, 5 - f3=001, f7=0100100, shamt=5
+  // I-type: = 36 << 25 | 5 << 20 | 6 << 15 | 1 << 12 | 5 << 7 | 0x13 = 0x48531293
+  let code = 0x48531293U
+  let DecodeResult(result) = decode(code)
+  match result {
+    BCLRI(rd, rs1, shamt) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(shamt, content="5")
+    }
+    _ => inspect(result, content="BCLRI(_, _, _)")
+  }
+}
+
+///|
+test "decode_bexti" {
+  // BEXTI x5, x6, 5 - f3=101, f7=0100100, shamt=5
+  // I-type: = 36 << 25 | 5 << 20 | 6 << 15 | 5 << 12 | 5 << 7 | 0x13 = 0x48535293
+  let code = 0x48535293U
+  let DecodeResult(result) = decode(code)
+  match result {
+    BEXTI(rd, rs1, shamt) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(shamt, content="5")
+    }
+    _ => inspect(result, content="BEXTI(_, _, _)")
+  }
+}
+
+///|
+test "decode_binvi" {
+  // BINVI x5, x6, 5 - f3=101, f7=0110100, shamt=5
+  // I-type: = 52 << 25 | 5 << 20 | 6 << 15 | 5 << 12 | 5 << 7 | 0x13 = 0x68535293
+  let code = 0x68535293U
+  let DecodeResult(result) = decode(code)
+  match result {
+    BINVI(rd, rs1, shamt) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(shamt, content="5")
+    }
+    _ => inspect(result, content="BINVI(_, _, _)")
+  }
+}

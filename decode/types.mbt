@@ -141,6 +141,49 @@ pub enum Instruction {
   C_JALR(UInt) // rs1
   C_ADD(UInt, UInt) // rd, rs2
   C_SWSP(UInt, UInt) // rs2, imm
+  // Zicsr extension (CSR instructions)
+  CSRRW(UInt, UInt, UInt) // rd, csr, rs1 - CSR read/write
+  CSRRS(UInt, UInt, UInt) // rd, csr, rs1 - CSR read/set
+  CSRRC(UInt, UInt, UInt) // rd, csr, rs1 - CSR read/clear
+  CSRRWI(UInt, UInt, UInt) // rd, csr, uimm - CSR read/write immediate
+  CSRRSI(UInt, UInt, UInt) // rd, csr, uimm - CSR read/set immediate
+  CSRRCI(UInt, UInt, UInt) // rd, csr, uimm - CSR read/clear immediate
+  // Zba extension (address generation)
+  SH1ADD(UInt, UInt, UInt) // rd, rs1, rs2 - shift left by 1 and add
+  SH2ADD(UInt, UInt, UInt) // rd, rs1, rs2 - shift left by 2 and add
+  SH3ADD(UInt, UInt, UInt) // rd, rs1, rs2 - shift left by 3 and add
+  // Zbb extension (basic bit manipulation)
+  ANDN(UInt, UInt, UInt) // rd, rs1, rs2 - AND with inverted rs2
+  ORN(UInt, UInt, UInt) // rd, rs1, rs2 - OR with inverted rs2
+  XNOR(UInt, UInt, UInt) // rd, rs1, rs2 - XNOR
+  CLZ(UInt, UInt) // rd, rs1 - count leading zeros
+  CTZ(UInt, UInt) // rd, rs1 - count trailing zeros
+  CPOP(UInt, UInt) // rd, rs1 - count population (set bits)
+  SEXT_B(UInt, UInt) // rd, rs1 - sign extend byte
+  SEXT_H(UInt, UInt) // rd, rs1 - sign extend halfword
+  ZEXT_H(UInt, UInt) // rd, rs1 - zero extend halfword (also in Zbb)
+  MAX(UInt, UInt, UInt) // rd, rs1, rs2 - maximum (signed)
+  MAXU(UInt, UInt, UInt) // rd, rs1, rs2 - maximum (unsigned)
+  MIN(UInt, UInt, UInt) // rd, rs1, rs2 - minimum (signed)
+  MINU(UInt, UInt, UInt) // rd, rs1, rs2 - minimum (unsigned)
+  ROL(UInt, UInt, UInt) // rd, rs1, rs2 - rotate left
+  ROR(UInt, UInt, UInt) // rd, rs1, rs2 - rotate right
+  RORI(UInt, UInt, UInt) // rd, rs1, shamt - rotate right immediate
+  ORC_B(UInt, UInt) // rd, rs1 - OR combine bytes
+  REV8(UInt, UInt) // rd, rs1 - byte reverse
+  // Zbc extension (carry-less multiplication)
+  CLMUL(UInt, UInt, UInt) // rd, rs1, rs2 - carry-less multiply low
+  CLMULH(UInt, UInt, UInt) // rd, rs1, rs2 - carry-less multiply high
+  CLMULR(UInt, UInt, UInt) // rd, rs1, rs2 - carry-less multiply reversed
+  // Zbs extension (single bit instructions)
+  BCLR(UInt, UInt, UInt) // rd, rs1, rs2 - bit clear
+  BCLRI(UInt, UInt, UInt) // rd, rs1, shamt - bit clear immediate
+  BEXT(UInt, UInt, UInt) // rd, rs1, rs2 - bit extract
+  BEXTI(UInt, UInt, UInt) // rd, rs1, shamt - bit extract immediate
+  BINV(UInt, UInt, UInt) // rd, rs1, rs2 - bit invert
+  BINVI(UInt, UInt, UInt) // rd, rs1, shamt - bit invert immediate
+  BSET(UInt, UInt, UInt) // rd, rs1, rs2 - bit set
+  BSETI(UInt, UInt, UInt) // rd, rs1, shamt - bit set immediate
   // Unknown/invalid instruction
   Invalid(UInt) // code
 } derive(Show)
@@ -259,6 +302,47 @@ pub fn Instruction::category(self : Instruction) -> InstructionCategory {
     C_ADD(_, _) => InstructionCategory::Arithmetic
     C_SUB(_, _) => InstructionCategory::Arithmetic
     C_EBREAK => InstructionCategory::System
+    // Zicsr instructions
+    CSRRW(_, _, _)
+    | CSRRS(_, _, _)
+    | CSRRC(_, _, _)
+    | CSRRWI(_, _, _)
+    | CSRRSI(_, _, _)
+    | CSRRCI(_, _, _) => InstructionCategory::System
+    // Zba extension (address generation)
+    SH1ADD(_, _, _) | SH2ADD(_, _, _) | SH3ADD(_, _, _) =>
+      InstructionCategory::Arithmetic
+    // Zbb extension (basic bit manipulation)
+    ANDN(_, _, _)
+    | ORN(_, _, _)
+    | XNOR(_, _, _)
+    | CLZ(_, _)
+    | CTZ(_, _)
+    | CPOP(_, _)
+    | SEXT_B(_, _)
+    | SEXT_H(_, _)
+    | ZEXT_H(_, _)
+    | MAX(_, _, _)
+    | MAXU(_, _, _)
+    | MIN(_, _, _)
+    | MINU(_, _, _)
+    | ROL(_, _, _)
+    | ROR(_, _, _)
+    | RORI(_, _, _)
+    | ORC_B(_, _)
+    | REV8(_, _) => InstructionCategory::Logical
+    // Zbc extension (carry-less multiplication)
+    CLMUL(_, _, _) | CLMULH(_, _, _) | CLMULR(_, _, _) =>
+      InstructionCategory::Arithmetic
+    // Zbs extension (single bit instructions)
+    BCLR(_, _, _)
+    | BCLRI(_, _, _)
+    | BEXT(_, _, _)
+    | BEXTI(_, _, _)
+    | BINV(_, _, _)
+    | BINVI(_, _, _)
+    | BSET(_, _, _)
+    | BSETI(_, _, _) => InstructionCategory::Logical
     Invalid(_) => InstructionCategory::Unknown
   }
 }

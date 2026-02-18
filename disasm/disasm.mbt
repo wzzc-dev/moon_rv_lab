@@ -355,6 +355,92 @@ pub fn disassemble(inst : @decode.Instruction) -> String {
       "c.add \{@decode.reg_name(rd)}, \{@decode.reg_name(rs2)}"
     @decode.C_SWSP(rs2, imm) => "c.swsp \{@decode.reg_name(rs2)}, \{imm}(sp)"
 
+    // Zicsr instructions
+    @decode.CSRRW(rd, csr, rs1) =>
+      "csrrw \{@decode.reg_name(rd)}, \{csr.reinterpret_as_int()}, \{@decode.reg_name(rs1)}"
+    @decode.CSRRS(rd, csr, rs1) =>
+      "csrrs \{@decode.reg_name(rd)}, \{csr.reinterpret_as_int()}, \{@decode.reg_name(rs1)}"
+    @decode.CSRRC(rd, csr, rs1) =>
+      "csrrc \{@decode.reg_name(rd)}, \{csr.reinterpret_as_int()}, \{@decode.reg_name(rs1)}"
+    @decode.CSRRWI(rd, csr, uimm) =>
+      "csrrwi \{@decode.reg_name(rd)}, \{csr.reinterpret_as_int()}, \{uimm.reinterpret_as_int()}"
+    @decode.CSRRSI(rd, csr, uimm) =>
+      "csrrsi \{@decode.reg_name(rd)}, \{csr.reinterpret_as_int()}, \{uimm.reinterpret_as_int()}"
+    @decode.CSRRCI(rd, csr, uimm) =>
+      "csrrci \{@decode.reg_name(rd)}, \{csr.reinterpret_as_int()}, \{uimm.reinterpret_as_int()}"
+
+    // Zba extension (address generation)
+    @decode.SH1ADD(rd, rs1, rs2) =>
+      "sh1add \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.SH2ADD(rd, rs1, rs2) =>
+      "sh2add \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.SH3ADD(rd, rs1, rs2) =>
+      "sh3add \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}, \{@decode.reg_name(rs2)}"
+
+    // Zbb extension (basic bit manipulation)
+    @decode.ANDN(rd, rs1, rs2) =>
+      "andn \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.ORN(rd, rs1, rs2) =>
+      "orn \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.XNOR(rd, rs1, rs2) =>
+      "xnor \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.CLZ(rd, rs1) =>
+      "clz \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}"
+    @decode.CTZ(rd, rs1) =>
+      "ctz \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}"
+    @decode.CPOP(rd, rs1) =>
+      "cpop \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}"
+    @decode.SEXT_B(rd, rs1) =>
+      "sext.b \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}"
+    @decode.SEXT_H(rd, rs1) =>
+      "sext.h \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}"
+    @decode.ZEXT_H(rd, rs1) =>
+      "zext.h \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}"
+    @decode.MAX(rd, rs1, rs2) =>
+      "max \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.MAXU(rd, rs1, rs2) =>
+      "maxu \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.MIN(rd, rs1, rs2) =>
+      "min \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.MINU(rd, rs1, rs2) =>
+      "minu \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.ROL(rd, rs1, rs2) =>
+      "rol \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.ROR(rd, rs1, rs2) =>
+      "ror \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.RORI(rd, rs1, shamt) =>
+      "rori \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}, \{shamt.reinterpret_as_int()}"
+    @decode.ORC_B(rd, rs1) =>
+      "orc.b \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}"
+    @decode.REV8(rd, rs1) =>
+      "rev8 \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}"
+
+    // Zbc extension (carry-less multiplication)
+    @decode.CLMUL(rd, rs1, rs2) =>
+      "clmul \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.CLMULH(rd, rs1, rs2) =>
+      "clmulh \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.CLMULR(rd, rs1, rs2) =>
+      "clmulr \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}, \{@decode.reg_name(rs2)}"
+
+    // Zbs extension (single bit instructions)
+    @decode.BCLR(rd, rs1, rs2) =>
+      "bclr \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.BCLRI(rd, rs1, shamt) =>
+      "bclri \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}, \{shamt.reinterpret_as_int()}"
+    @decode.BEXT(rd, rs1, rs2) =>
+      "bext \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.BEXTI(rd, rs1, shamt) =>
+      "bexti \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}, \{shamt.reinterpret_as_int()}"
+    @decode.BINV(rd, rs1, rs2) =>
+      "binv \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.BINVI(rd, rs1, shamt) =>
+      "binvi \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}, \{shamt.reinterpret_as_int()}"
+    @decode.BSET(rd, rs1, rs2) =>
+      "bset \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.BSETI(rd, rs1, shamt) =>
+      "bseti \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}, \{shamt.reinterpret_as_int()}"
+
     // Invalid instruction
     @decode.Invalid(code) => ".invalid \{format_hex_uint(code)}"
   }
