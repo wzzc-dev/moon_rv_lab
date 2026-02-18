@@ -20,11 +20,17 @@ pub fn cfg_to_dot(CFG, String) -> String
 
 pub fn cfg_to_json(CFG) -> String
 
+pub fn compute_def_use_chains(FixedArray[DecodedInst]) -> FixedArray[DefUseChain]
+
+pub fn compute_liveness(CFG, FixedArray[DecodedInst]) -> FixedArray[BlockLiveness]
+
 pub fn decode_instructions(FixedArray[Byte], UInt) -> FixedArray[DecodedInst]
 
 pub fn find_entry_points(CFG) -> FixedArray[UInt]
 
 pub fn get_branch_target(@decode.Instruction) -> Int
+
+pub fn get_operands(@decode.Instruction) -> InstOperands
 
 pub fn is_call(@decode.Instruction) -> Bool
 
@@ -40,6 +46,10 @@ pub fn print_call_graph(CallGraph) -> Unit
 
 pub fn print_cfg(CFG) -> Unit
 
+pub fn print_def_use_chains(FixedArray[DefUseChain]) -> Unit
+
+pub fn print_live_set(LiveSet) -> String
+
 pub fn reachable_functions(CallGraph) -> FixedArray[UInt]
 
 // Errors
@@ -52,6 +62,15 @@ pub struct BasicBlock {
   is_terminated : Bool
 }
 pub impl Show for BasicBlock
+
+pub struct BlockLiveness {
+  block_addr : UInt
+  live_in : LiveSet
+  live_out : LiveSet
+  def : LiveSet
+  uses : LiveSet
+}
+pub impl Show for BlockLiveness
 
 pub struct CFG {
   blocks : FixedArray[BasicBlock]
@@ -85,6 +104,23 @@ pub struct DecodedInst {
 }
 pub impl Show for DecodedInst
 
+pub struct DefUseChain {
+  reg : UInt
+  is_float : Bool
+  defs : FixedArray[DefUseEntry]
+  uses : FixedArray[DefUseEntry]
+}
+pub impl Show for DefUseChain
+
+pub struct DefUseEntry {
+  addr : UInt
+  index : Int
+  reg : UInt
+  is_float : Bool
+  is_def : Bool
+}
+pub impl Show for DefUseEntry
+
 pub struct Edge {
   from_block : UInt
   to_block : UInt
@@ -101,6 +137,42 @@ pub enum EdgeType {
 }
 pub impl Eq for EdgeType
 pub impl Show for EdgeType
+
+pub struct InstOperands {
+  operands : FixedArray[RegOperand]
+}
+pub impl Show for InstOperands
+
+pub struct LiveSet {
+  int_regs : UInt
+  float_regs : UInt
+}
+pub fn LiveSet::add_float(Self, UInt) -> Self
+pub fn LiveSet::add_int(Self, UInt) -> Self
+pub fn LiveSet::contains_float(Self, UInt) -> Bool
+pub fn LiveSet::contains_int(Self, UInt) -> Bool
+pub fn LiveSet::empty() -> Self
+pub fn LiveSet::equal(Self, Self) -> Bool
+pub fn LiveSet::remove_float(Self, UInt) -> Self
+pub fn LiveSet::remove_int(Self, UInt) -> Self
+pub fn LiveSet::union(Self, Self) -> Self
+pub impl Eq for LiveSet
+pub impl Show for LiveSet
+
+pub enum OperandRole {
+  Use
+  Def
+  UseDef
+}
+pub impl Eq for OperandRole
+pub impl Show for OperandRole
+
+pub struct RegOperand {
+  reg : UInt
+  is_float : Bool
+  role : OperandRole
+}
+pub impl Show for RegOperand
 
 // Type aliases
 

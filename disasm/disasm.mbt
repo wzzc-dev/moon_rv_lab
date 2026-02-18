@@ -441,6 +441,120 @@ pub fn disassemble(inst : @decode.Instruction) -> String {
     @decode.BSETI(rd, rs1, shamt) =>
       "bseti \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}, \{shamt.reinterpret_as_int()}"
 
+    // RV32F extension (single-precision floating-point)
+    @decode.FLW(rd, rs1, imm) =>
+      "flw \{@decode.freg_name(rd)}, \{format_imm(imm)}(\{@decode.reg_name(rs1)})"
+    @decode.FSW(rs1, rs2, imm) =>
+      "fsw \{@decode.freg_name(rs2)}, \{format_imm(imm)}(\{@decode.reg_name(rs1)})"
+    @decode.FADD_S(rd, rs1, rs2) =>
+      "fadd.s \{@decode.freg_name(rd)}, \{@decode.freg_name(rs1)}, \{@decode.freg_name(rs2)}"
+    @decode.FSUB_S(rd, rs1, rs2) =>
+      "fsub.s \{@decode.freg_name(rd)}, \{@decode.freg_name(rs1)}, \{@decode.freg_name(rs2)}"
+    @decode.FMUL_S(rd, rs1, rs2) =>
+      "fmul.s \{@decode.freg_name(rd)}, \{@decode.freg_name(rs1)}, \{@decode.freg_name(rs2)}"
+    @decode.FDIV_S(rd, rs1, rs2) =>
+      "fdiv.s \{@decode.freg_name(rd)}, \{@decode.freg_name(rs1)}, \{@decode.freg_name(rs2)}"
+    @decode.FSQRT_S(rd, rs1) =>
+      "fsqrt.s \{@decode.freg_name(rd)}, \{@decode.freg_name(rs1)}"
+    @decode.FSGNJ_S(rd, rs1, rs2) =>
+      "fsgnj.s \{@decode.freg_name(rd)}, \{@decode.freg_name(rs1)}, \{@decode.freg_name(rs2)}"
+    @decode.FSGNJN_S(rd, rs1, rs2) =>
+      "fsgnjn.s \{@decode.freg_name(rd)}, \{@decode.freg_name(rs1)}, \{@decode.freg_name(rs2)}"
+    @decode.FSGNJX_S(rd, rs1, rs2) =>
+      "fsgnjx.s \{@decode.freg_name(rd)}, \{@decode.freg_name(rs1)}, \{@decode.freg_name(rs2)}"
+    @decode.FMIN_S(rd, rs1, rs2) =>
+      "fmin.s \{@decode.freg_name(rd)}, \{@decode.freg_name(rs1)}, \{@decode.freg_name(rs2)}"
+    @decode.FMAX_S(rd, rs1, rs2) =>
+      "fmax.s \{@decode.freg_name(rd)}, \{@decode.freg_name(rs1)}, \{@decode.freg_name(rs2)}"
+    @decode.FCVT_W_S(rd, rs1, rm) =>
+      "fcvt.w.s \{@decode.reg_name(rd)}, \{@decode.freg_name(rs1)}"
+    @decode.FCVT_WU_S(rd, rs1, rm) =>
+      "fcvt.wu.s \{@decode.reg_name(rd)}, \{@decode.freg_name(rs1)}"
+    @decode.FMV_X_W(rd, rs1) =>
+      "fmv.x.w \{@decode.reg_name(rd)}, \{@decode.freg_name(rs1)}"
+    @decode.FEQ_S(rd, rs1, rs2) =>
+      "feq.s \{@decode.reg_name(rd)}, \{@decode.freg_name(rs1)}, \{@decode.freg_name(rs2)}"
+    @decode.FLT_S(rd, rs1, rs2) =>
+      "flt.s \{@decode.reg_name(rd)}, \{@decode.freg_name(rs1)}, \{@decode.freg_name(rs2)}"
+    @decode.FLE_S(rd, rs1, rs2) =>
+      "fle.s \{@decode.reg_name(rd)}, \{@decode.freg_name(rs1)}, \{@decode.freg_name(rs2)}"
+    @decode.FCLASS_S(rd, rs1) =>
+      "fclass.s \{@decode.reg_name(rd)}, \{@decode.freg_name(rs1)}"
+    @decode.FCVT_S_W(rd, rs1, rm) =>
+      "fcvt.s.w \{@decode.freg_name(rd)}, \{@decode.reg_name(rs1)}"
+    @decode.FCVT_S_WU(rd, rs1, rm) =>
+      "fcvt.s.wu \{@decode.freg_name(rd)}, \{@decode.reg_name(rs1)}"
+    @decode.FMV_W_X(rd, rs1) =>
+      "fmv.w.x \{@decode.freg_name(rd)}, \{@decode.reg_name(rs1)}"
+    // RV64F
+    @decode.FCVT_L_S(rd, rs1, rm) =>
+      "fcvt.l.s \{@decode.reg_name(rd)}, \{@decode.freg_name(rs1)}"
+    @decode.FCVT_LU_S(rd, rs1, rm) =>
+      "fcvt.lu.s \{@decode.reg_name(rd)}, \{@decode.freg_name(rs1)}"
+    @decode.FCVT_S_L(rd, rs1, rm) =>
+      "fcvt.s.l \{@decode.freg_name(rd)}, \{@decode.reg_name(rs1)}"
+    @decode.FCVT_S_LU(rd, rs1, rm) =>
+      "fcvt.s.lu \{@decode.freg_name(rd)}, \{@decode.reg_name(rs1)}"
+
+    // RV32D extension (double-precision floating-point)
+    @decode.FLD(rd, rs1, imm) =>
+      "fld \{@decode.freg_name(rd)}, \{format_imm(imm)}(\{@decode.reg_name(rs1)})"
+    @decode.FSD(rs1, rs2, imm) =>
+      "fsd \{@decode.freg_name(rs2)}, \{format_imm(imm)}(\{@decode.reg_name(rs1)})"
+    @decode.FADD_D(rd, rs1, rs2) =>
+      "fadd.d \{@decode.freg_name(rd)}, \{@decode.freg_name(rs1)}, \{@decode.freg_name(rs2)}"
+    @decode.FSUB_D(rd, rs1, rs2) =>
+      "fsub.d \{@decode.freg_name(rd)}, \{@decode.freg_name(rs1)}, \{@decode.freg_name(rs2)}"
+    @decode.FMUL_D(rd, rs1, rs2) =>
+      "fmul.d \{@decode.freg_name(rd)}, \{@decode.freg_name(rs1)}, \{@decode.freg_name(rs2)}"
+    @decode.FDIV_D(rd, rs1, rs2) =>
+      "fdiv.d \{@decode.freg_name(rd)}, \{@decode.freg_name(rs1)}, \{@decode.freg_name(rs2)}"
+    @decode.FSQRT_D(rd, rs1) =>
+      "fsqrt.d \{@decode.freg_name(rd)}, \{@decode.freg_name(rs1)}"
+    @decode.FSGNJ_D(rd, rs1, rs2) =>
+      "fsgnj.d \{@decode.freg_name(rd)}, \{@decode.freg_name(rs1)}, \{@decode.freg_name(rs2)}"
+    @decode.FSGNJN_D(rd, rs1, rs2) =>
+      "fsgnjn.d \{@decode.freg_name(rd)}, \{@decode.freg_name(rs1)}, \{@decode.freg_name(rs2)}"
+    @decode.FSGNJX_D(rd, rs1, rs2) =>
+      "fsgnjx.d \{@decode.freg_name(rd)}, \{@decode.freg_name(rs1)}, \{@decode.freg_name(rs2)}"
+    @decode.FMIN_D(rd, rs1, rs2) =>
+      "fmin.d \{@decode.freg_name(rd)}, \{@decode.freg_name(rs1)}, \{@decode.freg_name(rs2)}"
+    @decode.FMAX_D(rd, rs1, rs2) =>
+      "fmax.d \{@decode.freg_name(rd)}, \{@decode.freg_name(rs1)}, \{@decode.freg_name(rs2)}"
+    @decode.FCVT_S_D(rd, rs1, rm) =>
+      "fcvt.s.d \{@decode.freg_name(rd)}, \{@decode.freg_name(rs1)}"
+    @decode.FCVT_D_S(rd, rs1, rm) =>
+      "fcvt.d.s \{@decode.freg_name(rd)}, \{@decode.freg_name(rs1)}"
+    @decode.FEQ_D(rd, rs1, rs2) =>
+      "feq.d \{@decode.reg_name(rd)}, \{@decode.freg_name(rs1)}, \{@decode.freg_name(rs2)}"
+    @decode.FLT_D(rd, rs1, rs2) =>
+      "flt.d \{@decode.reg_name(rd)}, \{@decode.freg_name(rs1)}, \{@decode.freg_name(rs2)}"
+    @decode.FLE_D(rd, rs1, rs2) =>
+      "fle.d \{@decode.reg_name(rd)}, \{@decode.freg_name(rs1)}, \{@decode.freg_name(rs2)}"
+    @decode.FCLASS_D(rd, rs1) =>
+      "fclass.d \{@decode.reg_name(rd)}, \{@decode.freg_name(rs1)}"
+    @decode.FCVT_W_D(rd, rs1, rm) =>
+      "fcvt.w.d \{@decode.reg_name(rd)}, \{@decode.freg_name(rs1)}"
+    @decode.FCVT_WU_D(rd, rs1, rm) =>
+      "fcvt.wu.d \{@decode.reg_name(rd)}, \{@decode.freg_name(rs1)}"
+    @decode.FCVT_D_W(rd, rs1, rm) =>
+      "fcvt.d.w \{@decode.freg_name(rd)}, \{@decode.reg_name(rs1)}"
+    @decode.FCVT_D_WU(rd, rs1, rm) =>
+      "fcvt.d.wu \{@decode.freg_name(rd)}, \{@decode.reg_name(rs1)}"
+    // RV64D
+    @decode.FCVT_L_D(rd, rs1, rm) =>
+      "fcvt.l.d \{@decode.reg_name(rd)}, \{@decode.freg_name(rs1)}"
+    @decode.FCVT_LU_D(rd, rs1, rm) =>
+      "fcvt.lu.d \{@decode.reg_name(rd)}, \{@decode.freg_name(rs1)}"
+    @decode.FMV_X_D(rd, rs1) =>
+      "fmv.x.d \{@decode.reg_name(rd)}, \{@decode.freg_name(rs1)}"
+    @decode.FCVT_D_L(rd, rs1, rm) =>
+      "fcvt.d.l \{@decode.freg_name(rd)}, \{@decode.reg_name(rs1)}"
+    @decode.FCVT_D_LU(rd, rs1, rm) =>
+      "fcvt.d.lu \{@decode.freg_name(rd)}, \{@decode.reg_name(rs1)}"
+    @decode.FMV_D_X(rd, rs1) =>
+      "fmv.d.x \{@decode.freg_name(rd)}, \{@decode.reg_name(rs1)}"
+
     // Invalid instruction
     @decode.Invalid(code) => ".invalid \{format_hex_uint(code)}"
   }

@@ -6,7 +6,7 @@
 
 ///|
 /// CLI version
-const VERSION : String = "0.3.0"
+const VERSION : String = "0.4.0"
 
 ///|
 /// Command types
@@ -463,7 +463,7 @@ fn _print_version() -> Unit {
   println("rv-analyzer \{VERSION}")
   println("RISC-V Binary Analyzer")
   println(
-    "Supported architectures: RV32I, RV32M, RV32C, RV64I, RV64M, RV32A, RV64A",
+    "Supported architectures: RV32I, RV32M, RV32C, RV64I, RV64M, RV32A, RV64A, RV32F, RV64F, RV32D, RV64D, Zicsr, Zba, Zbb, Zbc, Zbs",
   )
 }
 
@@ -549,6 +549,39 @@ fn run_demo() -> Unit {
   println("\{amoswap_addr}: \{amoswap_inst}")
   println("")
 
+  // RV32F instructions
+  println("=== RV32F Single-Precision Floating-Point ===")
+  let flw_addr = format_hex_padded(0x00052507U)
+  let flw_inst = disasm_hex("0x00052507")
+  println("\{flw_addr}: \{flw_inst}")
+  let fadd_s_addr = format_hex_padded(0x000580D3U)
+  let fadd_s_inst = disasm_hex("0x000580D3")
+  println("\{fadd_s_addr}: \{fadd_s_inst}")
+  let fmul_s_addr = format_hex_padded(0x100580D3U)
+  let fmul_s_inst = disasm_hex("0x100580D3")
+  println("\{fmul_s_addr}: \{fmul_s_inst}")
+  println("")
+
+  // RV32D instructions
+  println("=== RV32D Double-Precision Floating-Point ===")
+  let fld_addr = format_hex_padded(0x00053507U)
+  let fld_inst = disasm_hex("0x00053507")
+  println("\{fld_addr}: \{fld_inst}")
+  let fadd_d_addr = format_hex_padded(0x020580D3U)
+  let fadd_d_inst = disasm_hex("0x020580D3")
+  println("\{fadd_d_addr}: \{fadd_d_inst}")
+  println("")
+
+  // Zbb instructions
+  println("=== Zbb Bit Manipulation Extension ===")
+  let clz_addr = format_hex_padded(0x60003013U)
+  let clz_inst = disasm_hex("0x60003013")
+  println("\{clz_addr}: \{clz_inst}")
+  let rev8_addr = format_hex_padded(0x6b830013U)
+  let rev8_inst = disasm_hex("0x6b830013")
+  println("\{rev8_addr}: \{rev8_inst}")
+  println("")
+
   println("=== Supported Instruction Sets ===")
   println("- RV32I: Base integer instructions (40+ instructions)")
   println("- RV32M: Multiply/divide extension (8 instructions)")
@@ -556,11 +589,24 @@ fn run_demo() -> Unit {
   println("- RV64I: 64-bit base instructions (12+ instructions)")
   println("- RV64M: 64-bit multiply/divide (5 instructions)")
   println("- RV32A/RV64A: Atomic operations (22 instructions)")
+  println("- RV32F/RV64F: Single-precision floating-point (30+ instructions)")
+  println("- RV32D/RV64D: Double-precision floating-point (30+ instructions)")
+  println("- Zicsr: CSR instructions (6 instructions)")
+  println("- Zba: Address generation (3 instructions)")
+  println("- Zbb: Basic bit manipulation (16+ instructions)")
+  println("- Zbc: Carry-less multiplication (3 instructions)")
+  println("- Zbs: Single-bit instructions (8 instructions)")
   println("")
   println("=== Supported File Formats ===")
   println("- ELF32/ELF64 (RISC-V)")
   println("- Raw binary files")
-  println("- Intel HEX format")
+  println("")
+  println("=== Analysis Features ===")
+  println("- Control Flow Graph (CFG) construction")
+  println("- Call Graph analysis")
+  println("- Def-Use chain analysis")
+  println("- Live variable analysis")
+  println("- DOT/JSON export for visualization")
 }
 
 ///|

@@ -179,6 +179,15 @@ pub fn decode(code : UInt) -> DecodeResult {
         _ => DecodeResult(Invalid(code))
       }
     }
+    // LOAD-FP (RV32F/RV32D: floating-point load)
+    0b0000111 => {
+      let imm = decode_i_imm(code)
+      match f3 {
+        0b010 => DecodeResult(FLW(rd, rs1, imm)) // RV32F: load single
+        0b011 => DecodeResult(FLD(rd, rs1, imm)) // RV32D: load double
+        _ => DecodeResult(Invalid(code))
+      }
+    }
     // Store
     0b0100011 => {
       let imm = decode_s_imm(code)
@@ -187,6 +196,15 @@ pub fn decode(code : UInt) -> DecodeResult {
         0b001 => DecodeResult(SH(rs1, rs2, imm))
         0b010 => DecodeResult(SW(rs1, rs2, imm))
         0b011 => DecodeResult(SD(rs1, rs2, imm)) // RV64I: store doubleword
+        _ => DecodeResult(Invalid(code))
+      }
+    }
+    // STORE-FP (RV32F/RV32D: floating-point store)
+    0b0100111 => {
+      let imm = decode_s_imm(code)
+      match f3 {
+        0b010 => DecodeResult(FSW(rs1, rs2, imm)) // RV32F: store single
+        0b011 => DecodeResult(FSD(rs1, rs2, imm)) // RV32D: store double
         _ => DecodeResult(Invalid(code))
       }
     }
@@ -499,6 +517,170 @@ pub fn decode(code : UInt) -> DecodeResult {
             // AMOMAXU.D
             0b11100 => DecodeResult(AMOMAXU_D(rd, rs1, rs2, aq, rl))
             _ => DecodeResult(Invalid(code))
+          }
+        _ => DecodeResult(Invalid(code))
+      }
+    }
+    // OP-FP (RV32F/RV32D: floating-point operations)
+    // opcode = 0b1010011
+    0b1010011 => {
+      // For OP-FP, rm (rounding mode) is in f3
+      // f7 determines the operation
+      let rm = f3
+      match f7 {
+        // FADD.S
+        0b0000000 => DecodeResult(FADD_S(rd, rs1, rs2))
+        // FSUB.S
+        0b0000100 => DecodeResult(FSUB_S(rd, rs1, rs2))
+        // FMUL.S
+        0b0001000 => DecodeResult(FMUL_S(rd, rs1, rs2))
+        // FDIV_S
+        0b0001100 => DecodeResult(FDIV_S(rd, rs1, rs2))
+        // FADD.D
+        0b0000001 => DecodeResult(FADD_D(rd, rs1, rs2))
+        // FSUB.D
+        0b0000101 => DecodeResult(FSUB_D(rd, rs1, rs2))
+        // FMUL.D
+        0b0001001 => DecodeResult(FMUL_D(rd, rs1, rs2))
+        // FDIV.D
+        0b0001101 => DecodeResult(FDIV_D(rd, rs1, rs2))
+        // FSQRT.S (rs2 must be 0)
+        0b0101100 =>
+          if rs2 == 0U {
+            DecodeResult(FSQRT_S(rd, rs1))
+          } else {
+            DecodeResult(Invalid(code))
+          }
+        // FSQRT.D (rs2 must be 0)
+        0b0101101 =>
+          if rs2 == 0U {
+            DecodeResult(FSQRT_D(rd, rs1))
+          } else {
+            DecodeResult(Invalid(code))
+          }
+        // FSGNJ.S / FSGNJN.S / FSGNJX.S
+        0b0010000 =>
+          match rs2 {
+            0b00000 => DecodeResult(FSGNJ_S(rd, rs1, rs2))
+            0b00001 => DecodeResult(FSGNJN_S(rd, rs1, rs2))
+            0b00010 => DecodeResult(FSGNJX_S(rd, rs1, rs2))
+            _ => DecodeResult(Invalid(code))
+          }
+        // FSGNJ.D / FSGNJN.D / FSGNJX.D
+        0b0010001 =>
+          match rs2 {
+            0b00000 => DecodeResult(FSGNJ_D(rd, rs1, rs2))
+            0b00001 => DecodeResult(FSGNJN_D(rd, rs1, rs2))
+            0b00010 => DecodeResult(FSGNJX_D(rd, rs1, rs2))
+            _ => DecodeResult(Invalid(code))
+          }
+        // FMIN.S / FMAX.S
+        0b0010100 =>
+          match rs2 {
+            0b00000 => DecodeResult(FMIN_S(rd, rs1, rs2))
+            0b00001 => DecodeResult(FMAX_S(rd, rs1, rs2))
+            _ => DecodeResult(Invalid(code))
+          }
+        // FMIN.D / FMAX.D
+        0b0010101 =>
+          match rs2 {
+            0b00000 => DecodeResult(FMIN_D(rd, rs1, rs2))
+            0b00001 => DecodeResult(FMAX_D(rd, rs1, rs2))
+            _ => DecodeResult(Invalid(code))
+          }
+        // FCVT.W.S / FCVT.WU.S / FCVT.L.S / FCVT.LU.S (convert float to int)
+        0b1100000 =>
+          match rs2 {
+            0b00000 => DecodeResult(FCVT_W_S(rd, rs1, rm))
+            0b00001 => DecodeResult(FCVT_WU_S(rd, rs1, rm))
+            0b00010 => DecodeResult(FCVT_L_S(rd, rs1, rm)) // RV64F
+            0b00011 => DecodeResult(FCVT_LU_S(rd, rs1, rm)) // RV64F
+            _ => DecodeResult(Invalid(code))
+          }
+        // FCVT.W.D / FCVT.WU.D / FCVT.L.D / FCVT.LU.D
+        0b1100001 =>
+          match rs2 {
+            0b00000 => DecodeResult(FCVT_W_D(rd, rs1, rm))
+            0b00001 => DecodeResult(FCVT_WU_D(rd, rs1, rm))
+            0b00010 => DecodeResult(FCVT_L_D(rd, rs1, rm)) // RV64D
+            0b00011 => DecodeResult(FCVT_LU_D(rd, rs1, rm)) // RV64D
+            _ => DecodeResult(Invalid(code))
+          }
+        // FCVT.S.W / FCVT.S.WU / FCVT.S.L / FCVT.S.LU (convert int to float)
+        0b1101000 =>
+          match rs2 {
+            0b00000 => DecodeResult(FCVT_S_W(rd, rs1, rm))
+            0b00001 => DecodeResult(FCVT_S_WU(rd, rs1, rm))
+            0b00010 => DecodeResult(FCVT_S_L(rd, rs1, rm)) // RV64F
+            0b00011 => DecodeResult(FCVT_S_LU(rd, rs1, rm)) // RV64F
+            _ => DecodeResult(Invalid(code))
+          }
+        // FCVT.D.W / FCVT.D.WU / FCVT.D.L / FCVT.D.LU
+        0b1101001 =>
+          match rs2 {
+            0b00000 => DecodeResult(FCVT_D_W(rd, rs1, rm))
+            0b00001 => DecodeResult(FCVT_D_WU(rd, rs1, rm))
+            0b00010 => DecodeResult(FCVT_D_L(rd, rs1, rm)) // RV64D
+            0b00011 => DecodeResult(FCVT_D_LU(rd, rs1, rm)) // RV64D
+            _ => DecodeResult(Invalid(code))
+          }
+        // FCVT.S.D (convert double to single)
+        0b0100000 =>
+          if rs2 == 0b00001U {
+            DecodeResult(FCVT_S_D(rd, rs1, rm))
+          } else {
+            DecodeResult(Invalid(code))
+          }
+        // FCVT.D.S (convert single to double)
+        0b0100001 =>
+          if rs2 == 0b00000U {
+            DecodeResult(FCVT_D_S(rd, rs1, rm))
+          } else {
+            DecodeResult(Invalid(code))
+          }
+        // FEQ.S / FLT.S / FLE.S
+        0b1010000 =>
+          match rs2 {
+            0b00010 => DecodeResult(FEQ_S(rd, rs1, rs2))
+            0b00001 => DecodeResult(FLT_S(rd, rs1, rs2))
+            0b00000 => DecodeResult(FLE_S(rd, rs1, rs2))
+            _ => DecodeResult(Invalid(code))
+          }
+        // FEQ.D / FLT.D / FLE.D
+        0b1010001 =>
+          match rs2 {
+            0b00010 => DecodeResult(FEQ_D(rd, rs1, rs2))
+            0b00001 => DecodeResult(FLT_D(rd, rs1, rs2))
+            0b00000 => DecodeResult(FLE_D(rd, rs1, rs2))
+            _ => DecodeResult(Invalid(code))
+          }
+        // FCLASS.S / FMV.X.W
+        0b1110000 =>
+          match rs2 {
+            0b00000 => DecodeResult(FCLASS_S(rd, rs1))
+            0b10000 => DecodeResult(FMV_X_W(rd, rs1))
+            _ => DecodeResult(Invalid(code))
+          }
+        // FCLASS.D / FMV.X.D
+        0b1110001 =>
+          match rs2 {
+            0b00000 => DecodeResult(FCLASS_D(rd, rs1))
+            0b10000 => DecodeResult(FMV_X_D(rd, rs1))
+            _ => DecodeResult(Invalid(code))
+          }
+        // FMV.W.X
+        0b1111000 =>
+          if rs2 == 0b00000U {
+            DecodeResult(FMV_W_X(rd, rs1))
+          } else {
+            DecodeResult(Invalid(code))
+          }
+        // FMV.D.X
+        0b1111001 =>
+          if rs2 == 0b00000U {
+            DecodeResult(FMV_D_X(rd, rs1))
+          } else {
+            DecodeResult(Invalid(code))
           }
         _ => DecodeResult(Invalid(code))
       }

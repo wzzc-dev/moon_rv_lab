@@ -184,6 +184,71 @@ pub enum Instruction {
   BINVI(UInt, UInt, UInt) // rd, rs1, shamt - bit invert immediate
   BSET(UInt, UInt, UInt) // rd, rs1, rs2 - bit set
   BSETI(UInt, UInt, UInt) // rd, rs1, shamt - bit set immediate
+  // RV32F extension (single-precision floating-point)
+  // Load/Store
+  FLW(UInt, UInt, Int) // rd, rs1, imm - load single-precision
+  FSW(UInt, UInt, Int) // rs1, rs2, imm - store single-precision
+  // Computational
+  FADD_S(UInt, UInt, UInt) // rd, rs1, rs2 - add single
+  FSUB_S(UInt, UInt, UInt) // rd, rs1, rs2 - subtract single
+  FMUL_S(UInt, UInt, UInt) // rd, rs1, rs2 - multiply single
+  FDIV_S(UInt, UInt, UInt) // rd, rs1, rs2 - divide single
+  FSQRT_S(UInt, UInt) // rd, rs1 - square root single
+  FMIN_S(UInt, UInt, UInt) // rd, rs1, rs2 - minimum single
+  FMAX_S(UInt, UInt, UInt) // rd, rs1, rs2 - maximum single
+  // Sign injection
+  FSGNJ_S(UInt, UInt, UInt) // rd, rs1, rs2 - sign inject single
+  FSGNJN_S(UInt, UInt, UInt) // rd, rs1, rs2 - sign inject neg single
+  FSGNJX_S(UInt, UInt, UInt) // rd, rs1, rs2 - sign inject xor single
+  FSGNJ_D(UInt, UInt, UInt) // rd, rs1, rs2 - sign inject double
+  FSGNJN_D(UInt, UInt, UInt) // rd, rs1, rs2 - sign inject neg double
+  FSGNJX_D(UInt, UInt, UInt) // rd, rs1, rs2 - sign inject xor double
+  // Conversion/Move
+  FCVT_W_S(UInt, UInt, UInt) // rd, rs1, rm - convert single to int (signed)
+  FCVT_WU_S(UInt, UInt, UInt) // rd, rs1, rm - convert single to int (unsigned)
+  FMV_X_W(UInt, UInt) // rd, rs1 - move bits from float to int
+  FEQ_S(UInt, UInt, UInt) // rd, rs1, rs2 - equal
+  FLT_S(UInt, UInt, UInt) // rd, rs1, rs2 - less than
+  FLE_S(UInt, UInt, UInt) // rd, rs1, rs2 - less than or equal
+  FCLASS_S(UInt, UInt) // rd, rs1 - classify single
+  FCVT_S_W(UInt, UInt, UInt) // rd, rs1, rm - convert int to single (signed)
+  FCVT_S_WU(UInt, UInt, UInt) // rd, rs1, rm - convert int to single (unsigned)
+  FMV_W_X(UInt, UInt) // rd, rs1 - move bits from int to float
+  // RV64F extension (64-bit specific conversions)
+  FCVT_L_S(UInt, UInt, UInt) // rd, rs1, rm - convert single to long (signed)
+  FCVT_LU_S(UInt, UInt, UInt) // rd, rs1, rm - convert single to long (unsigned)
+  FCVT_S_L(UInt, UInt, UInt) // rd, rs1, rm - convert long to single (signed)
+  FCVT_S_LU(UInt, UInt, UInt) // rd, rs1, rm - convert long to single (unsigned)
+  // RV32D extension (double-precision floating-point)
+  // Load/Store
+  FLD(UInt, UInt, Int) // rd, rs1, imm - load double-precision
+  FSD(UInt, UInt, Int) // rs1, rs2, imm - store double-precision
+  // Computational
+  FADD_D(UInt, UInt, UInt) // rd, rs1, rs2 - add double
+  FSUB_D(UInt, UInt, UInt) // rd, rs1, rs2 - subtract double
+  FMUL_D(UInt, UInt, UInt) // rd, rs1, rs2 - multiply double
+  FDIV_D(UInt, UInt, UInt) // rd, rs1, rs2 - divide double
+  FSQRT_D(UInt, UInt) // rd, rs1 - square root double
+  FMIN_D(UInt, UInt, UInt) // rd, rs1, rs2 - minimum double
+  FMAX_D(UInt, UInt, UInt) // rd, rs1, rs2 - maximum double
+  // Conversion/Move
+  FCVT_S_D(UInt, UInt, UInt) // rd, rs1, rm - convert double to single
+  FCVT_D_S(UInt, UInt, UInt) // rd, rs1, rm - convert single to double
+  FEQ_D(UInt, UInt, UInt) // rd, rs1, rs2 - equal
+  FLT_D(UInt, UInt, UInt) // rd, rs1, rs2 - less than
+  FLE_D(UInt, UInt, UInt) // rd, rs1, rs2 - less than or equal
+  FCLASS_D(UInt, UInt) // rd, rs1 - classify double
+  FCVT_W_D(UInt, UInt, UInt) // rd, rs1, rm - convert double to int (signed)
+  FCVT_WU_D(UInt, UInt, UInt) // rd, rs1, rm - convert double to int (unsigned)
+  FCVT_D_W(UInt, UInt, UInt) // rd, rs1, rm - convert int to double (signed)
+  FCVT_D_WU(UInt, UInt, UInt) // rd, rs1, rm - convert int to double (unsigned)
+  // RV64D extension (64-bit specific conversions)
+  FCVT_L_D(UInt, UInt, UInt) // rd, rs1, rm - convert double to long (signed)
+  FCVT_LU_D(UInt, UInt, UInt) // rd, rs1, rm - convert double to long (unsigned)
+  FMV_X_D(UInt, UInt) // rd, rs1 - move bits from double to int
+  FCVT_D_L(UInt, UInt, UInt) // rd, rs1, rm - convert long to double (signed)
+  FCVT_D_LU(UInt, UInt, UInt) // rd, rs1, rm - convert long to double (unsigned)
+  FMV_D_X(UInt, UInt) // rd, rs1 - move bits from int to double
   // Unknown/invalid instruction
   Invalid(UInt) // code
 } derive(Show)
@@ -199,6 +264,7 @@ pub enum InstructionCategory {
   Load
   Store
   System
+  Float
   Unknown
 } derive(Show, Eq)
 
@@ -339,6 +405,60 @@ pub fn Instruction::category(self : Instruction) -> InstructionCategory {
     | BINVI(_, _, _)
     | BSET(_, _, _)
     | BSETI(_, _, _) => InstructionCategory::Logical
+    // RV32F extension (single-precision floating-point)
+    FLW(_, _, _) => InstructionCategory::Load
+    FSW(_, _, _) => InstructionCategory::Store
+    FADD_S(_, _, _)
+    | FSUB_S(_, _, _)
+    | FMUL_S(_, _, _)
+    | FDIV_S(_, _, _)
+    | FSQRT_S(_, _)
+    | FMIN_S(_, _, _)
+    | FMAX_S(_, _, _)
+    | FSGNJ_S(_, _, _)
+    | FSGNJN_S(_, _, _)
+    | FSGNJX_S(_, _, _)
+    | FSGNJ_D(_, _, _)
+    | FSGNJN_D(_, _, _)
+    | FSGNJX_D(_, _, _) => InstructionCategory::Float
+    FCVT_W_S(_, _, _)
+    | FCVT_WU_S(_, _, _)
+    | FMV_X_W(_, _)
+    | FCVT_S_W(_, _, _)
+    | FCVT_S_WU(_, _, _)
+    | FMV_W_X(_, _)
+    | FCVT_L_S(_, _, _)
+    | FCVT_LU_S(_, _, _)
+    | FCVT_S_L(_, _, _)
+    | FCVT_S_LU(_, _, _) => InstructionCategory::Float
+    FEQ_S(_, _, _) | FLT_S(_, _, _) | FLE_S(_, _, _) =>
+      InstructionCategory::Compare
+    FCLASS_S(_, _) => InstructionCategory::Float
+    // RV32D extension (double-precision floating-point)
+    FLD(_, _, _) => InstructionCategory::Load
+    FSD(_, _, _) => InstructionCategory::Store
+    FADD_D(_, _, _)
+    | FSUB_D(_, _, _)
+    | FMUL_D(_, _, _)
+    | FDIV_D(_, _, _)
+    | FSQRT_D(_, _)
+    | FMIN_D(_, _, _)
+    | FMAX_D(_, _, _) => InstructionCategory::Float
+    FCVT_S_D(_, _, _)
+    | FCVT_D_S(_, _, _)
+    | FCVT_W_D(_, _, _)
+    | FCVT_WU_D(_, _, _)
+    | FCVT_D_W(_, _, _)
+    | FCVT_D_WU(_, _, _)
+    | FCVT_L_D(_, _, _)
+    | FCVT_LU_D(_, _, _)
+    | FMV_X_D(_, _)
+    | FCVT_D_L(_, _, _)
+    | FCVT_D_LU(_, _, _)
+    | FMV_D_X(_, _) => InstructionCategory::Float
+    FEQ_D(_, _, _) | FLT_D(_, _, _) | FLE_D(_, _, _) =>
+      InstructionCategory::Compare
+    FCLASS_D(_, _) => InstructionCategory::Float
     Invalid(_) => InstructionCategory::Unknown
   }
 }
@@ -436,5 +556,45 @@ pub fn reg_name(reg : UInt) -> String {
     30U => "t5"
     31U => "t6"
     _ => "unknown"
+  }
+}
+
+///|
+/// Floating-point register name lookup (f0-f31)
+pub fn freg_name(reg : UInt) -> String {
+  match reg {
+    0U => "ft0"
+    1U => "ft1"
+    2U => "ft2"
+    3U => "ft3"
+    4U => "ft4"
+    5U => "ft5"
+    6U => "ft6"
+    7U => "ft7"
+    8U => "fs0"
+    9U => "fs1"
+    10U => "fa0"
+    11U => "fa1"
+    12U => "fa2"
+    13U => "fa3"
+    14U => "fa4"
+    15U => "fa5"
+    16U => "fa6"
+    17U => "fa7"
+    18U => "fs2"
+    19U => "fs3"
+    20U => "fs4"
+    21U => "fs5"
+    22U => "fs6"
+    23U => "fs7"
+    24U => "fs8"
+    25U => "fs9"
+    26U => "fs10"
+    27U => "fs11"
+    28U => "ft8"
+    29U => "ft9"
+    30U => "ft10"
+    31U => "ft11"
+    _ => "funknown"
   }
 }

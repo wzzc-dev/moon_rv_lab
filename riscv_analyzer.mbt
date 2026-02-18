@@ -45,6 +45,11 @@ pub fn reg_name(reg : UInt) -> String {
 }
 
 ///|
+pub fn freg_name(reg : UInt) -> String {
+  @decode.freg_name(reg)
+}
+
+///|
 /// Re-export analysis module types and functions
 pub type BasicBlock = @analysis.BasicBlock
 
@@ -203,4 +208,57 @@ pub fn disassemble_bytes(bytes : FixedArray[Byte], start_addr : UInt) -> String 
     result = result + line + "\n"
   }
   result
+}
+
+///|
+/// Re-export dataflow analysis module types
+pub type OperandRole = @analysis.OperandRole
+
+///|
+pub type RegOperand = @analysis.RegOperand
+
+///|
+pub type InstOperands = @analysis.InstOperands
+
+///|
+pub type DefUseEntry = @analysis.DefUseEntry
+
+///|
+pub type DefUseChain = @analysis.DefUseChain
+
+///|
+pub type LiveSet = @analysis.LiveSet
+
+///|
+pub type BlockLiveness = @analysis.BlockLiveness
+
+///|
+/// Re-export dataflow analysis functions
+pub fn get_operands(inst : Instruction) -> InstOperands {
+  @analysis.get_operands(inst)
+}
+
+///|
+pub fn compute_def_use_chains(
+  instructions : FixedArray[DecodedInst],
+) -> FixedArray[DefUseChain] {
+  @analysis.compute_def_use_chains(instructions)
+}
+
+///|
+pub fn compute_liveness(
+  cfg : CFG,
+  instructions : FixedArray[DecodedInst],
+) -> FixedArray[BlockLiveness] {
+  @analysis.compute_liveness(cfg, instructions)
+}
+
+///|
+pub fn print_live_set(set : LiveSet) -> String {
+  @analysis.print_live_set(set)
+}
+
+///|
+pub fn print_def_use_chains(chains : FixedArray[DefUseChain]) -> Unit {
+  @analysis.print_def_use_chains(chains)
 }

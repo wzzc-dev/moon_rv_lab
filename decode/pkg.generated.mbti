@@ -12,6 +12,8 @@ pub fn decode_from_bytes(FixedArray[Byte]) -> DecodeResult?
 
 pub fn decode_from_bytes_auto(FixedArray[Byte]) -> DecodeResult?
 
+pub fn freg_name(UInt) -> String
+
 pub fn instruction_length(UInt) -> Int
 
 pub fn is_compressed(UInt) -> Bool
@@ -179,6 +181,60 @@ pub enum Instruction {
   BINVI(UInt, UInt, UInt)
   BSET(UInt, UInt, UInt)
   BSETI(UInt, UInt, UInt)
+  FLW(UInt, UInt, Int)
+  FSW(UInt, UInt, Int)
+  FADD_S(UInt, UInt, UInt)
+  FSUB_S(UInt, UInt, UInt)
+  FMUL_S(UInt, UInt, UInt)
+  FDIV_S(UInt, UInt, UInt)
+  FSQRT_S(UInt, UInt)
+  FMIN_S(UInt, UInt, UInt)
+  FMAX_S(UInt, UInt, UInt)
+  FSGNJ_S(UInt, UInt, UInt)
+  FSGNJN_S(UInt, UInt, UInt)
+  FSGNJX_S(UInt, UInt, UInt)
+  FSGNJ_D(UInt, UInt, UInt)
+  FSGNJN_D(UInt, UInt, UInt)
+  FSGNJX_D(UInt, UInt, UInt)
+  FCVT_W_S(UInt, UInt, UInt)
+  FCVT_WU_S(UInt, UInt, UInt)
+  FMV_X_W(UInt, UInt)
+  FEQ_S(UInt, UInt, UInt)
+  FLT_S(UInt, UInt, UInt)
+  FLE_S(UInt, UInt, UInt)
+  FCLASS_S(UInt, UInt)
+  FCVT_S_W(UInt, UInt, UInt)
+  FCVT_S_WU(UInt, UInt, UInt)
+  FMV_W_X(UInt, UInt)
+  FCVT_L_S(UInt, UInt, UInt)
+  FCVT_LU_S(UInt, UInt, UInt)
+  FCVT_S_L(UInt, UInt, UInt)
+  FCVT_S_LU(UInt, UInt, UInt)
+  FLD(UInt, UInt, Int)
+  FSD(UInt, UInt, Int)
+  FADD_D(UInt, UInt, UInt)
+  FSUB_D(UInt, UInt, UInt)
+  FMUL_D(UInt, UInt, UInt)
+  FDIV_D(UInt, UInt, UInt)
+  FSQRT_D(UInt, UInt)
+  FMIN_D(UInt, UInt, UInt)
+  FMAX_D(UInt, UInt, UInt)
+  FCVT_S_D(UInt, UInt, UInt)
+  FCVT_D_S(UInt, UInt, UInt)
+  FEQ_D(UInt, UInt, UInt)
+  FLT_D(UInt, UInt, UInt)
+  FLE_D(UInt, UInt, UInt)
+  FCLASS_D(UInt, UInt)
+  FCVT_W_D(UInt, UInt, UInt)
+  FCVT_WU_D(UInt, UInt, UInt)
+  FCVT_D_W(UInt, UInt, UInt)
+  FCVT_D_WU(UInt, UInt, UInt)
+  FCVT_L_D(UInt, UInt, UInt)
+  FCVT_LU_D(UInt, UInt, UInt)
+  FMV_X_D(UInt, UInt)
+  FCVT_D_L(UInt, UInt, UInt)
+  FCVT_D_LU(UInt, UInt, UInt)
+  FMV_D_X(UInt, UInt)
   Invalid(UInt)
 }
 pub fn Instruction::branch_offset(Self) -> Int
@@ -197,6 +253,7 @@ pub enum InstructionCategory {
   Load
   Store
   System
+  Float
   Unknown
 }
 pub impl Eq for InstructionCategory

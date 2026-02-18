@@ -16,6 +16,10 @@ pub fn build_call_graph(FixedArray[@analysis.DecodedInst], @analysis.CFG) -> @an
 
 pub fn build_cfg(FixedArray[@analysis.DecodedInst], UInt) -> @analysis.CFG
 
+pub fn compute_def_use_chains(FixedArray[@analysis.DecodedInst]) -> FixedArray[@analysis.DefUseChain]
+
+pub fn compute_liveness(@analysis.CFG, FixedArray[@analysis.DecodedInst]) -> FixedArray[@analysis.BlockLiveness]
+
 pub fn decode(UInt) -> @decode.DecodeResult
 
 pub fn decode_compressed(UInt) -> @decode.DecodeResult
@@ -28,9 +32,13 @@ pub fn disassemble_bytes(FixedArray[Byte], UInt) -> String
 
 pub fn disassemble_with_addr(@decode.Instruction, UInt) -> String
 
+pub fn freg_name(UInt) -> String
+
 pub fn get_branch_target(@decode.Instruction) -> Int
 
 pub fn get_elf_class(FixedArray[Byte]) -> @format.ElfClass
+
+pub fn get_operands(@decode.Instruction) -> @analysis.InstOperands
 
 pub fn instruction_length(UInt) -> Int
 
@@ -50,6 +58,10 @@ pub fn is_unconditional_jump(@decode.Instruction) -> Bool
 
 pub fn parse_elf(FixedArray[Byte]) -> @format.ElfFile?
 
+pub fn print_def_use_chains(FixedArray[@analysis.DefUseChain]) -> Unit
+
+pub fn print_live_set(@analysis.LiveSet) -> String
+
 pub fn reachable_functions(@analysis.CallGraph) -> FixedArray[UInt]
 
 pub fn reg_name(UInt) -> String
@@ -61,6 +73,8 @@ pub fn reg_name(UInt) -> String
 // Type aliases
 pub using @analysis {type BasicBlock}
 
+pub using @analysis {type BlockLiveness}
+
 pub using @analysis {type CFG}
 
 pub using @analysis {type CallGraph}
@@ -71,6 +85,10 @@ pub using @decode {type DecodeResult}
 
 pub using @analysis {type DecodedInst}
 
+pub using @analysis {type DefUseChain}
+
+pub using @analysis {type DefUseEntry}
+
 pub using @analysis {type Edge}
 
 pub using @analysis {type EdgeType}
@@ -79,9 +97,17 @@ pub using @format {type ElfClass}
 
 pub using @format {type ElfFile}
 
+pub using @analysis {type InstOperands}
+
 pub using @decode {type Instruction}
 
 pub using @decode {type InstructionCategory}
+
+pub using @analysis {type LiveSet}
+
+pub using @analysis {type OperandRole}
+
+pub using @analysis {type RegOperand}
 
 pub using @format {type Symbol}
 
