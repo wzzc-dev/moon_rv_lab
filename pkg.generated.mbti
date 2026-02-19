@@ -66,6 +66,8 @@ pub fn reachable_functions(@analysis.CallGraph) -> FixedArray[UInt]
 
 pub fn reg_name(UInt) -> String
 
+pub fn vreg_name(UInt) -> String
+
 // Errors
 
 // Types and methods

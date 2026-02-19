@@ -186,6 +186,7 @@ test "disassemble_bytes_api" {
   inspect(result, content="0x0: addi t0, zero, 100\n")
 }
 
+///|
 /// Test RISC-V Vector Extension - vle8.v instruction
 test "decode_vle8_v" {
   // vle8.v v1, (x5)
@@ -203,6 +204,7 @@ test "decode_vle8_v" {
   }
 }
 
+///|
 /// Test vreg_name API
 test "vreg_name_api" {
   inspect(@riscv_analyzer.vreg_name(0U), content="v0")
