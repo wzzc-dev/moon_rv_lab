@@ -1732,3 +1732,58 @@ test "decode_binvi" {
     _ => inspect(result, content="BINVI(_, _, _)")
   }
 }
+
+///|
+/// RVV Vector Extension Tests
+///|
+
+test "decode_vsetvli" {
+  // VSETVLI x0, x0, 0 - set vector length with AVL=0, vtype=0
+  // opcode=0x57, f3=7, rd=0, rs1=0, rs2=0, f7=0
+  // code = 0 << 25 | 0 << 20 | 0 << 15 | 7 << 12 | 0 << 7 | 0x57 = 0x7057
+  let code = 0x00007057U
+  let DecodeResult(result) = decode(code)
+  match result {
+    VSETVLI(rd, rs1, avl) => {
+      inspect(rd, content="0")
+      inspect(rs1, content="0")
+      inspect(avl, content="0")
+    }
+    _ => inspect(result, content="VSETVLI(_, _, _)")
+  }
+}
+
+///|
+test "decode_vsetvli_nonzero" {
+  // VSETVLI x5, x6, 8 - set vector length
+  // rd=5, rs1=6, rs2=8, f3=7, funct6=0, vm=0
+  // f7 = (funct6 << 1) | vm = 0
+  // code = 0 << 25 | 8 << 20 | 6 << 15 | 7 << 12 | 5 << 7 | 0x57
+  let code = 0x008372D7U
+  let DecodeResult(result) = decode(code)
+  match result {
+    VSETVLI(rd, rs1, avl) => {
+      inspect(rd, content="5")
+      inspect(rs1, content="6")
+      inspect(avl, content="8")
+    }
+    _ => inspect(result, content="VSETVLI(_, _, _)")
+  }
+}
+
+///|
+test "decode_vle8_v" {
+  // VLE8_V v1, (x5) - load vector of 8-bit elements
+  // opcode=0x07, f3=0, rd=1, rs1=5, f7=0
+  // code = 0 << 25 | 0 << 20 | 5 << 15 | 0 << 12 | 1 << 7 | 0x07
+  let code = 0x00028087U
+  let DecodeResult(result) = decode(code)
+  match result {
+    VLE8_V(rd, rs1, vm) => {
+      inspect(rd, content="1")
+      inspect(rs1, content="5")
+      inspect(vm, content="false")
+    }
+    _ => inspect(result, content="VLE8_V(_, _, _)")
+  }
+}

@@ -190,9 +190,9 @@ test "disassemble_bytes_api" {
 test "decode_vle8_v" {
   // vle8.v v1, (x5)
   // opcode=0x07, f3=0b000, vm=0
-  // vd=1, rs1=5
-  // 000000_0_00000_00101_000_00001_0000111 = 0x00054807
-  let code = 0x00054807U
+  // vd=1, rs1=5, rs2=0, f7=0
+  // code = 0 << 25 | 0 << 20 | 5 << 15 | 0 << 12 | 1 << 7 | 0x07 = 0x00028087
+  let code = 0x00028087U
   let result = @riscv_analyzer.decode(code)
   match result {
     DecodeResult(inst) => {
@@ -200,7 +200,6 @@ test "decode_vle8_v" {
       println(s)
       assert_true(not(s.contains("invalid")))
     }
-    _ => assert_true(false)
   }
 }
 

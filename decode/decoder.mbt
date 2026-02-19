@@ -179,14 +179,29 @@ pub fn decode(code : UInt) -> DecodeResult {
         _ => DecodeResult(Invalid(code))
       }
     }
-    // LOAD-FP (RV32F/RV32D/RV32Q: floating-point load)
+    // LOAD-FP (0x07): Floating-point load OR Vector load
+    // Vector loads have funct6=0 (f7[6:1]=0), while FP loads have arbitrary immediate in f7
     0b0000111 => {
-      let imm = decode_i_imm(code)
-      match f3 {
-        0b010 => DecodeResult(FLW(rd, rs1, imm)) // RV32F: load single
-        0b011 => DecodeResult(FLD(rd, rs1, imm)) // RV32D: load double
-        0b100 => DecodeResult(FLQ(rd, rs1, imm)) // RV32Q: load quad
-        _ => DecodeResult(Invalid(code))
+      let funct6 = f7 >> 1
+      if funct6 == 0U {
+        // Vector load (VLE8/VLE16/VLE32/VLE64)
+        let vm = (f7 & 0x1U) != 0U
+        match f3 {
+          0b000 => DecodeResult(VLE8_V(rd, rs1, vm)) // vle8.v
+          0b001 => DecodeResult(VLE16_V(rd, rs1, vm)) // vle16.v
+          0b010 => DecodeResult(VLE32_V(rd, rs1, vm)) // vle32.v
+          0b011 => DecodeResult(VLE64_V(rd, rs1, vm)) // vle64.v
+          _ => DecodeResult(Invalid(code))
+        }
+      } else {
+        // Floating-point load (FLW/FLD/FLQ)
+        let imm = decode_i_imm(code)
+        match f3 {
+          0b010 => DecodeResult(FLW(rd, rs1, imm)) // RV32F: load single
+          0b011 => DecodeResult(FLD(rd, rs1, imm)) // RV32D: load double
+          0b100 => DecodeResult(FLQ(rd, rs1, imm)) // RV32Q: load quad
+          _ => DecodeResult(Invalid(code))
+        }
       }
     }
     // Store
@@ -200,14 +215,29 @@ pub fn decode(code : UInt) -> DecodeResult {
         _ => DecodeResult(Invalid(code))
       }
     }
-    // STORE-FP (RV32F/RV32D/RV32Q: floating-point store)
+    // STORE-FP (0x27): Floating-point store OR Vector store
+    // Vector stores have funct6=0 (f7[6:1]=0), while FP stores have arbitrary immediate in f7
     0b0100111 => {
-      let imm = decode_s_imm(code)
-      match f3 {
-        0b010 => DecodeResult(FSW(rs1, rs2, imm)) // RV32F: store single
-        0b011 => DecodeResult(FSD(rs1, rs2, imm)) // RV32D: store double
-        0b100 => DecodeResult(FSQ(rs1, rs2, imm)) // RV32Q: store quad
-        _ => DecodeResult(Invalid(code))
+      let funct6 = f7 >> 1
+      if funct6 == 0U {
+        // Vector store (VSE8/VSE16/VSE32/VSE64)
+        let vm = (f7 & 0x1U) != 0U
+        match f3 {
+          0b000 => DecodeResult(VSE8_V(rs2, rs1, vm)) // vse8.v
+          0b001 => DecodeResult(VSE16_V(rs2, rs1, vm)) // vse16.v
+          0b010 => DecodeResult(VSE32_V(rs2, rs1, vm)) // vse32.v
+          0b011 => DecodeResult(VSE64_V(rs2, rs1, vm)) // vse64.v
+          _ => DecodeResult(Invalid(code))
+        }
+      } else {
+        // Floating-point store (FSW/FSD/FSQ)
+        let imm = decode_s_imm(code)
+        match f3 {
+          0b010 => DecodeResult(FSW(rs1, rs2, imm)) // RV32F: store single
+          0b011 => DecodeResult(FSD(rs1, rs2, imm)) // RV32D: store double
+          0b100 => DecodeResult(FSQ(rs1, rs2, imm)) // RV32Q: store quad
+          _ => DecodeResult(Invalid(code))
+        }
       }
     }
     // OP_IMM (Immediate arithmetic/logical) - includes Zbb/Zbs immediate extensions
@@ -828,47 +858,8 @@ pub fn decode(code : UInt) -> DecodeResult {
         0b111 => DecodeResult(CSRRCI(rd, csr, rs1)) // CSRRCi (rs1 field is uimm)
         _ => DecodeResult(Invalid(code))
       }
-    // RISC-V Vector Extension (RVV)
-    // LOAD-FP (0x07): Vector loads
-    // vm is bit 25 (in f7)
-    0b0000111 => {
-      let vm = (f7 >> 6) & 0x1U // bit 25: vector mask
-      let vm_bool = vm != 0U
-      match f3 {
-        // Vector unit-stride loads
-        0b000 => DecodeResult(VLE8_V(rd, rs1, vm_bool)) // vle8.v
-        0b001 => DecodeResult(VLE16_V(rd, rs1, vm_bool)) // vle16.v
-        0b010 => DecodeResult(VLE32_V(rd, rs1, vm_bool)) // vle32.v
-        0b011 => DecodeResult(VLE64_V(rd, rs1, vm_bool)) // vle64.v
-        // Vector strided loads
-        0b100 => DecodeResult(VLSE8_V(rd, rs1, rs2, vm_bool)) // vlse8.v
-        0b101 => DecodeResult(VLSE16_V(rd, rs1, rs2, vm_bool)) // vlse16.v
-        0b110 => DecodeResult(VLSE32_V(rd, rs1, rs2, vm_bool)) // vlse32.v
-        0b111 => DecodeResult(VLSE64_V(rd, rs1, rs2, vm_bool)) // vlse64.v
-        // Indexed loads (different format)
-        _ => DecodeResult(Invalid(code))
-      }
-    }
-    // STORE-FP (0x27): Vector stores
-    0b0010011 => {
-      let vm = (f7 >> 6) & 0x1U // bit 25: vector mask
-      let vm_bool = vm != 0U
-      match f3 {
-        // Vector unit-stride stores
-        0b000 => DecodeResult(VSE8_V(rs2, rs1, vm_bool)) // vse8.v
-        0b001 => DecodeResult(VSE16_V(rs2, rs1, vm_bool)) // vse16.v
-        0b010 => DecodeResult(VSE32_V(rs2, rs1, vm_bool)) // vse32.v
-        0b011 => DecodeResult(VSE64_V(rs2, rs1, vm_bool)) // vse64.v
-        // Vector strided stores
-        0b100 => DecodeResult(VSSE8_V(rs2, rs1, rs2, vm_bool)) // vsse8.v
-        0b101 => DecodeResult(VSSE16_V(rs2, rs1, rs2, vm_bool)) // vsse16.v
-        0b110 => DecodeResult(VSSE32_V(rs2, rs1, rs2, vm_bool)) // vsse32.v
-        0b111 => DecodeResult(VSSE64_V(rs2, rs1, rs2, vm_bool)) // vsse64.v
-        _ => DecodeResult(Invalid(code))
-      }
-    }
     // OP-V (0x57): Vector arithmetic and configuration
-    0b0101011 => {
+    0b1010111 => {
       // Vector instructions use funct3 and funct6/funct7 for operation encoding
       let vm = (f7 >> 0) & 0x1U // bit 0: vector mask
       let vm_bool = vm != 0U
