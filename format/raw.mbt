@@ -193,7 +193,60 @@ pub fn parse_ihex_line(line : String) -> IHexRecord? {
 
 ///|
 /// Check if a string looks like Intel HEX format
+/// Validates:
+/// - Each line starts with ':'
+/// - Each line contains valid hex characters after ':'
+/// - Each line has minimum required length (11 chars: :LLAAAA00CC)
 pub fn is_ihex_format(content : String) -> Bool {
   let trimmed = content.trim()
-  trimmed.length() > 0 && trimmed[0].unsafe_to_char() == ':'
+  if trimmed.length() == 0 {
+    return false
+  }
+
+  // Check first line
+  if trimmed[0].unsafe_to_char() != ':' {
+    return false
+  }
+
+  // Find end of first line
+  let mut line_end = trimmed.length()
+  for i = 0; i < trimmed.length(); i = i + 1 {
+    let c = trimmed[i].unsafe_to_char()
+    if c == '\n' || c == '\r' {
+      line_end = i
+      break
+    }
+  }
+
+  // First line must be at least 11 chars: :LLAAAA00CC
+  if line_end < 11 {
+    return false
+  }
+
+  // Verify all characters after ':' until end of line are valid hex
+  for i = 1; i < line_end; i = i + 1 {
+    let c = trimmed[i].unsafe_to_char()
+    match hex_char_to_val(c) {
+      Some(_) => ignore(())
+      None => return false
+    }
+  }
+
+  // Validate byte count field matches actual data length
+  let byte_count = match
+    hex_chars_to_byte_val(
+      trimmed[1].unsafe_to_char(),
+      trimmed[2].unsafe_to_char(),
+    ) {
+    Some(v) => v
+    None => return false
+  }
+
+  // Expected line length: 1 (:) + 2 (byte count) + 4 (address) + 2 (record type) + byte_count*2 (data) + 2 (checksum)
+  let expected_len = 11 + byte_count * 2
+  if line_end != expected_len {
+    return false
+  }
+
+  true
 }

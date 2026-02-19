@@ -629,7 +629,7 @@ pub fn build_call_graph(
     func_infos.push(FuncInfo::{ addr, name, size: next_addr - addr, calls })
   }
 
-  // Build call graph nodes
+  // Build call graph nodes - first pass: create nodes with empty called_by
   let nodes : Array[CallGraphNode] = []
   for info in func_infos {
     // Deduplicate calls
@@ -659,6 +659,64 @@ pub fn build_call_graph(
     })
   }
 
+  // Build called_by relationships - second pass
+  // Create a map from address to index for efficient lookup
+  let addr_to_idx : Array[(UInt, Int)] = []
+  for i = 0; i < nodes.length(); i = i + 1 {
+    addr_to_idx.push((nodes[i].address, i))
+  }
+
+  // Collect called_by info for each node
+  let called_by_map : Array[Array[UInt]] = []
+  for i = 0; i < nodes.length(); i = i + 1 {
+    called_by_map.push([])
+  }
+
+  for i = 0; i < nodes.length(); i = i + 1 {
+    let node = nodes[i]
+    for callee_addr in node.calls {
+      // Find the callee node index
+      for j = 0; j < nodes.length(); j = j + 1 {
+        if nodes[j].address == callee_addr {
+          called_by_map[j].push(node.address)
+          break
+        }
+      }
+    }
+  }
+
+  // Deduplicate and sort called_by arrays, then update nodes
+  let final_nodes : Array[CallGraphNode] = []
+  for i = 0; i < nodes.length(); i = i + 1 {
+    let node = nodes[i]
+    // Sort the called_by array
+    let called_by_arr = called_by_map[i]
+    called_by_arr.sort()
+    // Deduplicate
+    let unique_called_by : Array[UInt] = []
+    let mut prev : UInt? = None
+    for c in called_by_arr {
+      match prev {
+        Some(p) =>
+          if c != p {
+            unique_called_by.push(c)
+            prev = Some(c)
+          }
+        None => {
+          unique_called_by.push(c)
+          prev = Some(c)
+        }
+      }
+    }
+    final_nodes.push(CallGraphNode::{
+      address: node.address,
+      name: node.name,
+      size: node.size,
+      calls: node.calls,
+      called_by: FixedArray::from_array(unique_called_by),
+    })
+  }
+
   // Find entry point
   let entry = if cfg.entry_points.length() > 0 {
     cfg.entry_points[0]
@@ -668,7 +726,7 @@ pub fn build_call_graph(
     0U
   }
 
-  CallGraph::{ nodes: FixedArray::from_array(nodes), entry_point: entry }
+  CallGraph::{ nodes: FixedArray::from_array(final_nodes), entry_point: entry }
 }
 
 ///|

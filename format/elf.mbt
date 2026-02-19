@@ -119,8 +119,10 @@ pub struct ElfFile {
 
 ///|
 /// Read a 32-bit little-endian value from bytes
+/// Returns 0 if offset is out of bounds
 fn read_u32_le(bytes : FixedArray[Byte], offset : Int) -> UInt {
-  if offset + 3 >= bytes.length() {
+  // Boundary check: need 4 bytes starting at offset
+  if offset < 0 || offset + 3 >= bytes.length() {
     0U
   } else {
     bytes[offset].to_uint() |
@@ -132,8 +134,10 @@ fn read_u32_le(bytes : FixedArray[Byte], offset : Int) -> UInt {
 
 ///|
 /// Read a 64-bit little-endian value from bytes (returns lower 32 bits)
+/// Returns 0 if offset is out of bounds
 fn read_u64_le(bytes : FixedArray[Byte], offset : Int) -> UInt {
-  if offset + 7 >= bytes.length() {
+  // Boundary check: need 8 bytes starting at offset
+  if offset < 0 || offset + 7 >= bytes.length() {
     0U
   } else {
     bytes[offset].to_uint() |
@@ -149,8 +153,10 @@ fn read_u64_le(bytes : FixedArray[Byte], offset : Int) -> UInt {
 
 ///|
 /// Read a 16-bit little-endian value from bytes
+/// Returns 0 if offset is out of bounds
 fn read_u16_le(bytes : FixedArray[Byte], offset : Int) -> UInt {
-  if offset + 1 >= bytes.length() {
+  // Boundary check: need 2 bytes starting at offset
+  if offset < 0 || offset + 1 >= bytes.length() {
     0U
   } else {
     bytes[offset].to_uint() | (bytes[offset + 1].to_uint() << 8)
@@ -316,6 +322,11 @@ fn parse_elf64_program_header(
 ///|
 /// Parse ELF file from bytes
 pub fn parse_elf(bytes : FixedArray[Byte]) -> ElfFile? {
+  // Minimum ELF header size is 52 bytes (ELF32) or 64 bytes (ELF64)
+  if bytes.length() < 52 {
+    return None
+  }
+
   if !is_elf(bytes) {
     None
   } else {

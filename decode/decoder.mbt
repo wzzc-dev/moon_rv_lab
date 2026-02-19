@@ -36,18 +36,6 @@ fn sign_extend_13(value : UInt) -> Int {
 }
 
 ///|
-/// Sign extend 20-bit value (for U-type immediate, as upper 20 bits)
-fn _sign_extend_20(value : UInt) -> Int {
-  let sign_bit = (value >> 19).reinterpret_as_int()
-  if sign_bit == 1 {
-    // Negative: set upper 12 bits to 1
-    value.reinterpret_as_int() - 1048576
-  } else {
-    value.reinterpret_as_int()
-  }
-}
-
-///|
 /// Sign extend 21-bit value (for J-type)
 fn sign_extend_21(value : UInt) -> Int {
   let sign_bit = (value >> 20).reinterpret_as_int()
@@ -912,14 +900,15 @@ pub fn decode(code : UInt) -> DecodeResult {
             0b000 => DecodeResult(VFREDOSUM_VS(rd, rs1, rs2, vm_bool)) // vfredosum.vs
             0b001 => DecodeResult(VRSUB_VX(rd, rs1, rs2, vm_bool)) // vrsub.vx (vfrecsum.vs is reserved)
             0b010 => DecodeResult(VFREDMAX_VS(rd, rs1, rs2, vm_bool)) // vfredmax.vs
-            0b011 => {
+            0b011 =>
               // rs1=0 (vs1=v0) indicates vfredmin.vs, otherwise vrsub.vi
               if rs1 == 0U {
                 DecodeResult(VFREDMIN_VS(rd, rs1, rs2, vm_bool)) // vfredmin.vs
               } else {
-                DecodeResult(VRSUB_VI(rd, rs1.reinterpret_as_int(), rs2, vm_bool)) // vrsub.vi
+                DecodeResult(
+                  VRSUB_VI(rd, rs1.reinterpret_as_int(), rs2, vm_bool),
+                ) // vrsub.vi
               }
-            }
             _ => DecodeResult(Invalid(code))
           }
         // ===== Vector min/max: funct6=0b000100 =====
@@ -1285,7 +1274,7 @@ pub fn decode(code : UInt) -> DecodeResult {
             0b010 => DecodeResult(VMFGE_VF(rd, rs1, rs2, vm_bool)) // vmfge.vf
             _ => DecodeResult(Invalid(code))
           }
-        
+
         // ===== Vector narrowing =====
         // VNSRL/VNSRA: funct6=0b101100
         0b101100 =>
@@ -1348,17 +1337,6 @@ fn sign_extend_6(value : UInt) -> Int {
   let sign_bit = (value >> 5).reinterpret_as_int()
   if sign_bit == 1 {
     value.reinterpret_as_int() - 64
-  } else {
-    value.reinterpret_as_int()
-  }
-}
-
-///|
-/// Sign extend a 8-bit value to signed Int
-fn _sign_extend_8(value : UInt) -> Int {
-  let sign_bit = (value >> 7).reinterpret_as_int()
-  if sign_bit == 1 {
-    value.reinterpret_as_int() - 256
   } else {
     value.reinterpret_as_int()
   }
