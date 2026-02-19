@@ -825,9 +825,238 @@ pub fn decode(code : UInt) -> DecodeResult {
         0b011 => DecodeResult(CSRRC(rd, csr, rs1)) // CSRRC
         0b101 => DecodeResult(CSRRWI(rd, csr, rs1)) // CSRRWI (rs1 field is uimm)
         0b110 => DecodeResult(CSRRSI(rd, csr, rs1)) // CSRRSI (rs1 field is uimm)
-        0b111 => DecodeResult(CSRRCI(rd, csr, rs1)) // CSRRCI (rs1 field is uimm)
+        0b111 => DecodeResult(CSRRCI(rd, csr, rs1)) // CSRRCi (rs1 field is uimm)
         _ => DecodeResult(Invalid(code))
       }
+    // RISC-V Vector Extension (RVV)
+    // LOAD-FP (0x07): Vector loads
+    // vm is bit 25 (in f7)
+    0b0000111 => {
+      let vm = (f7 >> 6) & 0x1U // bit 25: vector mask
+      let vm_bool = vm != 0U
+      match f3 {
+        // Vector unit-stride loads
+        0b000 => DecodeResult(VLE8_V(rd, rs1, vm_bool)) // vle8.v
+        0b001 => DecodeResult(VLE16_V(rd, rs1, vm_bool)) // vle16.v
+        0b010 => DecodeResult(VLE32_V(rd, rs1, vm_bool)) // vle32.v
+        0b011 => DecodeResult(VLE64_V(rd, rs1, vm_bool)) // vle64.v
+        // Vector strided loads
+        0b100 => DecodeResult(VLSE8_V(rd, rs1, rs2, vm_bool)) // vlse8.v
+        0b101 => DecodeResult(VLSE16_V(rd, rs1, rs2, vm_bool)) // vlse16.v
+        0b110 => DecodeResult(VLSE32_V(rd, rs1, rs2, vm_bool)) // vlse32.v
+        0b111 => DecodeResult(VLSE64_V(rd, rs1, rs2, vm_bool)) // vlse64.v
+        // Indexed loads (different format)
+        _ => DecodeResult(Invalid(code))
+      }
+    }
+    // STORE-FP (0x27): Vector stores
+    0b0010011 => {
+      let vm = (f7 >> 6) & 0x1U // bit 25: vector mask
+      let vm_bool = vm != 0U
+      match f3 {
+        // Vector unit-stride stores
+        0b000 => DecodeResult(VSE8_V(rs2, rs1, vm_bool)) // vse8.v
+        0b001 => DecodeResult(VSE16_V(rs2, rs1, vm_bool)) // vse16.v
+        0b010 => DecodeResult(VSE32_V(rs2, rs1, vm_bool)) // vse32.v
+        0b011 => DecodeResult(VSE64_V(rs2, rs1, vm_bool)) // vse64.v
+        // Vector strided stores
+        0b100 => DecodeResult(VSSE8_V(rs2, rs1, rs2, vm_bool)) // vsse8.v
+        0b101 => DecodeResult(VSSE16_V(rs2, rs1, rs2, vm_bool)) // vsse16.v
+        0b110 => DecodeResult(VSSE32_V(rs2, rs1, rs2, vm_bool)) // vsse32.v
+        0b111 => DecodeResult(VSSE64_V(rs2, rs1, rs2, vm_bool)) // vsse64.v
+        _ => DecodeResult(Invalid(code))
+      }
+    }
+    // OP-V (0x57): Vector arithmetic and configuration
+    0b0101011 => {
+      // Vector instructions use funct3 and funct6/funct7 for operation encoding
+      let vm = (f7 >> 0) & 0x1U // bit 0: vector mask
+      let vm_bool = vm != 0U
+      let funct6 = f7 >> 1 // bits 31:25 (excluding vm bit)
+      match funct6 {
+        // Vector configuration instructions
+        0b000000 =>
+          // VSETVLI: rd=vl, rs1=rs1, rs2=avl (in rs2)
+          // f3 = 0b111 for VSETVLI
+          match f3 {
+            0b111 => DecodeResult(VSETVLI(rd, rs1, rs2))
+            _ => DecodeResult(Invalid(code))
+          }
+        // Integer arithmetic: vadd.vv, vsub.vv, etc.
+        0b000001 =>
+          // Vector integer add/sub
+          match f3 {
+            0b000 => DecodeResult(VADD_VV(rd, rs1, rs2, vm_bool)) // vadd.vv
+            0b001 => DecodeResult(VADD_VX(rd, rs1, rs2, vm_bool)) // vadd.vx
+            0b010 =>
+              DecodeResult(VADD_VI(rd, rs1.reinterpret_as_int(), rs2, vm_bool)) // vadd.vi
+            0b011 => DecodeResult(VSUB_VV(rd, rs1, rs2, vm_bool)) // vsub.vv
+            0b100 => DecodeResult(VRSUB_VX(rd, rs1, rs2, vm_bool)) // vrsub.vx
+            0b101 =>
+              DecodeResult(VRSUB_VI(rd, rs1.reinterpret_as_int(), rs2, vm_bool)) // vrsub.vi
+            _ => DecodeResult(Invalid(code))
+          }
+        // Vector integer multiply
+        0b000100 =>
+          match f3 {
+            0b001 => DecodeResult(VMUL_VV(rd, rs1, rs2, vm_bool)) // vmul.vv
+            0b010 => DecodeResult(VMULH_VV(rd, rs1, rs2, vm_bool)) // vmulh.vv
+            0b011 => DecodeResult(VMULHU_VV(rd, rs1, rs2, vm_bool)) // vmulhu.vv
+            0b100 => DecodeResult(VMULHSU_VV(rd, rs1, rs2, vm_bool)) // vmulhsu.vv
+            _ => DecodeResult(Invalid(code))
+          }
+        // Vector integer divide
+        0b000101 =>
+          match f3 {
+            0b001 => DecodeResult(VDIV_VV(rd, rs1, rs2, vm_bool)) // vdiv.vv
+            0b010 => DecodeResult(VDIVU_VV(rd, rs1, rs2, vm_bool)) // vdivu.vv
+            0b011 => DecodeResult(VREM_VV(rd, rs1, rs2, vm_bool)) // vrem.vv
+            0b100 => DecodeResult(VREMU_VV(rd, rs1, rs2, vm_bool)) // vremu.vv
+            _ => DecodeResult(Invalid(code))
+          }
+        // Vector bitwise operations
+        0b001001 =>
+          match f3 {
+            0b000 => DecodeResult(VAND_VV(rd, rs1, rs2, vm_bool)) // vand.vv
+            0b010 => DecodeResult(VOR_VV(rd, rs1, rs2, vm_bool)) // vor.vv
+            0b011 => DecodeResult(VXOR_VV(rd, rs1, rs2, vm_bool)) // vxor.vv
+            _ => DecodeResult(Invalid(code))
+          }
+        // Vector shift operations
+        0b001010 =>
+          match f3 {
+            0b001 => DecodeResult(VSLL_VV(rd, rs1, rs2, vm_bool)) // vsll.vv
+            0b101 => DecodeResult(VSRL_VV(rd, rs1, rs2, vm_bool)) // vsrl.vv
+            0b110 => DecodeResult(VSRA_VV(rd, rs1, rs2, vm_bool)) // vsra.vv
+            _ => DecodeResult(Invalid(code))
+          }
+        // Vector comparison
+        0b001100 =>
+          match f3 {
+            0b000 => DecodeResult(VMSEQ_VV(rd, rs1, rs2, vm_bool)) // vmseq.vv
+            0b001 => DecodeResult(VMSNE_VV(rd, rs1, rs2, vm_bool)) // vmsne.vv
+            0b010 => DecodeResult(VMSLTU_VV(rd, rs1, rs2, vm_bool)) // vmsltu.vv
+            0b011 => DecodeResult(VMSLT_VV(rd, rs1, rs2, vm_bool)) // vmslt.vv
+            0b100 => DecodeResult(VMSLEU_VV(rd, rs1, rs2, vm_bool)) // vmsleu.vv
+            0b101 => DecodeResult(VMSLE_VV(rd, rs1, rs2, vm_bool)) // vmsle.vv
+            _ => DecodeResult(Invalid(code))
+          }
+        // Vector reduction operations
+        0b000010 =>
+          // Vector integer reduction add
+          match f3 {
+            0b000 => DecodeResult(VREDSUM_VS(rd, rs1, rs2, vm_bool)) // vredsum.vs
+            0b001 => DecodeResult(VREDAND_VS(rd, rs1, rs2, vm_bool)) // vredand.vs
+            0b010 => DecodeResult(VREDOR_VS(rd, rs1, rs2, vm_bool)) // vredor.vs
+            0b011 => DecodeResult(VREDXOR_VS(rd, rs1, rs2, vm_bool)) // vredxor.vs
+            0b100 => DecodeResult(VREDMINU_VS(rd, rs1, rs2, vm_bool)) // vredminu.vs
+            0b101 => DecodeResult(VREDMIN_VS(rd, rs1, rs2, vm_bool)) // vredmin.vs
+            0b110 => DecodeResult(VREDMAXU_VS(rd, rs1, rs2, vm_bool)) // vredmaxu.vs
+            0b111 => DecodeResult(VREDMAX_VS(rd, rs1, rs2, vm_bool)) // vredmax.vs
+            _ => DecodeResult(Invalid(code))
+          }
+        // Vector mask operations (funct6 = 0b010010)
+        0b010010 =>
+          match f3 {
+            0b001 => DecodeResult(VMAND_MM(rd, rs1, rs2, vm_bool)) // vmand.mm
+            0b010 => DecodeResult(VMOR_MM(rd, rs1, rs2, vm_bool)) // vmor.mm
+            0b011 => DecodeResult(VMXOR_MM(rd, rs1, rs2, vm_bool)) // vmxor.mm
+            0b101 => DecodeResult(VMANDN_MM(rd, rs1, rs2, vm_bool)) // vmandn.mm
+            _ => DecodeResult(Invalid(code))
+          }
+        // Vector single-width floating-point arithmetic
+        0b010000 =>
+          match f3 {
+            0b000 => DecodeResult(VFADD_VF(rd, rs1, rs2, vm_bool)) // vfadd.vf
+            0b001 => DecodeResult(VFSUB_VF(rd, rs1, rs2, vm_bool)) // vfsub.vf
+            0b010 => DecodeResult(VFRSUB_VF(rd, rs1, rs2, vm_bool)) // vfrsub.vf
+            0b100 => DecodeResult(VFMUL_VF(rd, rs1, rs2, vm_bool)) // vfmul.vf
+            0b101 => DecodeResult(VFDIV_VF(rd, rs1, rs2, vm_bool)) // vfdiv.vf
+            0b111 => DecodeResult(VFRDIV_VF(rd, rs1, rs2, vm_bool)) // vfrdiv.vf
+            _ => DecodeResult(Invalid(code))
+          }
+        // Vector floating-point reduce
+        0b010001 =>
+          match f3 {
+            0b000 => DecodeResult(VFREDOSUM_VS(rd, rs1, rs2, vm_bool)) // vfredosum.vs
+            0b001 => DecodeResult(VFREDSUM_VS(rd, rs1, rs2, vm_bool)) // vfredsum.vs
+            0b010 => DecodeResult(VFREDMAX_VS(rd, rs1, rs2, vm_bool)) // vfredmax.vs
+            0b011 => DecodeResult(VFREDMIN_VS(rd, rs1, rs2, vm_bool)) // vfredmin.vs
+            _ => DecodeResult(Invalid(code))
+          }
+        // Vector floating-point compare
+        0b010100 =>
+          match f3 {
+            0b000 => DecodeResult(VFADD_VV(rd, rs1, rs2, vm_bool)) // placeholder
+            _ => DecodeResult(Invalid(code))
+          }
+        // Vector merge
+        0b010111 =>
+          match f3 {
+            0b000 => DecodeResult(VMERGE_VVM(rd, rs1, rs2, vm_bool)) // vmerge.vvm
+            0b001 => DecodeResult(VMERGE_VXM(rd, rs1, rs2, vm_bool)) // vmerge.vxm
+            0b010 =>
+              DecodeResult(
+                VMERGE_VIM(rd, rs1.reinterpret_as_int(), rs2, vm_bool),
+              ) // vmerge.vim
+            _ => DecodeResult(Invalid(code))
+          }
+        // Vector move
+        0b010011 =>
+          match f3 {
+            0b000 => DecodeResult(VMV_V_V(rd, rs1, vm_bool)) // vmv.v.v
+            0b001 => DecodeResult(VMV_V_X(rd, rs1, vm_bool)) // vmv.v.x
+            0b010 =>
+              DecodeResult(VMV_V_I(rd, rs1.reinterpret_as_int(), vm_bool)) // vmv.v.i
+            _ => DecodeResult(Invalid(code))
+          }
+        // Vector sign extension and zero extension
+        0b010010 =>
+          // This overlaps with mask operations, using different funct3
+          match f3 {
+            0b110 => DecodeResult(VSEXT_VF2(rd, rs2, vm_bool)) // vsext.vf2
+            0b111 => DecodeResult(VSEXT_VF4(rd, rs2, vm_bool)) // vsext.vf4
+            0b011 => DecodeResult(VZEXT_VF2(rd, rs2, vm_bool)) // vzext.vf2
+            0b010 => DecodeResult(VZEXT_VF4(rd, rs2, vm_bool)) // vzext.vf4
+            _ => DecodeResult(Invalid(code))
+          }
+        // Vector gather/scatter (indexed)
+        0b000011 =>
+          // Indexed load
+          match f3 {
+            0b000 => DecodeResult(VLUXEI8_V(rd, rs1, rs2, vm_bool)) // vluxei8.v
+            0b001 => DecodeResult(VLUXEI16_V(rd, rs1, rs2, vm_bool)) // vluxei16.v
+            0b010 => DecodeResult(VLUXEI32_V(rd, rs1, rs2, vm_bool)) // vluxei32.v
+            0b011 => DecodeResult(VLUXEI64_V(rd, rs1, rs2, vm_bool)) // vluxei64.v
+            _ => DecodeResult(Invalid(code))
+          }
+        0b000111 =>
+          // Indexed store
+          match f3 {
+            0b000 => DecodeResult(VSUXEI8_V(rs2, rs1, rs2, vm_bool)) // vsuxei8.v
+            0b001 => DecodeResult(VSUXEI16_V(rs2, rs1, rs2, vm_bool)) // vsuxei16.v
+            0b010 => DecodeResult(VSUXEI32_V(rs2, rs1, rs2, vm_bool)) // vsuxei32.v
+            0b011 => DecodeResult(VSUXEI64_V(rs2, rs1, rs2, vm_bool)) // vsuxei64.v
+            _ => DecodeResult(Invalid(code))
+          }
+        // Vector integer min/max
+        0b000111 =>
+          match f3 {
+            0b000 => DecodeResult(VMINU_VV(rd, rs1, rs2, vm_bool)) // vminu.vv
+            0b001 => DecodeResult(VMIN_VV(rd, rs1, rs2, vm_bool)) // vmin.vv
+            0b010 => DecodeResult(VMAXU_VV(rd, rs1, rs2, vm_bool)) // vmaxu.vv
+            0b011 => DecodeResult(VMAX_VV(rd, rs1, rs2, vm_bool)) // vmax.vv
+            _ => DecodeResult(Invalid(code))
+          }
+        // Vector width extension - use integer arithmetic
+        0b010110 =>
+          match f3 {
+            0b000 => DecodeResult(VADD_VV(rd, rs1, 0U, vm_bool)) // placeholder
+            _ => DecodeResult(Invalid(code))
+          }
+        _ => DecodeResult(Invalid(code))
+      }
+    }
     _ => DecodeResult(Invalid(code))
   }
 }

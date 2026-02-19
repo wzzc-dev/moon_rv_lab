@@ -7,7 +7,7 @@
 test "decode_instruction" {
   let DecodeResult(inst) = @riscv_analyzer.decode(0x007302B3U)
   // Verify it's an ADD instruction
-  assert_true(inst is ADD)
+  assert_true(inst is ADD(_))
 }
 
 ///|
@@ -15,7 +15,7 @@ test "decode_instruction" {
 test "decode_compressed_instruction" {
   let DecodeResult(inst) = @riscv_analyzer.decode_compressed(0x0505U)
   // Verify it's a C_ADDI instruction
-  assert_true(inst is C_ADDI)
+  assert_true(inst is C_ADDI(_))
 }
 
 ///|
@@ -184,4 +184,30 @@ test "disassemble_bytes_api" {
 
   let result = @riscv_analyzer.disassemble_bytes(bytes, 0U)
   inspect(result, content="0x0: addi t0, zero, 100\n")
+}
+
+/// Test RISC-V Vector Extension - vle8.v instruction
+test "decode_vle8_v" {
+  // vle8.v v1, (x5)
+  // opcode=0x07, f3=0b000, vm=0
+  // vd=1, rs1=5
+  // 000000_0_00000_00101_000_00001_0000111 = 0x00054807
+  let code = 0x00054807U
+  let result = @riscv_analyzer.decode(code)
+  match result {
+    DecodeResult(inst) => {
+      let s = @riscv_analyzer.disassemble(inst)
+      println(s)
+      assert_true(not(s.contains("invalid")))
+    }
+    _ => assert_true(false)
+  }
+}
+
+/// Test vreg_name API
+test "vreg_name_api" {
+  inspect(@riscv_analyzer.vreg_name(0U), content="v0")
+  inspect(@riscv_analyzer.vreg_name(1U), content="v1")
+  inspect(@riscv_analyzer.vreg_name(10U), content="v10")
+  inspect(@riscv_analyzer.vreg_name(31U), content="v31")
 }

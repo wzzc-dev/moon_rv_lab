@@ -50,6 +50,11 @@ pub fn freg_name(reg : UInt) -> String {
 }
 
 ///|
+pub fn vreg_name(reg : UInt) -> String {
+  @decode.vreg_name(reg)
+}
+
+///|
 /// Re-export analysis module types and functions
 pub type BasicBlock = @analysis.BasicBlock
 

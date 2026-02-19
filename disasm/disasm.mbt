@@ -662,6 +662,713 @@ pub fn disassemble(inst : @decode.Instruction) -> String {
     @decode.C_FSWSP(rs2, imm) =>
       "c.fswsp \{@decode.freg_name(rs2)}, \{format_imm(imm.reinterpret_as_int())}(sp)"
 
+    // RVV Vector Extension
+    // Configuration
+    @decode.VSETVLI(rd, rs1, avl) =>
+      "vsetvli \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}, avl=\{@decode.reg_name(avl)}"
+    @decode.VSETIVLI(rd, uimm, avl) =>
+      "vsetivli \{@decode.reg_name(rd)}, \{uimm}, avl=\{@decode.reg_name(avl)}"
+    @decode.VSETVL(rd, rs1, rs2) =>
+      "vsetvl \{@decode.reg_name(rd)}, \{@decode.reg_name(rs1)}, \{@decode.reg_name(rs2)}"
+
+    // Vector loads
+    @decode.VLE8_V(rd, rs1, vm) =>
+      "vle8.v \{@decode.vreg_name(rd)}, (\{@decode.reg_name(rs1)})"
+    @decode.VLE16_V(rd, rs1, vm) =>
+      "vle16.v \{@decode.vreg_name(rd)}, (\{@decode.reg_name(rs1)})"
+    @decode.VLE32_V(rd, rs1, vm) =>
+      "vle32.v \{@decode.vreg_name(rd)}, (\{@decode.reg_name(rs1)})"
+    @decode.VLE64_V(rd, rs1, vm) =>
+      "vle64.v \{@decode.vreg_name(rd)}, (\{@decode.reg_name(rs1)})"
+    @decode.VLSE8_V(rd, rs1, rs2, vm) =>
+      "vlse8.v \{@decode.vreg_name(rd)}, (\{@decode.reg_name(rs1)}), \{@decode.reg_name(rs2)}"
+    @decode.VLSE16_V(rd, rs1, rs2, vm) =>
+      "vlse16.v \{@decode.vreg_name(rd)}, (\{@decode.reg_name(rs1)}), \{@decode.reg_name(rs2)}"
+    @decode.VLSE32_V(rd, rs1, rs2, vm) =>
+      "vlse32.v \{@decode.vreg_name(rd)}, (\{@decode.reg_name(rs1)}), \{@decode.reg_name(rs2)}"
+    @decode.VLSE64_V(rd, rs1, rs2, vm) =>
+      "vlse64.v \{@decode.vreg_name(rd)}, (\{@decode.reg_name(rs1)}), \{@decode.reg_name(rs2)}"
+
+    // Vector stores
+    @decode.VSE8_V(rs2, rs1, vm) =>
+      "vse8.v \{@decode.vreg_name(rs2)}, (\{@decode.reg_name(rs1)})"
+    @decode.VSE16_V(rs2, rs1, vm) =>
+      "vse16.v \{@decode.vreg_name(rs2)}, (\{@decode.reg_name(rs1)})"
+    @decode.VSE32_V(rs2, rs1, vm) =>
+      "vse32.v \{@decode.vreg_name(rs2)}, (\{@decode.reg_name(rs1)})"
+    @decode.VSE64_V(rs2, rs1, vm) =>
+      "vse64.v \{@decode.vreg_name(rs2)}, (\{@decode.reg_name(rs1)})"
+    @decode.VSSE8_V(rs2, rs1, rs3, vm) =>
+      "vsse8.v \{@decode.vreg_name(rs2)}, (\{@decode.reg_name(rs1)}), \{@decode.reg_name(rs3)}"
+    @decode.VSSE16_V(rs2, rs1, rs3, vm) =>
+      "vsse16.v \{@decode.vreg_name(rs2)}, (\{@decode.reg_name(rs1)}), \{@decode.reg_name(rs3)}"
+    @decode.VSSE32_V(rs2, rs1, rs3, vm) =>
+      "vsse32.v \{@decode.vreg_name(rs2)}, (\{@decode.reg_name(rs1)}), \{@decode.reg_name(rs3)}"
+    @decode.VSSE64_V(rs2, rs1, rs3, vm) =>
+      "vsse64.v \{@decode.vreg_name(rs2)}, (\{@decode.reg_name(rs1)}), \{@decode.reg_name(rs3)}"
+
+    // Vector indexed load
+    @decode.VLUXEI8_V(rd, rs1, vs2, vm) =>
+      "vluxei8.v \{@decode.vreg_name(rd)}, (\{@decode.reg_name(rs1)}), \{@decode.vreg_name(vs2)}"
+    @decode.VLUXEI16_V(rd, rs1, vs2, vm) =>
+      "vluxei16.v \{@decode.vreg_name(rd)}, (\{@decode.reg_name(rs1)}), \{@decode.vreg_name(vs2)}"
+    @decode.VLUXEI32_V(rd, rs1, vs2, vm) =>
+      "vluxei32.v \{@decode.vreg_name(rd)}, (\{@decode.reg_name(rs1)}), \{@decode.vreg_name(vs2)}"
+    @decode.VLUXEI64_V(rd, rs1, vs2, vm) =>
+      "vluxei64.v \{@decode.vreg_name(rd)}, (\{@decode.reg_name(rs1)}), \{@decode.vreg_name(vs2)}"
+
+    // Vector indexed store
+    @decode.VSUXEI8_V(vs3, rs1, vs2, vm) =>
+      "vsuxei8.v \{@decode.vreg_name(vs3)}, (\{@decode.reg_name(rs1)}), \{@decode.vreg_name(vs2)}"
+    @decode.VSUXEI16_V(vs3, rs1, vs2, vm) =>
+      "vsuxei16.v \{@decode.vreg_name(vs3)}, (\{@decode.reg_name(rs1)}), \{@decode.vreg_name(vs2)}"
+    @decode.VSUXEI32_V(vs3, rs1, vs2, vm) =>
+      "vsuxei32.v \{@decode.vreg_name(vs3)}, (\{@decode.reg_name(rs1)}), \{@decode.vreg_name(vs2)}"
+    @decode.VSUXEI64_V(vs3, rs1, vs2, vm) =>
+      "vsuxei64.v \{@decode.vreg_name(vs3)}, (\{@decode.reg_name(rs1)}), \{@decode.vreg_name(vs2)}"
+
+    // Vector integer arithmetic
+    @decode.VADD_VV(rd, rs1, rs2, vm) =>
+      "vadd.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VADD_VX(rd, rs1, rs2, vm) =>
+      "vadd.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.VSUB_VV(rd, rs1, rs2, vm) =>
+      "vsub.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VRSUB_VX(rd, rs1, rs2, vm) =>
+      "vrsub.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.VAND_VV(rd, rs1, rs2, vm) =>
+      "vand.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VOR_VV(rd, rs1, rs2, vm) =>
+      "vor.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VXOR_VV(rd, rs1, rs2, vm) =>
+      "vxor.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VSLL_VV(rd, rs1, rs2, vm) =>
+      "vsll.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VSRL_VV(rd, rs1, rs2, vm) =>
+      "vsrl.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VSRA_VV(rd, rs1, rs2, vm) =>
+      "vsra.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+
+    // Vector integer multiply/divide
+    @decode.VMUL_VV(rd, rs1, rs2, vm) =>
+      "vmul.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VMULH_VV(rd, rs1, rs2, vm) =>
+      "vmulh.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VMULHU_VV(rd, rs1, rs2, vm) =>
+      "vmulhu.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VMULHSU_VV(rd, rs1, rs2, vm) =>
+      "vmulhsu.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VDIV_VV(rd, rs1, rs2, vm) =>
+      "vdiv.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VDIVU_VV(rd, rs1, rs2, vm) =>
+      "vdivu.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VREM_VV(rd, rs1, rs2, vm) =>
+      "vrem.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VREMU_VV(rd, rs1, rs2, vm) =>
+      "vremu.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+
+    // Vector min/max
+    @decode.VMINU_VV(rd, rs1, rs2, vm) =>
+      "vminu.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VMIN_VV(rd, rs1, rs2, vm) =>
+      "vmin.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VMAXU_VV(rd, rs1, rs2, vm) =>
+      "vmaxu.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VMAX_VV(rd, rs1, rs2, vm) =>
+      "vmax.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+
+    // Vector compare
+    @decode.VMSEQ_VV(rd, rs1, rs2, vm) =>
+      "vmseq.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VMSNE_VV(rd, rs1, rs2, vm) =>
+      "vmsne.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VMSLTU_VV(rd, rs1, rs2, vm) =>
+      "vmsltu.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VMSLT_VV(rd, rs1, rs2, vm) =>
+      "vmslt.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VMSLEU_VV(rd, rs1, rs2, vm) =>
+      "vmsleu.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VMSLE_VV(rd, rs1, rs2, vm) =>
+      "vmsle.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+
+    // Vector reduction
+    @decode.VREDSUM_VS(rd, rs1, rs2, vm) =>
+      "vredsum.vs \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VREDAND_VS(rd, rs1, rs2, vm) =>
+      "vredand.vs \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VREDOR_VS(rd, rs1, rs2, vm) =>
+      "vredor.vs \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VREDXOR_VS(rd, rs1, rs2, vm) =>
+      "vredxor.vs \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VREDMINU_VS(rd, rs1, rs2, vm) =>
+      "vredminu.vs \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VREDMIN_VS(rd, rs1, rs2, vm) =>
+      "vredmin.vs \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VREDMAXU_VS(rd, rs1, rs2, vm) =>
+      "vredmaxu.vs \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VREDMAX_VS(rd, rs1, rs2, vm) =>
+      "vredmax.vs \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+
+    // Vector mask
+    @decode.VMAND_MM(rd, rs1, rs2, vm) =>
+      "vmand.mm \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VMOR_MM(rd, rs1, rs2, vm) =>
+      "vmor.mm \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VMXOR_MM(rd, rs1, rs2, vm) =>
+      "vmxor.mm \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VMANDN_MM(rd, rs1, rs2, vm) =>
+      "vmandn.mm \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+
+    // Vector merge/move
+    @decode.VMERGE_VVM(rd, rs1, rs2, vm) =>
+      "vmerge.vvm \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VMERGE_VXM(rd, rs1, rs2, vm) =>
+      "vmerge.vxm \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.VMV_V_V(rd, rs1, vm) =>
+      "vmv.v.v \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}"
+    @decode.VMV_V_X(rd, rs1, vm) =>
+      "vmv.v.x \{@decode.vreg_name(rd)}, \{@decode.reg_name(rs1)}"
+
+    // Vector floating-point arithmetic
+    @decode.VFADD_VV(rd, rs1, rs2, vm) =>
+      "vfadd.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VFADD_VF(rd, rs1, rs2, vm) =>
+      "vfadd.vf \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.freg_name(rs2)}"
+    @decode.VFSUB_VF(rd, rs1, rs2, vm) =>
+      "vfsub.vf \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.freg_name(rs2)}"
+    @decode.VFRSUB_VF(rd, rs1, rs2, vm) =>
+      "vfrsub.vf \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.freg_name(rs2)}"
+    @decode.VFMUL_VF(rd, rs1, rs2, vm) =>
+      "vfmul.vf \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.freg_name(rs2)}"
+    @decode.VFDIV_VF(rd, rs1, rs2, vm) =>
+      "vfdiv.vf \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.freg_name(rs2)}"
+    @decode.VFRDIV_VF(rd, rs1, rs2, vm) =>
+      "vfrdiv.vf \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.freg_name(rs2)}"
+
+    // Vector floating-point reduction
+    @decode.VFREDOSUM_VS(rd, rs1, rs2, vm) =>
+      "vfredosum.vs \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VFREDSUM_VS(rd, rs1, rs2, vm) =>
+      "vfredsum.vs \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VFREDMAX_VS(rd, rs1, rs2, vm) =>
+      "vfredmax.vs \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VFREDMIN_VS(rd, rs1, rs2, vm) =>
+      "vfredmin.vs \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+
+    // Vector sign/zero extension
+    @decode.VSEXT_VF2(rd, rs2, vm) =>
+      "vsext.vf2 \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs2)}"
+    @decode.VSEXT_VF4(rd, rs2, vm) =>
+      "vsext.vf4 \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs2)}"
+    @decode.VZEXT_VF2(rd, rs2, vm) =>
+      "vzext.vf2 \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs2)}"
+    @decode.VZEXT_VF4(rd, rs2, vm) =>
+      "vzext.vf4 \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs2)}"
+
+    // Vector slide
+    @decode.VSLIDEUP_VX(rd, rs1, rs2, vm) =>
+      "vslideup.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.VSLIDEUP_VI(rd, rs1, uimm, vm) =>
+      "vslideup.vi \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{uimm}"
+    @decode.VSLIDEDOWN_VX(rd, rs1, rs2, vm) =>
+      "vslidedown.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.VSLIDEDOWN_VI(rd, rs1, uimm, vm) =>
+      "vslidedown.vi \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{uimm}"
+    @decode.VSLIDE1UP_VX(rd, rs1, rs2, vm) =>
+      "vslide1up.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.VSLIDE1DOWN_VX(rd, rs1, rs2, vm) =>
+      "vslide1down.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+
+    // Vector gather (rgather)
+    @decode.VRGATHER_VV(rd, rs1, rs2, vm) =>
+      "vrgather.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VRGATHER_VX(rd, rs1, rs2, vm) =>
+      "vrgather.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.VRGATHER_VI(rd, rs1, uimm, vm) =>
+      "vrgather.vi \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{uimm}"
+
+    // Vector compress
+    @decode.VCOMPRESS_VM(rd, rs1, rs2, vm) =>
+      "vcompress.vm \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+
+    // Vector whole register load/store
+    @decode.VL1RE8_V(rd, rs1) =>
+      "vl1re8.v \{@decode.vreg_name(rd)}, (\{@decode.reg_name(rs1)})"
+    @decode.VL1RE16_V(rd, rs1) =>
+      "vl1re16.v \{@decode.vreg_name(rd)}, (\{@decode.reg_name(rs1)})"
+    @decode.VL1RE32_V(rd, rs1) =>
+      "vl1re32.v \{@decode.vreg_name(rd)}, (\{@decode.reg_name(rs1)})"
+    @decode.VL1RE64_V(rd, rs1) =>
+      "vl1re64.v \{@decode.vreg_name(rd)}, (\{@decode.reg_name(rs1)})"
+    @decode.VS1R_V(rs2, rs1) =>
+      "vs1r.v \{@decode.vreg_name(rs2)}, (\{@decode.reg_name(rs1)})"
+    @decode.VS2R_V(rs2, rs1) =>
+      "vs2r.v \{@decode.vreg_name(rs2)}, (\{@decode.reg_name(rs1)})"
+    @decode.VS4R_V(rs2, rs1) =>
+      "vs4r.v \{@decode.vreg_name(rs2)}, (\{@decode.reg_name(rs1)})"
+    @decode.VS8R_V(rs2, rs1) =>
+      "vs8r.v \{@decode.vreg_name(rs2)}, (\{@decode.reg_name(rs1)})"
+
+    // Vector saturating add/sub
+    @decode.VSADD_VV(rd, rs1, rs2, vm) =>
+      "vsadd.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VSADD_VX(rd, rs1, rs2, vm) =>
+      "vsadd.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.VSADDU_VV(rd, rs1, rs2, vm) =>
+      "vsaddu.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VSADDU_VX(rd, rs1, rs2, vm) =>
+      "vsaddu.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.VSSUB_VV(rd, rs1, rs2, vm) =>
+      "vssub.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VSSUB_VX(rd, rs1, rs2, vm) =>
+      "vssub.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.VSSUBU_VV(rd, rs1, rs2, vm) =>
+      "vssubu.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VSSUBU_VX(rd, rs1, rs2, vm) =>
+      "vssubu.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+
+    // Vector average
+    @decode.VAADD_VX(rd, rs1, rs2, vm) =>
+      "vaadd.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.VAADD_VV(rd, rs1, rs2, vm) =>
+      "vaadd.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VASUB_VX(rd, rs1, rs2, vm) =>
+      "vasub.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.VASUB_VV(rd, rs1, rs2, vm) =>
+      "vasub.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+
+    // Vector shift right rounded
+    @decode.VSSRA_VV(rd, rs1, rs2, vm) =>
+      "vssra.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VSSRA_VX(rd, rs1, rs2, vm) =>
+      "vssra.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.VSSRA_VI(rd, rs1, uimm, vm) =>
+      "vssra.vi \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{uimm}"
+    @decode.VSSRL_VV(rd, rs1, rs2, vm) =>
+      "vssrl.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VSSRL_VX(rd, rs1, rs2, vm) =>
+      "vssrl.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.VSSRL_VI(rd, rs1, uimm, vm) =>
+      "vssrl.vi \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{uimm}"
+
+    // Vector narrowing clip
+    @decode.VNCLIP_WV(rd, rs1, rs2, vm) =>
+      "vnclip.wv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VNCLIP_WX(rd, rs1, rs2, vm) =>
+      "vnclip.wx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.VNCLIPU_WV(rd, rs1, rs2, vm) =>
+      "vnclipu.wv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VNCLIPU_WX(rd, rs1, rs2, vm) =>
+      "vnclipu.wx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.VNCLIPU_WI(rd, rs1, uimm, vm) =>
+      "vnclipu.wi \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{uimm}"
+    @decode.VNCLIP_WI(rd, rs1, uimm, vm) =>
+      "vnclip.wi \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{uimm}"
+
+    // Vector add/sub
+    @decode.VADD_VV(rd, rs1, rs2, vm) =>
+      "vadd.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VADD_VX(rd, rs1, rs2, vm) =>
+      "vadd.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.VADD_VI(rd, rs1, rs2, vm) =>
+      "vadd.vi \{@decode.vreg_name(rd)}, \{rs1.to_string()}, \{@decode.vreg_name(rs2)}"
+    @decode.VSUB_VV(rd, rs1, rs2, vm) =>
+      "vsub.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VSUB_VX(rd, rs1, rs2, vm) =>
+      "vsub.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.VRSUB_VI(rd, rs1, rs2, vm) =>
+      "vrsub.vi \{@decode.vreg_name(rd)}, \{rs1.to_string()}, \{@decode.vreg_name(rs2)}"
+
+    // Vector bitwise
+    @decode.VAND_VV(rd, rs1, rs2, vm) =>
+      "vand.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VAND_VX(rd, rs1, rs2, vm) =>
+      "vand.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.VAND_VI(rd, rs1, rs2, vm) =>
+      "vand.vi \{@decode.vreg_name(rd)}, \{rs1.to_string()}, \{@decode.vreg_name(rs2)}"
+    @decode.VOR_VV(rd, rs1, rs2, vm) =>
+      "vor.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VOR_VX(rd, rs1, rs2, vm) =>
+      "vor.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.VOR_VI(rd, rs1, rs2, vm) =>
+      "vor.vi \{@decode.vreg_name(rd)}, \{rs1.to_string()}, \{@decode.vreg_name(rs2)}"
+    @decode.VXOR_VV(rd, rs1, rs2, vm) =>
+      "vxor.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VXOR_VX(rd, rs1, rs2, vm) =>
+      "vxor.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.VXOR_VI(rd, rs1, rs2, vm) =>
+      "vxor.vi \{@decode.vreg_name(rd)}, \{rs1.to_string()}, \{@decode.vreg_name(rs2)}"
+
+    // Vector widening reduction
+    @decode.VWREDSUM_VS(rd, rs1, rs2, vm) =>
+      "vwredsum.vs \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VWREDSUMU_VS(rd, rs1, rs2, vm) =>
+      "vwredsumu.vs \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+
+    // Vector widening float reduction
+    @decode.VFWREDSUM_VS(rd, rs1, rs2, vm) =>
+      "vfwredsum.vs \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VFWREDOSUM_VS(rd, rs1, rs2, vm) =>
+      "vfwredosum.vs \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+
+    // Vector widening float mul
+    @decode.VFWMUL_VF(rd, rs1, rs2, vm) =>
+      "vfwmul.vf \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.freg_name(rs2)}"
+    @decode.VFWMUL_VV(rd, rs1, rs2, vm) =>
+      "vfwmul.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+
+    // Vector widening float add/sub
+    @decode.VFWADD_VV(rd, rs1, rs2, vm) =>
+      "vfwadd.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VFWADD_VF(rd, rs1, rs2, vm) =>
+      "vfwadd.vf \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.freg_name(rs2)}"
+    @decode.VFWADD_WV(rd, rs1, rs2, vm) =>
+      "vfwadd.wv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VFWADD_WF(rd, rs1, rs2, vm) =>
+      "vfwadd.wf \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.freg_name(rs2)}"
+    @decode.VFWSUB_VV(rd, rs1, rs2, vm) =>
+      "vfwsub.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VFWSUB_VF(rd, rs1, rs2, vm) =>
+      "vfwsub.vf \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.freg_name(rs2)}"
+    @decode.VFWSUB_WV(rd, rs1, rs2, vm) =>
+      "vfwsub.wv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VFWSUB_WF(rd, rs1, rs2, vm) =>
+      "vfwsub.wf \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.freg_name(rs2)}"
+
+    // Vector mask register operations
+    @decode.VPOPC_M(rd, rs1, rs2, vm) =>
+      "vpopc.m \{@decode.reg_name(rd)}, \{@decode.vreg_name(rs2)}"
+    @decode.VFIRST_M(rd, rs1, rs2, vm) =>
+      "vfirst.m \{@decode.reg_name(rd)}, \{@decode.vreg_name(rs2)}"
+    @decode.VMSBF_M(rd, rs1, rs2, vm) =>
+      "vmsbf.m \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs2)}"
+    @decode.VMSIF_M(rd, rs1, rs2, vm) =>
+      "vmsif.m \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs2)}"
+    @decode.VMSOF_M(rd, rs1, rs2, vm) =>
+      "vmsof.m \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs2)}"
+    @decode.VIOTA_M(rd, rs1, rs2, vm) =>
+      "viota.m \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs2)}"
+    @decode.VID_V(rd, rs1, vm) => "vid.v \{@decode.vreg_name(rd)}"
+
+    // Vector mask logical (extra)
+    @decode.VMORN_MM(rd, rs1, rs2, vm) =>
+      "vmorn.mm \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VMNAND_MM(rd, rs1, rs2, vm) =>
+      "vmnand.mm \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VMNOR_MM(rd, rs1, rs2, vm) =>
+      "vmnor.mm \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VMXNOR_MM(rd, rs1, rs2, vm) =>
+      "vmxnor.mm \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+
+    // Vector floating-point move
+    @decode.VFMV_S_F(rd, rs1) =>
+      "vfmv.s.f \{@decode.vreg_name(rd)}, \{@decode.freg_name(rs1)}"
+    @decode.VFMV_F_S(rd, rs1) =>
+      "vfmv.f.s \{@decode.freg_name(rd)}, \{@decode.vreg_name(rs1)}"
+    @decode.VFMV_S_F(_, _) => ".reserved"
+    @decode.VFMV_F_S(_, _) => ".reserved"
+    @decode.VFMV_V_F(rd, rs1, vm) =>
+      "vfmv.v.f \{@decode.vreg_name(rd)}, \{@decode.freg_name(rs1)}"
+    @decode.VFMERGE_VFM(rd, rs1, rs2, vm) =>
+      "vmerge.vfm \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.freg_name(rs2)}"
+
+    // Vector floating-point classify
+    @decode.VFCLASS_V(rd, rs2, vm) =>
+      "vclassify.v \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs2)}"
+
+    // Vector floating-point compare
+    @decode.VMFGE_VF(rd, rs1, rs2, vm) =>
+      "vmfge.vf \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.freg_name(rs2)}"
+    @decode.VMFGT_VF(rd, rs1, rs2, vm) =>
+      "vmfgt.vf \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.freg_name(rs2)}"
+    @decode.VMFLE_VF(rd, rs1, rs2, vm) =>
+      "vmfle.vf \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.freg_name(rs2)}"
+    @decode.VMFLT_VF(rd, rs1, rs2, vm) =>
+      "vmflt.vf \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.freg_name(rs2)}"
+    @decode.VMFLE_VV(rd, rs1, rs2, vm) =>
+      "vmfle.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VMFLT_VV(rd, rs1, rs2, vm) =>
+      "vmflt.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+
+    // Vector floating-point compare (more)
+    @decode.VMFEQ_VF(rd, rs1, rs2, vm) =>
+      "vmfeq.vf \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.freg_name(rs2)}"
+    @decode.VMFNE_VF(rd, rs1, rs2, vm) =>
+      "vmfne.vf \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.freg_name(rs2)}"
+    @decode.VMFEQ_VV(rd, rs1, rs2, vm) =>
+      "vmfeq.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VMFNE_VV(rd, rs1, rs2, vm) =>
+      "vmfne.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+
+    // Vector saturating add immediate
+    @decode.VSADD_VI(rd, _, _, _) =>
+      "vsadd.vi \{@decode.vreg_name(rd)}, <dest>, <imm>"
+    @decode.VSADDU_VI(rd, _, _, _) =>
+      "vsaddu.vi \{@decode.vreg_name(rd)}, <dest>, <imm>"
+
+    // Vector floating-point sign inject
+    @decode.VFSGNJX_VF(rd, rs1, rs2, vm) =>
+      "vfsgnjx.vf \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.freg_name(rs2)}"
+    @decode.VFSGNJX_VV(rd, rs1, rs2, vm) =>
+      "vfsgnjx.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+
+    // Vector floating-point sign inject (more)
+    @decode.VFSGNJ_VF(rd, rs1, rs2, vm) =>
+      "vfsgnj.vf \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.freg_name(rs2)}"
+    @decode.VFSGNJ_VV(rd, rs1, rs2, vm) =>
+      "vfsgnj.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VFSGNJN_VF(rd, rs1, rs2, vm) =>
+      "vfsgnjn.vf \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.freg_name(rs2)}"
+    @decode.VFSGNJN_VV(rd, rs1, rs2, vm) =>
+      "vfsgnjn.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+
+    // Vector floating-point arithmetic (more)
+    @decode.VFSQRT_V(rd, rs2, vm) =>
+      "vfsqrt.v \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs2)}"
+    @decode.VFMAX_VF(rd, rs1, rs2, vm) =>
+      "vfmax.vf \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.freg_name(rs2)}"
+    @decode.VFMAX_VV(rd, rs1, rs2, vm) =>
+      "vfmax.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VFMIN_VF(rd, rs1, rs2, vm) =>
+      "vfmin.vf \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.freg_name(rs2)}"
+    @decode.VFMIN_VV(rd, rs1, rs2, vm) =>
+      "vfmin.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VFDIV_VV(rd, rs1, rs2, vm) =>
+      "vfdiv.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VFMUL_VV(rd, rs1, rs2, vm) =>
+      "vfmul.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VFSUB_VV(rd, rs1, rs2, vm) =>
+      "vfsub.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+
+    // Vector indexed load (ordered)
+    @decode.VLOXEI8_V(rd, rs1, vs2, vm) =>
+      "vloxei8.v \{@decode.vreg_name(rd)}, (\{@decode.reg_name(rs1)}), \{@decode.vreg_name(vs2)}"
+    @decode.VLOXEI16_V(rd, rs1, vs2, vm) =>
+      "vloxei16.v \{@decode.vreg_name(rd)}, (\{@decode.reg_name(rs1)}), \{@decode.vreg_name(vs2)}"
+    @decode.VLOXEI32_V(rd, rs1, vs2, vm) =>
+      "vloxei32.v \{@decode.vreg_name(rd)}, (\{@decode.reg_name(rs1)}), \{@decode.vreg_name(vs2)}"
+    @decode.VLOXEI64_V(rd, rs1, vs2, vm) =>
+      "vloxei64.v \{@decode.vreg_name(rd)}, (\{@decode.reg_name(rs1)}), \{@decode.vreg_name(vs2)}"
+
+    // Vector indexed store (ordered)
+    @decode.VSOXEI8_V(vs3, rs1, vs2, vm) =>
+      "vsoxei8.v \{@decode.vreg_name(vs3)}, (\{@decode.reg_name(rs1)}), \{@decode.vreg_name(vs2)}"
+    @decode.VSOXEI16_V(vs3, rs1, vs2, vm) =>
+      "vsoxei16.v \{@decode.vreg_name(vs3)}, (\{@decode.reg_name(rs1)}), \{@decode.vreg_name(vs2)}"
+    @decode.VSOXEI32_V(vs3, rs1, vs2, vm) =>
+      "vsoxei32.v \{@decode.vreg_name(vs3)}, (\{@decode.reg_name(rs1)}), \{@decode.vreg_name(vs2)}"
+    @decode.VSOXEI64_V(vs3, rs1, vs2, vm) =>
+      "vsoxei64.v \{@decode.vreg_name(vs3)}, (\{@decode.reg_name(rs1)}), \{@decode.vreg_name(vs2)}"
+
+    // Vector extension
+    @decode.VSEXT_VF8(rd, rs2, vm) =>
+      "vsext.vf8 \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs2)}"
+    @decode.VZEXT_VF8(rd, rs2, vm) =>
+      "vzext.vf8 \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs2)}"
+
+    // Vector move (more)
+    @decode.VMV_S_X(rd, rs1) =>
+      "vmv.s.x \{@decode.vreg_name(rd)}, \{@decode.reg_name(rs1)}"
+    @decode.VMV_X_S(rd, rs1) =>
+      "vmv.x.s \{@decode.reg_name(rd)}, \{@decode.vreg_name(rs1)}"
+    @decode.VMV_V_I(rd, _, _) => "vmv.v.i \{@decode.vreg_name(rd)}, <imm>"
+    @decode.VMERGE_VIM(rd, _, _, _) =>
+      "vmerge.vim \{@decode.vreg_name(rd)}, <src>, <imm>"
+
+    // Vector widening multiply
+    @decode.VWMULU_VX(rd, rs1, rs2, vm) =>
+      "vwmulu.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.VWMULU_VV(rd, rs1, rs2, vm) =>
+      "vwmulu.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VWMULSU_VX(rd, rs1, rs2, vm) =>
+      "vwmulsu.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.VWMULSU_VV(rd, rs1, rs2, vm) =>
+      "vwmulsu.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+
+    // VMULH instructions
+    @decode.VMULH_VV(rd, rs1, rs2, vm) =>
+      "vmulh.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VMULH_VX(rd, rs1, rs2, vm) =>
+      "vmulh.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.VMULHU_VV(rd, rs1, rs2, vm) =>
+      "vmulhu.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VMULHU_VX(rd, rs1, rs2, vm) =>
+      "vmulhu.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.VMULHSU_VV(rd, rs1, rs2, vm) =>
+      "vmulhsu.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VMULHSU_VX(rd, rs1, rs2, vm) =>
+      "vmulhsu.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+
+    // VDIV instructions
+    @decode.VDIV_VV(rd, rs1, rs2, vm) =>
+      "vdiv.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VDIV_VX(rd, rs1, rs2, vm) =>
+      "vdiv.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.VDIVU_VV(rd, rs1, rs2, vm) =>
+      "vdivu.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VDIVU_VX(rd, rs1, rs2, vm) =>
+      "vdivu.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+
+    // VREM instructions
+    @decode.VREM_VV(rd, rs1, rs2, vm) =>
+      "vrem.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VREM_VX(rd, rs1, rs2, vm) =>
+      "vrem.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.VREMU_VV(rd, rs1, rs2, vm) =>
+      "vremu.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VREMU_VX(rd, rs1, rs2, vm) =>
+      "vremu.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+
+    // VWADD instructions
+    @decode.VWADD_VV(rd, rs1, rs2, vm) =>
+      "vwadd.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VWADD_VX(rd, rs1, rs2, vm) =>
+      "vwadd.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.VWADDU_VV(rd, rs1, rs2, vm) =>
+      "vwaddu.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VWADDU_VX(rd, rs1, rs2, vm) =>
+      "vwaddu.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.VWADD_WV(rd, rs1, rs2, vm) =>
+      "vwadd.wv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VWADD_WX(rd, rs1, rs2, vm) =>
+      "vwadd.wx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.VWADDU_WV(rd, rs1, rs2, vm) =>
+      "vwaddu.wv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VWADDU_WX(rd, rs1, rs2, vm) =>
+      "vwaddu.wx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+
+    // VWSUB instructions
+    @decode.VWSUB_VV(rd, rs1, rs2, vm) =>
+      "vwsub.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VWSUB_VX(rd, rs1, rs2, vm) =>
+      "vwsub.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.VWSUBU_VV(rd, rs1, rs2, vm) =>
+      "vwsubu.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VWSUBU_VX(rd, rs1, rs2, vm) =>
+      "vwsubu.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.VWSUB_WV(rd, rs1, rs2, vm) =>
+      "vwsub.wv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VWSUB_WX(rd, rs1, rs2, vm) =>
+      "vwsub.wx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.VWSUBU_WV(rd, rs1, rs2, vm) =>
+      "vwsubu.wv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VWSUBU_WX(rd, rs1, rs2, vm) =>
+      "vwsubu.wx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+
+    // Vector multiply
+    @decode.VMUL_VV(rd, rs1, rs2, vm) =>
+      "vmul.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VMUL_VX(rd, rs1, rs2, vm) =>
+      "vmul.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+
+    // Vector min/max
+    @decode.VMIN_VV(rd, rs1, rs2, vm) =>
+      "vmin.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VMIN_VX(rd, rs1, rs2, vm) =>
+      "vmin.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.VMINU_VV(rd, rs1, rs2, vm) =>
+      "vminu.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VMINU_VX(rd, rs1, rs2, vm) =>
+      "vminu.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.VMAX_VV(rd, rs1, rs2, vm) =>
+      "vmax.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VMAX_VX(rd, rs1, rs2, vm) =>
+      "vmax.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.VMAXU_VV(rd, rs1, rs2, vm) =>
+      "vmaxu.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VMAXU_VX(rd, rs1, rs2, vm) =>
+      "vmaxu.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+
+    // Vector shift
+    @decode.VSLL_VV(rd, rs1, rs2, vm) =>
+      "vsll.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VSLL_VX(rd, rs1, rs2, vm) =>
+      "vsll.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.VSLL_VI(rd, rs1, rs2, vm) =>
+      "vsll.vi \{@decode.vreg_name(rd)}, \{rs1.to_string()}, \{@decode.vreg_name(rs2)}"
+    @decode.VSRL_VV(rd, rs1, rs2, vm) =>
+      "vsrl.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VSRL_VX(rd, rs1, rs2, vm) =>
+      "vsrl.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.VSRL_VI(rd, rs1, rs2, vm) =>
+      "vsrl.vi \{@decode.vreg_name(rd)}, \{rs1.to_string()}, \{@decode.vreg_name(rs2)}"
+    @decode.VSRA_VV(rd, rs1, rs2, vm) =>
+      "vsra.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VSRA_VX(rd, rs1, rs2, vm) =>
+      "vsra.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.VSRA_VI(rd, rs1, rs2, vm) =>
+      "vsra.vi \{@decode.vreg_name(rd)}, \{rs1.to_string()}, \{@decode.vreg_name(rs2)}"
+
+    // Narrowing shift
+    @decode.VNSRL_VV(rd, rs1, rs2, vm) =>
+      "vnsrl.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VNSRL_VX(rd, rs1, rs2, vm) =>
+      "vnsrl.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.VNSRL_VI(rd, rs1, rs2, vm) =>
+      "vnsrl.vi \{@decode.vreg_name(rd)}, \{rs1.to_string()}, \{@decode.vreg_name(rs2)}"
+    @decode.VNSRA_VV(rd, rs1, rs2, vm) =>
+      "vnsra.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VNSRA_VX(rd, rs1, rs2, vm) =>
+      "vnsra.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.VNSRA_VI(rd, rs1, rs2, vm) =>
+      "vnsra.vi \{@decode.vreg_name(rd)}, \{rs1.to_string()}, \{@decode.vreg_name(rs2)}"
+
+    // Vector mask compare - equal
+    @decode.VMSEQ_VV(rd, rs1, rs2, vm) =>
+      "vmseq.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VMSEQ_VX(rd, rs1, rs2, vm) =>
+      "vmseq.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.VMSEQ_VI(rd, rs1, rs2, vm) =>
+      "vmseq.vi \{@decode.vreg_name(rd)}, \{rs1.to_string()}, \{@decode.vreg_name(rs2)}"
+
+    // Vector mask compare - not equal
+    @decode.VMSNE_VV(rd, rs1, rs2, vm) =>
+      "vmsne.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VMSNE_VX(rd, rs1, rs2, vm) =>
+      "vmsne.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.VMSNE_VI(rd, rs1, rs2, vm) =>
+      "vmsne.vi \{@decode.vreg_name(rd)}, \{rs1.to_string()}, \{@decode.vreg_name(rs2)}"
+
+    // Vector mask compare - less than
+    @decode.VMSLT_VV(rd, rs1, rs2, vm) =>
+      "vmslt.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VMSLT_VX(rd, rs1, rs2, vm) =>
+      "vmslt.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.VMSLTU_VV(rd, rs1, rs2, vm) =>
+      "vmsltu.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VMSLTU_VX(rd, rs1, rs2, vm) =>
+      "vmsltu.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+
+    // Vector mask compare - less than or equal
+    @decode.VMSLE_VV(rd, rs1, rs2, vm) =>
+      "vmsle.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VMSLE_VX(rd, rs1, rs2, vm) =>
+      "vmsle.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.VMSLE_VI(rd, rs1, rs2, vm) =>
+      "vmsle.vi \{@decode.vreg_name(rd)}, \{rs1.to_string()}, \{@decode.vreg_name(rs2)}"
+    @decode.VMSLEU_VV(rd, rs1, rs2, vm) =>
+      "vmsleu.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+    @decode.VMSLEU_VX(rd, rs1, rs2, vm) =>
+      "vmsleu.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.VMSLEU_VI(rd, rs1, rs2, vm) =>
+      "vmsleu.vi \{@decode.vreg_name(rd)}, \{rs1.to_string()}, \{@decode.vreg_name(rs2)}"
+
+    // Vector mask compare - greater than
+    @decode.VMSGT_VX(rd, rs1, rs2, vm) =>
+      "vmsgt.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.VMSGT_VI(rd, rs1, rs2, vm) =>
+      "vmsgt.vi \{@decode.vreg_name(rd)}, \{rs1.to_string()}, \{@decode.vreg_name(rs2)}"
+    @decode.VMSGTU_VX(rd, rs1, rs2, vm) =>
+      "vmsgtu.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.VMSGTU_VI(rd, rs1, rs2, vm) =>
+      "vmsgtu.vi \{@decode.vreg_name(rd)}, \{rs1.to_string()}, \{@decode.vreg_name(rs2)}"
+
+    // Vector widening multiply (more)
+    @decode.VWMUL_VX(rd, rs1, rs2, vm) =>
+      "vwmul.vx \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.reg_name(rs2)}"
+    @decode.VWMUL_VV(rd, rs1, rs2, vm) =>
+      "vwmul.vv \{@decode.vreg_name(rd)}, \{@decode.vreg_name(rs1)}, \{@decode.vreg_name(rs2)}"
+
     // Invalid instruction
     @decode.Invalid(code) => ".invalid \{format_hex_uint(code)}"
   }

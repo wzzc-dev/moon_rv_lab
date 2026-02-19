@@ -147,34 +147,34 @@ test "elf_internal_parsing" {
 test "instruction_variants" {
   // Test all major instruction types are correctly decoded
   let DecodeResult(lui) = @decode.decode(0x123452B7U)
-  assert_true(lui is LUI)
+  assert_true(lui is LUI(_))
 
   let DecodeResult(auipc) = @decode.decode(0x00010517U)
-  assert_true(auipc is AUIPC)
+  assert_true(auipc is AUIPC(_))
 
   let DecodeResult(add) = @decode.decode(0x007302B3U)
-  assert_true(add is ADD)
+  assert_true(add is ADD(_))
 
   let DecodeResult(sub) = @decode.decode(0x407302B3U)
-  assert_true(sub is SUB)
+  assert_true(sub is SUB(_))
 
   let DecodeResult(addi) = @decode.decode(0x06430293U)
-  assert_true(addi is ADDI)
+  assert_true(addi is ADDI(_))
 
   let DecodeResult(lw) = @decode.decode(0x06432283U)
-  assert_true(lw is LW)
+  assert_true(lw is LW(_))
 
   let DecodeResult(sw) = @decode.decode(0x00532423U)
-  assert_true(sw is SW)
+  assert_true(sw is SW(_))
 
   let DecodeResult(beq) = @decode.decode(0x00208463U)
-  assert_true(beq is BEQ)
+  assert_true(beq is BEQ(_))
 
   let DecodeResult(jal) = @decode.decode(0x100000EFU)
-  assert_true(jal is JAL)
+  assert_true(jal is JAL(_))
 
   let DecodeResult(jalr) = @decode.decode(0x008100E7U)
-  assert_true(jalr is JALR)
+  assert_true(jalr is JALR(_))
 
   let DecodeResult(ecall) = @decode.decode(0x00000073U)
   assert_true(ecall is ECALL)
@@ -193,42 +193,42 @@ test "rv32m_instructions" {
   // MUL x5, x6, x7:  funct7=0x01, rs2=7, rs1=6, funct3=0, rd=5, opcode=0x33
   // Binary: 0000001 00111 00110 000 00101 0110011 = 0x027302B3
   let DecodeResult(mul) = @decode.decode(0x027302B3U)
-  assert_true(mul is MUL)
+  assert_true(mul is MUL(_))
 
   // MULH x5, x6, x7: funct7=0x01, rs2=7, rs1=6, funct3=1, rd=5, opcode=0x33
   // Binary: 0000001 00111 00110 001 00101 0110011 = 0x027312B3
   let DecodeResult(mulh) = @decode.decode(0x027312B3U)
-  assert_true(mulh is MULH)
+  assert_true(mulh is MULH(_))
 
   // MULHSU x5, x6, x7: funct7=0x01, rs2=7, rs1=6, funct3=2, rd=5, opcode=0x33
   // Binary: 0000001 00111 00110 010 00101 0110011 = 0x027322B3
   let DecodeResult(mulhsu) = @decode.decode(0x027322B3U)
-  assert_true(mulhsu is MULHSU)
+  assert_true(mulhsu is MULHSU(_))
 
   // MULHU x5, x6, x7: funct7=0x01, rs2=7, rs1=6, funct3=3, rd=5, opcode=0x33
   // Binary: 0000001 00111 00110 011 00101 0110011 = 0x027332B3
   let DecodeResult(mulhu) = @decode.decode(0x027332B3U)
-  assert_true(mulhu is MULHU)
+  assert_true(mulhu is MULHU(_))
 
   // DIV x5, x6, x7: funct7=0x01, rs2=7, rs1=6, funct3=4, rd=5, opcode=0x33
   // Binary: 0000001 00111 00110 100 00101 0110011 = 0x027342B3
   let DecodeResult(div) = @decode.decode(0x027342B3U)
-  assert_true(div is DIV)
+  assert_true(div is DIV(_))
 
   // DIVU x5, x6, x7: funct7=0x01, rs2=7, rs1=6, funct3=5, rd=5, opcode=0x33
   // Binary: 0000001 00111 00110 101 00101 0110011 = 0x027352B3
   let DecodeResult(divu) = @decode.decode(0x027352B3U)
-  assert_true(divu is DIVU)
+  assert_true(divu is DIVU(_))
 
   // REM x5, x6, x7: funct7=0x01, rs2=7, rs1=6, funct3=6, rd=5, opcode=0x33
   // Binary: 0000001 00111 00110 110 00101 0110011 = 0x027362B3
   let DecodeResult(rem) = @decode.decode(0x027362B3U)
-  assert_true(rem is REM)
+  assert_true(rem is REM(_))
 
   // REMU x5, x6, x7: funct7=0x01, rs2=7, rs1=6, funct3=7, rd=5, opcode=0x33
   // Binary: 0000001 00111 00110 111 00101 0110011 = 0x027372B3
   let DecodeResult(remu) = @decode.decode(0x027372B3U)
-  assert_true(remu is REMU)
+  assert_true(remu is REMU(_))
 }
 
 ///|
@@ -253,7 +253,7 @@ test "decode_edge_cases" {
 
   // Test all zeros (illegal instruction)
   let DecodeResult(illegal) = @decode.decode(0x00000000U)
-  assert_true(illegal is Invalid)
+  assert_true(illegal is Invalid(_))
 }
 
 ///|

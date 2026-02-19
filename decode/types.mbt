@@ -311,6 +311,289 @@ pub enum Instruction {
   C_FSD(UInt, UInt, UInt) // rs2', rs1', imm - store double (compressed)
   C_FLDSP(UInt, UInt) // rd, imm - load double from SP (compressed)
   C_FSDSP(UInt, UInt) // rs2, imm - store double to SP (compressed)
+  // RVV Vector Extension (V extension)
+  // Configuration instructions
+  VSETVLI(UInt, UInt, UInt) // rd, rs1, vtypei - set vector length immediate
+  VSETIVLI(UInt, UInt, UInt) // rd, uimm, vtypei - set vector length immediate (immediate AVL)
+  VSETVL(UInt, UInt, UInt) // rd, rs1, rs2 - set vector length (register vtype)
+  // Vector integer arithmetic instructions - OPIVV/OPIVX/OPIVI
+  VADD_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - vector add
+  VADD_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - vector-scalar add
+  VADD_VI(UInt, Int, UInt, Bool) // vd, simm, vs2, vm - vector-immediate add
+  VSUB_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - vector sub
+  VSUB_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - vector-scalar sub
+  VRSUB_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - scalar-vector rsub
+  VRSUB_VI(UInt, Int, UInt, Bool) // vd, simm, vs2, vm - immediate-vector rsub
+  VAND_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - vector and
+  VAND_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - vector-scalar and
+  VAND_VI(UInt, Int, UInt, Bool) // vd, simm, vs2, vm - vector-immediate and
+  VOR_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - vector or
+  VOR_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - vector-scalar or
+  VOR_VI(UInt, Int, UInt, Bool) // vd, simm, vs2, vm - vector-immediate or
+  VXOR_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - vector xor
+  VXOR_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - vector-scalar xor
+  VXOR_VI(UInt, Int, UInt, Bool) // vd, simm, vs2, vm - vector-immediate xor
+  VSLL_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - vector shift left logical
+  VSLL_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - vector-scalar shift left logical
+  VSLL_VI(UInt, UInt, UInt, Bool) // vd, uimm, vs2, vm - vector-immediate shift left logical
+  VSRL_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - vector shift right logical
+  VSRL_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - vector-scalar shift right logical
+  VSRL_VI(UInt, UInt, UInt, Bool) // vd, uimm, vs2, vm - vector-immediate shift right logical
+  VSRA_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - vector shift right arithmetic
+  VSRA_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - vector-scalar shift right arithmetic
+  VSRA_VI(UInt, UInt, UInt, Bool) // vd, uimm, vs2, vm - vector-immediate shift right arithmetic
+  VNSRL_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - narrowing shift right logical
+  VNSRL_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - narrowing shift right logical
+  VNSRL_VI(UInt, UInt, UInt, Bool) // vd, uimm, vs2, vm - narrowing shift right logical
+  VNSRA_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - narrowing shift right arithmetic
+  VNSRA_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - narrowing shift right arithmetic
+  VNSRA_VI(UInt, UInt, UInt, Bool) // vd, uimm, vs2, vm - narrowing shift right arithmetic
+  VMSEQ_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - mask set equal
+  VMSEQ_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - mask set equal
+  VMSEQ_VI(UInt, Int, UInt, Bool) // vd, simm, vs2, vm - mask set equal
+  VMSNE_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - mask set not equal
+  VMSNE_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - mask set not equal
+  VMSNE_VI(UInt, Int, UInt, Bool) // vd, simm, vs2, vm - mask set not equal
+  VMSLTU_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - mask set less than unsigned
+  VMSLTU_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - mask set less than unsigned
+  VMSLT_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - mask set less than signed
+  VMSLT_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - mask set less than signed
+  VMSLEU_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - mask set less than or equal unsigned
+  VMSLEU_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - mask set less than or equal unsigned
+  VMSLEU_VI(UInt, Int, UInt, Bool) // vd, simm, vs2, vm - mask set less than or equal unsigned
+  VMSLE_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - mask set less than or equal signed
+  VMSLE_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - mask set less than or equal signed
+  VMSLE_VI(UInt, Int, UInt, Bool) // vd, simm, vs2, vm - mask set less than or equal signed
+  VMSGTU_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - mask set greater than unsigned
+  VMSGTU_VI(UInt, Int, UInt, Bool) // vd, simm, vs2, vm - mask set greater than unsigned
+  VMSGT_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - mask set greater than signed
+  VMSGT_VI(UInt, Int, UInt, Bool) // vd, simm, vs2, vm - mask set greater than signed
+  VMINU_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - minimum unsigned
+  VMINU_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - minimum unsigned
+  VMIN_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - minimum signed
+  VMIN_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - minimum signed
+  VMAXU_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - maximum unsigned
+  VMAXU_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - maximum unsigned
+  VMAX_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - maximum signed
+  VMAX_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - maximum signed
+  VMUL_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - multiply
+  VMUL_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - multiply
+  VMULH_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - multiply high signed
+  VMULH_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - multiply high signed
+  VMULHU_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - multiply high unsigned
+  VMULHU_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - multiply high unsigned
+  VMULHSU_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - multiply high signed-unsigned
+  VMULHSU_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - multiply high signed-unsigned
+  VDIVU_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - divide unsigned
+  VDIVU_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - divide unsigned
+  VDIV_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - divide signed
+  VDIV_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - divide signed
+  VREMU_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - remainder unsigned
+  VREMU_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - remainder unsigned
+  VREM_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - remainder signed
+  VREM_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - remainder signed
+  // Vector widening integer arithmetic - OPWVV/OPWVX
+  VWADDU_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - widening add unsigned
+  VWADDU_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - widening add unsigned
+  VWADD_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - widening add signed
+  VWADD_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - widening add signed
+  VWSUBU_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - widening sub unsigned
+  VWSUBU_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - widening sub unsigned
+  VWSUB_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - widening sub signed
+  VWSUB_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - widening sub signed
+  VWADDU_WV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - widening add unsigned (wide)
+  VWADDU_WX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - widening add unsigned (wide)
+  VWADD_WV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - widening add signed (wide)
+  VWADD_WX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - widening add signed (wide)
+  VWSUBU_WV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - widening sub unsigned (wide)
+  VWSUBU_WX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - widening sub unsigned (wide)
+  VWSUB_WV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - widening sub signed (wide)
+  VWSUB_WX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - widening sub signed (wide)
+  VWMUL_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - widening multiply signed
+  VWMUL_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - widening multiply signed
+  VWMULU_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - widening multiply unsigned
+  VWMULU_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - widening multiply unsigned
+  VWMULSU_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - widening multiply signed-unsigned
+  VWMULSU_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - widening multiply signed-unsigned
+  // Vector integer merge/move
+  VMERGE_VVM(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - merge
+  VMERGE_VXM(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - merge (scalar)
+  VMERGE_VIM(UInt, Int, UInt, Bool) // vd, simm, vs2, vm - merge (immediate)
+  VMV_V_V(UInt, UInt, Bool) // vd, vs1, vm - move vector
+  VMV_V_X(UInt, UInt, Bool) // vd, rs1, vm - move from scalar
+  VMV_V_I(UInt, Int, Bool) // vd, simm, vm - move immediate
+  VMV_X_S(UInt, UInt) // rd, vs2 - move to scalar
+  VMV_S_X(UInt, UInt) // vd, rs1 - move to vector element 0
+  // Vector integer extension
+  VZEXT_VF2(UInt, UInt, Bool) // vd, vs2, vm - zero extend 2x
+  VSEXT_VF2(UInt, UInt, Bool) // vd, vs2, vm - sign extend 2x
+  VZEXT_VF4(UInt, UInt, Bool) // vd, vs2, vm - zero extend 4x
+  VSEXT_VF4(UInt, UInt, Bool) // vd, vs2, vm - sign extend 4x
+  VZEXT_VF8(UInt, UInt, Bool) // vd, vs2, vm - zero extend 8x
+  VSEXT_VF8(UInt, UInt, Bool) // vd, vs2, vm - sign extend 8x
+  // Vector load/store instructions
+  VLE8_V(UInt, UInt, Bool) // vd, rs1, vm - load vector 8-bit
+  VLE16_V(UInt, UInt, Bool) // vd, rs1, vm - load vector 16-bit
+  VLE32_V(UInt, UInt, Bool) // vd, rs1, vm - load vector 32-bit
+  VLE64_V(UInt, UInt, Bool) // vd, rs1, vm - load vector 64-bit
+  VSE8_V(UInt, UInt, Bool) // vs3, rs1, vm - store vector 8-bit
+  VSE16_V(UInt, UInt, Bool) // vs3, rs1, vm - store vector 16-bit
+  VSE32_V(UInt, UInt, Bool) // vs3, rs1, vm - store vector 32-bit
+  VSE64_V(UInt, UInt, Bool) // vs3, rs1, vm - store vector 64-bit
+  // Vector strided load/store
+  VLSE8_V(UInt, UInt, UInt, Bool) // vd, rs1, rs2, vm - load strided 8-bit
+  VLSE16_V(UInt, UInt, UInt, Bool) // vd, rs1, rs2, vm - load strided 16-bit
+  VLSE32_V(UInt, UInt, UInt, Bool) // vd, rs1, rs2, vm - load strided 32-bit
+  VLSE64_V(UInt, UInt, UInt, Bool) // vd, rs1, rs2, vm - load strided 64-bit
+  VSSE8_V(UInt, UInt, UInt, Bool) // vs3, rs1, rs2, vm - store strided 8-bit
+  VSSE16_V(UInt, UInt, UInt, Bool) // vs3, rs1, rs2, vm - store strided 16-bit
+  VSSE32_V(UInt, UInt, UInt, Bool) // vs3, rs1, rs2, vm - store strided 32-bit
+  VSSE64_V(UInt, UInt, UInt, Bool) // vs3, rs1, rs2, vm - store strided 64-bit
+  // Vector indexed load/store
+  VLUXEI8_V(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - load indexed 8-bit
+  VLUXEI16_V(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - load indexed 16-bit
+  VLUXEI32_V(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - load indexed 32-bit
+  VLUXEI64_V(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - load indexed 64-bit
+  VSUXEI8_V(UInt, UInt, UInt, Bool) // vs3, rs1, vs2, vm - store indexed 8-bit
+  VSUXEI16_V(UInt, UInt, UInt, Bool) // vs3, rs1, vs2, vm - store indexed 16-bit
+  VSUXEI32_V(UInt, UInt, UInt, Bool) // vs3, rs1, vs2, vm - store indexed 32-bit
+  VSUXEI64_V(UInt, UInt, UInt, Bool) // vs3, rs1, vs2, vm - store indexed 64-bit
+  VLOXEI8_V(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - load indexed ordered 8-bit
+  VLOXEI16_V(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - load indexed ordered 16-bit
+  VLOXEI32_V(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - load indexed ordered 32-bit
+  VLOXEI64_V(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - load indexed ordered 64-bit
+  VSOXEI8_V(UInt, UInt, UInt, Bool) // vs3, rs1, vs2, vm - store indexed ordered 8-bit
+  VSOXEI16_V(UInt, UInt, UInt, Bool) // vs3, rs1, vs2, vm - store indexed ordered 16-bit
+  VSOXEI32_V(UInt, UInt, UInt, Bool) // vs3, rs1, vs2, vm - store indexed ordered 32-bit
+  VSOXEI64_V(UInt, UInt, UInt, Bool) // vs3, rs1, vs2, vm - store indexed ordered 64-bit
+  // Vector floating-point instructions - OPFVV/OPFVF
+  VFADD_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - vector float add
+  VFADD_VF(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - vector-scalar float add
+  VFSUB_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - vector float sub
+  VFSUB_VF(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - vector-scalar float sub
+  VFRSUB_VF(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - scalar-vector float rsub
+  VFMUL_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - vector float mul
+  VFMUL_VF(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - vector-scalar float mul
+  VFDIV_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - vector float div
+  VFDIV_VF(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - vector-scalar float div
+  VFRDIV_VF(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - scalar-vector float rdiv
+  VFMIN_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - vector float min
+  VFMIN_VF(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - vector-scalar float min
+  VFMAX_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - vector float max
+  VFMAX_VF(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - vector-scalar float max
+  VFSQRT_V(UInt, UInt, Bool) // vd, vs2, vm - vector float sqrt
+  VFSGNJ_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - vector float sign inject
+  VFSGNJ_VF(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - vector-scalar float sign inject
+  VFSGNJN_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - vector float sign inject neg
+  VFSGNJN_VF(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - vector-scalar float sign inject neg
+  VFSGNJX_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - vector float sign inject xor
+  VFSGNJX_VF(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - vector-scalar float sign inject xor
+  VMFEQ_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - mask set float equal
+  VMFEQ_VF(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - mask set float equal
+  VMFNE_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - mask set float not equal
+  VMFNE_VF(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - mask set float not equal
+  VMFLT_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - mask set float less than
+  VMFLT_VF(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - mask set float less than
+  VMFLE_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - mask set float less than or equal
+  VMFLE_VF(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - mask set float less than or equal
+  VMFGT_VF(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - mask set float greater than
+  VMFGE_VF(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - mask set float greater than or equal
+  VFCLASS_V(UInt, UInt, Bool) // vd, vs2, vm - vector float classify
+  VFMERGE_VFM(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - float merge
+  VFMV_V_F(UInt, UInt, Bool) // vd, rs1, vm - float move from scalar
+  VFMV_F_S(UInt, UInt) // rd, vs2 - float move to scalar
+  VFMV_S_F(UInt, UInt) // vd, rs1 - float move to vector element 0
+  // Vector widening floating-point
+  VFWADD_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - widening float add
+  VFWADD_VF(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - widening float add
+  VFWSUB_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - widening float sub
+  VFWSUB_VF(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - widening float sub
+  VFWADD_WV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - widening float add (wide)
+  VFWADD_WF(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - widening float add (wide)
+  VFWSUB_WV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - widening float sub (wide)
+  VFWSUB_WF(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - widening float sub (wide)
+  VFWMUL_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - widening float mul
+  VFWMUL_VF(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - widening float mul
+  // Vector reduction instructions
+  VREDSUM_VS(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - reduction sum
+  VREDMAXU_VS(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - reduction max unsigned
+  VREDMAX_VS(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - reduction max signed
+  VREDMINU_VS(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - reduction min unsigned
+  VREDMIN_VS(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - reduction min signed
+  VREDAND_VS(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - reduction and
+  VREDOR_VS(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - reduction or
+  VREDXOR_VS(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - reduction xor
+  VWREDSUMU_VS(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - widening reduction sum unsigned
+  VWREDSUM_VS(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - widening reduction sum signed
+  VFREDOSUM_VS(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - float reduction ordered sum
+  VFREDSUM_VS(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - float reduction sum
+  VFREDMAX_VS(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - float reduction max
+  VFREDMIN_VS(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - float reduction min
+  VFWREDOSUM_VS(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - widening float reduction ordered sum
+  VFWREDSUM_VS(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - widening float reduction sum
+  // Vector mask instructions
+  VMAND_MM(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - mask and
+  VMNAND_MM(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - mask nand
+  VMANDN_MM(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - mask and not
+  VMXOR_MM(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - mask xor
+  VMOR_MM(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - mask or
+  VMNOR_MM(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - mask nor
+  VMORN_MM(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - mask or not
+  VMXNOR_MM(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - mask xnor
+  VPOPC_M(UInt, UInt, UInt, Bool) // rd, vs2, vm - count population in mask
+  VFIRST_M(UInt, UInt, UInt, Bool) // rd, vs2, vm - find first set in mask
+  VMSBF_M(UInt, UInt, UInt, Bool) // vd, vs2, vm - mask set before first
+  VMSIF_M(UInt, UInt, UInt, Bool) // vd, vs2, vm - mask set including first
+  VMSOF_M(UInt, UInt, UInt, Bool) // vd, vs2, vm - mask set only first
+  VIOTA_M(UInt, UInt, UInt, Bool) // vd, vs2, vm - iota from mask
+  VID_V(UInt, UInt, Bool) // vd, vm - vector index
+  // Vector permutation instructions
+  VSLIDEUP_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - slide up
+  VSLIDEUP_VI(UInt, UInt, UInt, Bool) // vd, uimm, vs2, vm - slide up immediate
+  VSLIDEDOWN_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - slide down
+  VSLIDEDOWN_VI(UInt, UInt, UInt, Bool) // vd, uimm, vs2, vm - slide down immediate
+  VSLIDE1UP_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - slide 1 up
+  VSLIDE1DOWN_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - slide 1 down
+  VRGATHER_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - gather from vector
+  VRGATHER_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - gather from scalar
+  VRGATHER_VI(UInt, UInt, UInt, Bool) // vd, uimm, vs2, vm - gather from immediate
+  VCOMPRESS_VM(UInt, UInt, UInt, Bool) // vd, vs2, vm - compress
+  // Vector whole register load/store
+  VL1RE8_V(UInt, UInt) // vd, rs1 - load whole register 8-bit
+  VL1RE16_V(UInt, UInt) // vd, rs1 - load whole register 16-bit
+  VL1RE32_V(UInt, UInt) // vd, rs1 - load whole register 32-bit
+  VL1RE64_V(UInt, UInt) // vd, rs1 - load whole register 64-bit
+  VS1R_V(UInt, UInt) // vs3, rs1 - store whole register 8-bit
+  VS2R_V(UInt, UInt) // vs3, rs1 - store whole register 8-bit (2 regs)
+  VS4R_V(UInt, UInt) // vs3, rs1 - store whole register 8-bit (4 regs)
+  VS8R_V(UInt, UInt) // vs3, rs1 - store whole register 8-bit (8 regs)
+  // Vector fixed-point arithmetic
+  VSADDU_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - saturating add unsigned
+  VSADDU_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - saturating add unsigned
+  VSADDU_VI(UInt, Int, UInt, Bool) // vd, simm, vs2, vm - saturating add unsigned
+  VSADD_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - saturating add signed
+  VSADD_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - saturating add signed
+  VSADD_VI(UInt, Int, UInt, Bool) // vd, simm, vs2, vm - saturating add signed
+  VSSUBU_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - saturating sub unsigned
+  VSSUBU_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - saturating sub unsigned
+  VSSUB_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - saturating sub signed
+  VSSUB_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - saturating sub signed
+  VAADD_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - averaging add
+  VAADD_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - averaging add
+  VASUB_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - averaging sub
+  VASUB_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - averaging sub
+  VSSRL_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - scaling shift right logical
+  VSSRL_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - scaling shift right logical
+  VSSRL_VI(UInt, UInt, UInt, Bool) // vd, uimm, vs2, vm - scaling shift right logical
+  VSSRA_VV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - scaling shift right arithmetic
+  VSSRA_VX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - scaling shift right arithmetic
+  VSSRA_VI(UInt, UInt, UInt, Bool) // vd, uimm, vs2, vm - scaling shift right arithmetic
+  VNCLIPU_WV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - narrowing clip unsigned
+  VNCLIPU_WX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - narrowing clip unsigned
+  VNCLIPU_WI(UInt, UInt, UInt, Bool) // vd, uimm, vs2, vm - narrowing clip unsigned
+  VNCLIP_WV(UInt, UInt, UInt, Bool) // vd, vs1, vs2, vm - narrowing clip signed
+  VNCLIP_WX(UInt, UInt, UInt, Bool) // vd, rs1, vs2, vm - narrowing clip signed
+  VNCLIP_WI(UInt, UInt, UInt, Bool) // vd, uimm, vs2, vm - narrowing clip signed
   // Unknown/invalid instruction
   Invalid(UInt) // code
 } derive(Show)
@@ -327,6 +610,7 @@ pub enum InstructionCategory {
   Store
   System
   Float
+  Vector
   Unknown
 } derive(Show, Eq)
 
@@ -570,6 +854,283 @@ pub fn Instruction::category(self : Instruction) -> InstructionCategory {
     // Zcd extension (double-precision compressed)
     C_FLD(_, _, _) | C_FLDSP(_, _) => InstructionCategory::Load
     C_FSD(_, _, _) | C_FSDSP(_, _) => InstructionCategory::Store
+    // RVV Vector Extension
+    // Configuration
+    VSETVLI(_, _, _) | VSETIVLI(_, _, _) | VSETVL(_, _, _) =>
+      InstructionCategory::System
+    // Vector integer arithmetic
+    VADD_VV(_, _, _, _)
+    | VADD_VX(_, _, _, _)
+    | VADD_VI(_, _, _, _)
+    | VSUB_VV(_, _, _, _)
+    | VSUB_VX(_, _, _, _)
+    | VRSUB_VX(_, _, _, _)
+    | VRSUB_VI(_, _, _, _)
+    | VAND_VV(_, _, _, _)
+    | VAND_VX(_, _, _, _)
+    | VAND_VI(_, _, _, _)
+    | VOR_VV(_, _, _, _)
+    | VOR_VX(_, _, _, _)
+    | VOR_VI(_, _, _, _)
+    | VXOR_VV(_, _, _, _)
+    | VXOR_VX(_, _, _, _)
+    | VXOR_VI(_, _, _, _)
+    | VSLL_VV(_, _, _, _)
+    | VSLL_VX(_, _, _, _)
+    | VSLL_VI(_, _, _, _)
+    | VSRL_VV(_, _, _, _)
+    | VSRL_VX(_, _, _, _)
+    | VSRL_VI(_, _, _, _)
+    | VSRA_VV(_, _, _, _)
+    | VSRA_VX(_, _, _, _)
+    | VSRA_VI(_, _, _, _)
+    | VMINU_VV(_, _, _, _)
+    | VMINU_VX(_, _, _, _)
+    | VMIN_VV(_, _, _, _)
+    | VMIN_VX(_, _, _, _)
+    | VMAXU_VV(_, _, _, _)
+    | VMAXU_VX(_, _, _, _)
+    | VMAX_VV(_, _, _, _)
+    | VMAX_VX(_, _, _, _)
+    | VMUL_VV(_, _, _, _)
+    | VMUL_VX(_, _, _, _)
+    | VMULH_VV(_, _, _, _)
+    | VMULH_VX(_, _, _, _)
+    | VMULHU_VV(_, _, _, _)
+    | VMULHU_VX(_, _, _, _)
+    | VMULHSU_VV(_, _, _, _)
+    | VMULHSU_VX(_, _, _, _)
+    | VDIVU_VV(_, _, _, _)
+    | VDIVU_VX(_, _, _, _)
+    | VDIV_VV(_, _, _, _)
+    | VDIV_VX(_, _, _, _)
+    | VREMU_VV(_, _, _, _)
+    | VREMU_VX(_, _, _, _)
+    | VREM_VV(_, _, _, _)
+    | VREM_VX(_, _, _, _)
+    | VNSRL_VV(_, _, _, _)
+    | VNSRL_VX(_, _, _, _)
+    | VNSRL_VI(_, _, _, _)
+    | VNSRA_VV(_, _, _, _)
+    | VNSRA_VX(_, _, _, _)
+    | VNSRA_VI(_, _, _, _)
+    | VWADDU_VV(_, _, _, _)
+    | VWADDU_VX(_, _, _, _)
+    | VWADD_VV(_, _, _, _)
+    | VWADD_VX(_, _, _, _)
+    | VWSUBU_VV(_, _, _, _)
+    | VWSUBU_VX(_, _, _, _)
+    | VWSUB_VV(_, _, _, _)
+    | VWSUB_VX(_, _, _, _)
+    | VWADDU_WV(_, _, _, _)
+    | VWADDU_WX(_, _, _, _)
+    | VWADD_WV(_, _, _, _)
+    | VWADD_WX(_, _, _, _)
+    | VWSUBU_WV(_, _, _, _)
+    | VWSUBU_WX(_, _, _, _)
+    | VWSUB_WV(_, _, _, _)
+    | VWSUB_WX(_, _, _, _)
+    | VWMUL_VV(_, _, _, _)
+    | VWMUL_VX(_, _, _, _)
+    | VWMULU_VV(_, _, _, _)
+    | VWMULU_VX(_, _, _, _)
+    | VWMULSU_VV(_, _, _, _)
+    | VWMULSU_VX(_, _, _, _)
+    | VMERGE_VVM(_, _, _, _)
+    | VMERGE_VXM(_, _, _, _)
+    | VMERGE_VIM(_, _, _, _)
+    | VMV_V_V(_, _, _)
+    | VMV_V_X(_, _, _)
+    | VMV_V_I(_, _, _)
+    | VMV_X_S(_, _)
+    | VMV_S_X(_, _)
+    | VZEXT_VF2(_, _, _)
+    | VSEXT_VF2(_, _, _)
+    | VZEXT_VF4(_, _, _)
+    | VSEXT_VF4(_, _, _)
+    | VZEXT_VF8(_, _, _)
+    | VSEXT_VF8(_, _, _) => InstructionCategory::Vector
+    // Vector compare
+    VMSEQ_VV(_, _, _, _)
+    | VMSEQ_VX(_, _, _, _)
+    | VMSEQ_VI(_, _, _, _)
+    | VMSNE_VV(_, _, _, _)
+    | VMSNE_VX(_, _, _, _)
+    | VMSNE_VI(_, _, _, _)
+    | VMSLTU_VV(_, _, _, _)
+    | VMSLTU_VX(_, _, _, _)
+    | VMSLT_VV(_, _, _, _)
+    | VMSLT_VX(_, _, _, _)
+    | VMSLEU_VV(_, _, _, _)
+    | VMSLEU_VX(_, _, _, _)
+    | VMSLEU_VI(_, _, _, _)
+    | VMSLE_VV(_, _, _, _)
+    | VMSLE_VX(_, _, _, _)
+    | VMSLE_VI(_, _, _, _)
+    | VMSGTU_VX(_, _, _, _)
+    | VMSGTU_VI(_, _, _, _)
+    | VMSGT_VX(_, _, _, _)
+    | VMSGT_VI(_, _, _, _) => InstructionCategory::Compare
+    // Vector load/store
+    VLE8_V(_, _, _)
+    | VLE16_V(_, _, _)
+    | VLE32_V(_, _, _)
+    | VLE64_V(_, _, _)
+    | VLSE8_V(_, _, _, _)
+    | VLSE16_V(_, _, _, _)
+    | VLSE32_V(_, _, _, _)
+    | VLSE64_V(_, _, _, _)
+    | VLUXEI8_V(_, _, _, _)
+    | VLUXEI16_V(_, _, _, _)
+    | VLUXEI32_V(_, _, _, _)
+    | VLUXEI64_V(_, _, _, _)
+    | VLOXEI8_V(_, _, _, _)
+    | VLOXEI16_V(_, _, _, _)
+    | VLOXEI32_V(_, _, _, _)
+    | VLOXEI64_V(_, _, _, _)
+    | VL1RE8_V(_, _)
+    | VL1RE16_V(_, _)
+    | VL1RE32_V(_, _)
+    | VL1RE64_V(_, _) => InstructionCategory::Load
+    VSE8_V(_, _, _)
+    | VSE16_V(_, _, _)
+    | VSE32_V(_, _, _)
+    | VSE64_V(_, _, _)
+    | VSSE8_V(_, _, _, _)
+    | VSSE16_V(_, _, _, _)
+    | VSSE32_V(_, _, _, _)
+    | VSSE64_V(_, _, _, _)
+    | VSUXEI8_V(_, _, _, _)
+    | VSUXEI16_V(_, _, _, _)
+    | VSUXEI32_V(_, _, _, _)
+    | VSUXEI64_V(_, _, _, _)
+    | VSOXEI8_V(_, _, _, _)
+    | VSOXEI16_V(_, _, _, _)
+    | VSOXEI32_V(_, _, _, _)
+    | VSOXEI64_V(_, _, _, _)
+    | VS1R_V(_, _)
+    | VS2R_V(_, _)
+    | VS4R_V(_, _)
+    | VS8R_V(_, _) => InstructionCategory::Store
+    // Vector floating-point
+    VFADD_VV(_, _, _, _)
+    | VFADD_VF(_, _, _, _)
+    | VFSUB_VV(_, _, _, _)
+    | VFSUB_VF(_, _, _, _)
+    | VFRSUB_VF(_, _, _, _)
+    | VFMUL_VV(_, _, _, _)
+    | VFMUL_VF(_, _, _, _)
+    | VFDIV_VV(_, _, _, _)
+    | VFDIV_VF(_, _, _, _)
+    | VFRDIV_VF(_, _, _, _)
+    | VFMIN_VV(_, _, _, _)
+    | VFMIN_VF(_, _, _, _)
+    | VFMAX_VV(_, _, _, _)
+    | VFMAX_VF(_, _, _, _)
+    | VFSQRT_V(_, _, _)
+    | VFSGNJ_VV(_, _, _, _)
+    | VFSGNJ_VF(_, _, _, _)
+    | VFSGNJN_VV(_, _, _, _)
+    | VFSGNJN_VF(_, _, _, _)
+    | VFSGNJX_VV(_, _, _, _)
+    | VFSGNJX_VF(_, _, _, _)
+    | VFCLASS_V(_, _, _)
+    | VFMERGE_VFM(_, _, _, _)
+    | VFMV_V_F(_, _, _)
+    | VFMV_F_S(_, _)
+    | VFMV_S_F(_, _)
+    | VFWADD_VV(_, _, _, _)
+    | VFWADD_VF(_, _, _, _)
+    | VFWSUB_VV(_, _, _, _)
+    | VFWSUB_VF(_, _, _, _)
+    | VFWADD_WV(_, _, _, _)
+    | VFWADD_WF(_, _, _, _)
+    | VFWSUB_WV(_, _, _, _)
+    | VFWSUB_WF(_, _, _, _)
+    | VFWMUL_VV(_, _, _, _)
+    | VFWMUL_VF(_, _, _, _) => InstructionCategory::Float
+    // Vector float compare
+    VMFEQ_VV(_, _, _, _)
+    | VMFEQ_VF(_, _, _, _)
+    | VMFNE_VV(_, _, _, _)
+    | VMFNE_VF(_, _, _, _)
+    | VMFLT_VV(_, _, _, _)
+    | VMFLT_VF(_, _, _, _)
+    | VMFLE_VV(_, _, _, _)
+    | VMFLE_VF(_, _, _, _)
+    | VMFGT_VF(_, _, _, _)
+    | VMFGE_VF(_, _, _, _) => InstructionCategory::Compare
+    // Vector reduction
+    VREDSUM_VS(_, _, _, _)
+    | VREDMAXU_VS(_, _, _, _)
+    | VREDMAX_VS(_, _, _, _)
+    | VREDMINU_VS(_, _, _, _)
+    | VREDMIN_VS(_, _, _, _)
+    | VREDAND_VS(_, _, _, _)
+    | VREDOR_VS(_, _, _, _)
+    | VREDXOR_VS(_, _, _, _)
+    | VWREDSUMU_VS(_, _, _, _)
+    | VWREDSUM_VS(_, _, _, _)
+    | VFREDOSUM_VS(_, _, _, _)
+    | VFREDSUM_VS(_, _, _, _)
+    | VFREDMAX_VS(_, _, _, _)
+    | VFREDMIN_VS(_, _, _, _)
+    | VFWREDOSUM_VS(_, _, _, _)
+    | VFWREDSUM_VS(_, _, _, _) => InstructionCategory::Vector
+    // Vector mask
+    VMAND_MM(_, _, _, _)
+    | VMNAND_MM(_, _, _, _)
+    | VMANDN_MM(_, _, _, _)
+    | VMXOR_MM(_, _, _, _)
+    | VMOR_MM(_, _, _, _)
+    | VMNOR_MM(_, _, _, _)
+    | VMORN_MM(_, _, _, _)
+    | VMXNOR_MM(_, _, _, _)
+    | VPOPC_M(_, _, _, _)
+    | VFIRST_M(_, _, _, _)
+    | VMSBF_M(_, _, _, _)
+    | VMSIF_M(_, _, _, _)
+    | VMSOF_M(_, _, _, _)
+    | VIOTA_M(_, _, _, _)
+    | VID_V(_, _, _) => InstructionCategory::Logical
+    // Vector permutation
+    VSLIDEUP_VX(_, _, _, _)
+    | VSLIDEUP_VI(_, _, _, _)
+    | VSLIDEDOWN_VX(_, _, _, _)
+    | VSLIDEDOWN_VI(_, _, _, _)
+    | VSLIDE1UP_VX(_, _, _, _)
+    | VSLIDE1DOWN_VX(_, _, _, _)
+    | VRGATHER_VV(_, _, _, _)
+    | VRGATHER_VX(_, _, _, _)
+    | VRGATHER_VI(_, _, _, _)
+    | VCOMPRESS_VM(_, _, _, _) => InstructionCategory::Vector
+    // Vector fixed-point
+    VSADDU_VV(_, _, _, _)
+    | VSADDU_VX(_, _, _, _)
+    | VSADDU_VI(_, _, _, _)
+    | VSADD_VV(_, _, _, _)
+    | VSADD_VX(_, _, _, _)
+    | VSADD_VI(_, _, _, _)
+    | VSSUBU_VV(_, _, _, _)
+    | VSSUBU_VX(_, _, _, _)
+    | VSSUB_VV(_, _, _, _)
+    | VSSUB_VX(_, _, _, _)
+    | VAADD_VV(_, _, _, _)
+    | VAADD_VX(_, _, _, _)
+    | VASUB_VV(_, _, _, _)
+    | VASUB_VX(_, _, _, _)
+    | VSSRL_VV(_, _, _, _)
+    | VSSRL_VX(_, _, _, _)
+    | VSSRL_VI(_, _, _, _)
+    | VSSRA_VV(_, _, _, _)
+    | VSSRA_VX(_, _, _, _)
+    | VSSRA_VI(_, _, _, _)
+    | VNCLIPU_WV(_, _, _, _)
+    | VNCLIPU_WX(_, _, _, _)
+    | VNCLIPU_WI(_, _, _, _)
+    | VNCLIP_WV(_, _, _, _)
+    | VNCLIP_WX(_, _, _, _)
+    | VNCLIP_WI(_, _, _, _) => InstructionCategory::Vector
     Invalid(_) => InstructionCategory::Unknown
   }
 }
@@ -739,5 +1300,45 @@ pub fn creg_name(reg : UInt) -> String {
     30U => "ft10'"
     31U => "ft11'"
     _ => "fc\{reg}" // For f0-f7, show as fc0, fc1, etc.
+  }
+}
+
+///|
+/// Vector register name lookup (v0-v31)
+pub fn vreg_name(reg : UInt) -> String {
+  match reg {
+    0U => "v0"
+    1U => "v1"
+    2U => "v2"
+    3U => "v3"
+    4U => "v4"
+    5U => "v5"
+    6U => "v6"
+    7U => "v7"
+    8U => "v8"
+    9U => "v9"
+    10U => "v10"
+    11U => "v11"
+    12U => "v12"
+    13U => "v13"
+    14U => "v14"
+    15U => "v15"
+    16U => "v16"
+    17U => "v17"
+    18U => "v18"
+    19U => "v19"
+    20U => "v20"
+    21U => "v21"
+    22U => "v22"
+    23U => "v23"
+    24U => "v24"
+    25U => "v25"
+    26U => "v26"
+    27U => "v27"
+    28U => "v28"
+    29U => "v29"
+    30U => "v30"
+    31U => "v31"
+    _ => "v?"
   }
 }

@@ -1233,6 +1233,1889 @@ pub fn get_operands(inst : @decode.Instruction) -> InstOperands {
     // System instructions
     @decode.ECALL | @decode.EBREAK | @decode.FENCE(_, _) | @decode.FENCE_I =>
       ignore(())
+    // Vector instructions - handle v0-v31 as vector registers
+    // VSETVLI
+    @decode.VSETVLI(rd, rs1, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector loads: def vd, use rs1 (base address)
+    @decode.VLE8_V(rd, rs1, _)
+    | @decode.VLE16_V(rd, rs1, _)
+    | @decode.VLE32_V(rd, rs1, _)
+    | @decode.VLE64_V(rd, rs1, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector stores: use rs1 (base), use vs2 (data)
+    @decode.VSE8_V(rs1, rs2, _)
+    | @decode.VSE16_V(rs1, rs2, _)
+    | @decode.VSE32_V(rs1, rs2, _)
+    | @decode.VSE64_V(rs1, rs2, _) => {
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector arithmetic: def vd, use vs1, use vs2
+    // Most vector-vector and vector-scalar instructions follow this pattern
+    @decode.VADD_VV(rd, rs1, rs2, _)
+    | @decode.VSUB_VV(rd, rs1, rs2, _)
+    | @decode.VAND_VV(rd, rs1, rs2, _)
+    | @decode.VOR_VV(rd, rs1, rs2, _)
+    | @decode.VXOR_VV(rd, rs1, rs2, _)
+    | @decode.VMUL_VV(rd, rs1, rs2, _)
+    | @decode.VMUL_VX(rd, rs1, rs2, _)
+    | @decode.VDIV_VV(rd, rs1, rs2, _)
+    | @decode.VDIVU_VV(rd, rs1, rs2, _)
+    | @decode.VREM_VV(rd, rs1, rs2, _)
+    | @decode.VREMU_VV(rd, rs1, rs2, _)
+    | @decode.VMULH_VV(rd, rs1, rs2, _)
+    | @decode.VMULHU_VV(rd, rs1, rs2, _)
+    | @decode.VMULHSU_VV(rd, rs1, rs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector shift instructions
+    @decode.VSLL_VV(rd, rs1, rs2, _)
+    | @decode.VSRL_VV(rd, rs1, rs2, _)
+    | @decode.VSRA_VV(rd, rs1, rs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector mask compare
+    @decode.VMSEQ_VV(rd, rs1, rs2, _)
+    | @decode.VMSNE_VV(rd, rs1, rs2, _)
+    | @decode.VMSLT_VV(rd, rs1, rs2, _)
+    | @decode.VMSLTU_VV(rd, rs1, rs2, _)
+    | @decode.VMSLE_VV(rd, rs1, rs2, _)
+    | @decode.VMSLEU_VV(rd, rs1, rs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector widening multiply
+    @decode.VWMUL_VV(rd, rs1, rs2, _) | @decode.VWMULSU_VV(rd, rs1, rs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector widening add/sub
+    @decode.VWADD_VV(rd, rs1, rs2, _)
+    | @decode.VWADDU_VV(rd, rs1, rs2, _)
+    | @decode.VWSUB_VV(rd, rs1, rs2, _)
+    | @decode.VWSUBU_VV(rd, rs1, rs2, _)
+    | @decode.VWADD_WV(rd, rs1, rs2, _)
+    | @decode.VWADDU_WV(rd, rs1, rs2, _)
+    | @decode.VWSUB_WV(rd, rs1, rs2, _)
+    | @decode.VWSUBU_WV(rd, rs1, rs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector FP instructions - simplified handling
+    @decode.VFADD_VV(rd, rs1, rs2, _)
+    | @decode.VFSUB_VV(rd, rs1, rs2, _)
+    | @decode.VFMUL_VV(rd, rs1, rs2, _)
+    | @decode.VFDIV_VV(rd, rs1, rs2, _)
+    | @decode.VFMIN_VV(rd, rs1, rs2, _)
+    | @decode.VFMAX_VV(rd, rs1, rs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector reduction instructions
+    @decode.VREDSUM_VS(rd, rs1, rs2, _)
+    | @decode.VREDMAX_VS(rd, rs1, rs2, _)
+    | @decode.VREDMIN_VS(rd, rs1, rs2, _)
+    | @decode.VREDAND_VS(rd, rs1, rs2, _)
+    | @decode.VREDOR_VS(rd, rs1, rs2, _)
+    | @decode.VREDXOR_VS(rd, rs1, rs2, _)
+    | @decode.VWREDSUM_VS(rd, rs1, rs2, _)
+    | @decode.VWREDSUMU_VS(rd, rs1, rs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector narrowing clip (separate immediate variants)
+    @decode.VNCLIP_WV(rd, rs1, rs2, _) | @decode.VNCLIP_WX(rd, rs1, rs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    @decode.VNCLIP_WI(rd, uimm, rs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      ignore(uimm)
+    }
+    @decode.VNCLIPU_WV(rd, rs1, rs2, _) | @decode.VNCLIPU_WX(rd, rs1, rs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    @decode.VNCLIPU_WI(rd, uimm, rs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      ignore(uimm)
+    }
+    // Vector scalar shift (separate immediate variants)
+    @decode.VSSRA_VV(rd, rs1, rs2, _)
+    | @decode.VSSRA_VX(rd, rs1, rs2, _)
+    | @decode.VSSRL_VV(rd, rs1, rs2, _)
+    | @decode.VSSRL_VX(rd, rs1, rs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    @decode.VSSRA_VI(rd, uimm, rs2, _) | @decode.VSSRL_VI(rd, uimm, rs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      ignore(uimm)
+    }
+    // Vector saturating add/sub
+    @decode.VAADD_VV(rd, rs1, rs2, _)
+    | @decode.VAADD_VX(rd, rs1, rs2, _)
+    | @decode.VASUB_VV(rd, rs1, rs2, _)
+    | @decode.VASUB_VX(rd, rs1, rs2, _)
+    | @decode.VSSUB_VV(rd, rs1, rs2, _)
+    | @decode.VSSUB_VX(rd, rs1, rs2, _)
+    | @decode.VSSUBU_VV(rd, rs1, rs2, _)
+    | @decode.VSSUBU_VX(rd, rs1, rs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector signed/unsigned add (separate immediate variants)
+    @decode.VSADD_VV(rd, rs1, rs2, _)
+    | @decode.VSADD_VX(rd, rs1, rs2, _)
+    | @decode.VSADDU_VV(rd, rs1, rs2, _)
+    | @decode.VSADDU_VX(rd, rs1, rs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    @decode.VSADD_VI(rd, uimm, rs2, _) | @decode.VSADDU_VI(rd, uimm, rs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      ignore(uimm)
+    }
+    // Vector strided store (2 args)
+    @decode.VS1R_V(rs1, rs2)
+    | @decode.VS2R_V(rs1, rs2)
+    | @decode.VS4R_V(rs1, rs2)
+    | @decode.VS8R_V(rs1, rs2) => {
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector unit-stride fault-only-first load (2 args)
+    @decode.VL1RE8_V(rd, rs1)
+    | @decode.VL1RE16_V(rd, rs1)
+    | @decode.VL1RE32_V(rd, rs1)
+    | @decode.VL1RE64_V(rd, rs1) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector compress and gather
+    @decode.VCOMPRESS_VM(rd, rs1, rs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector gather (separate immediate variants)
+    @decode.VRGATHER_VV(rd, rs1, rs2, _)
+    | @decode.VRGATHER_VX(rd, rs1, rs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    @decode.VRGATHER_VI(rd, uimm, rs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      ignore(uimm)
+    }
+    // Vector slide (separate immediate variants)
+    @decode.VSLIDEUP_VX(rd, rs1, rs2, _)
+    | @decode.VSLIDEDOWN_VX(rd, rs1, rs2, _)
+    | @decode.VSLIDE1UP_VX(rd, rs1, rs2, _)
+    | @decode.VSLIDE1DOWN_VX(rd, rs1, rs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    @decode.VSLIDEUP_VI(rd, uimm, rs2, _)
+    | @decode.VSLIDEDOWN_VI(rd, uimm, rs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      ignore(uimm)
+    }
+    // Vector mask instructions
+    @decode.VID_V(rd, _, _) =>
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+    @decode.VIOTA_M(rd, rs2, _, _)
+    | @decode.VPOPC_M(rd, rs2, _, _)
+    | @decode.VFIRST_M(rd, rs2, _, _)
+    | @decode.VMSBF_M(rd, rs2, _, _)
+    | @decode.VMSIF_M(rd, rs2, _, _)
+    | @decode.VMSOF_M(rd, rs2, _, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector setvl/setivli
+    @decode.VSETVLI(rd, rs1, avl) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      ignore(avl)
+    }
+    @decode.VSETIVLI(rd, uimm, avl) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      ignore(uimm)
+      ignore(avl)
+    }
+    @decode.VSETVL(rd, rs1, rs2) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector mask logical
+    @decode.VMAND_MM(rd, rs1, rs2, _)
+    | @decode.VMNAND_MM(rd, rs1, rs2, _)
+    | @decode.VMANDN_MM(rd, rs1, rs2, _)
+    | @decode.VMXOR_MM(rd, rs1, rs2, _)
+    | @decode.VMOR_MM(rd, rs1, rs2, _)
+    | @decode.VMNOR_MM(rd, rs1, rs2, _)
+    | @decode.VMORN_MM(rd, rs1, rs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector float reduction
+    @decode.VFREDSUM_VS(rd, rs1, rs2, _)
+    | @decode.VFREDOSUM_VS(rd, rs1, rs2, _)
+    | @decode.VFREDMAX_VS(rd, rs1, rs2, _)
+    | @decode.VFREDMIN_VS(rd, rs1, rs2, _)
+    | @decode.VFWREDSUM_VS(rd, rs1, rs2, _)
+    | @decode.VFWREDOSUM_VS(rd, rs1, rs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector float reduction (unsigned)
+    @decode.VREDMAXU_VS(rd, rs1, rs2, _)
+    | @decode.VREDMINU_VS(rd, rs1, rs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector widening float multiply
+    @decode.VFWMUL_VF(rd, rs1, rs2, _) | @decode.VFWMUL_VV(rd, rs1, rs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector widening float add/sub
+    @decode.VFWADD_VV(rd, rs1, rs2, _)
+    | @decode.VFWADD_VF(rd, rs1, rs2, _)
+    | @decode.VFWADD_WV(rd, rs1, rs2, _)
+    | @decode.VFWADD_WF(rd, rs1, rs2, _)
+    | @decode.VFWSUB_VV(rd, rs1, rs2, _)
+    | @decode.VFWSUB_VF(rd, rs1, rs2, _)
+    | @decode.VFWSUB_WV(rd, rs1, rs2, _)
+    | @decode.VFWSUB_WF(rd, rs1, rs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector float move
+    @decode.VFMV_S_F(rd, rs1) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    @decode.VFMV_F_S(rd, rs1) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    @decode.VFMV_V_F(rd, rs1, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    @decode.VFMERGE_VFM(rd, rs1, rs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector float classify
+    @decode.VFCLASS_V(rd, rs1, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector float compare
+    @decode.VMFEQ_VV(rd, rs1, rs2, _)
+    | @decode.VMFNE_VV(rd, rs1, rs2, _)
+    | @decode.VMFLT_VV(rd, rs1, rs2, _)
+    | @decode.VMFLE_VV(rd, rs1, rs2, _)
+    | @decode.VMFEQ_VF(rd, rs1, rs2, _)
+    | @decode.VMFNE_VF(rd, rs1, rs2, _)
+    | @decode.VMFLT_VF(rd, rs1, rs2, _)
+    | @decode.VMFLE_VF(rd, rs1, rs2, _)
+    | @decode.VMFGT_VF(rd, rs1, rs2, _)
+    | @decode.VMFGE_VF(rd, rs1, rs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector float sign injection
+    @decode.VFSGNJ_VV(rd, rs1, rs2, _)
+    | @decode.VFSGNJN_VV(rd, rs1, rs2, _)
+    | @decode.VFSGNJX_VV(rd, rs1, rs2, _)
+    | @decode.VFSGNJ_VF(rd, rs1, rs2, _)
+    | @decode.VFSGNJN_VF(rd, rs1, rs2, _)
+    | @decode.VFSGNJX_VF(rd, rs1, rs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector float sqrt
+    @decode.VFSQRT_V(rd, rs1, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector float arithmetic
+    @decode.VFADD_VV(rd, rs1, rs2, _)
+    | @decode.VFSUB_VV(rd, rs1, rs2, _)
+    | @decode.VFMUL_VV(rd, rs1, rs2, _)
+    | @decode.VFDIV_VV(rd, rs1, rs2, _)
+    | @decode.VFADD_VF(rd, rs1, rs2, _)
+    | @decode.VFSUB_VF(rd, rs1, rs2, _)
+    | @decode.VFMUL_VF(rd, rs1, rs2, _)
+    | @decode.VFRSUB_VF(rd, rs1, rs2, _)
+    | @decode.VFMIN_VF(rd, rs1, rs2, _)
+    | @decode.VFMAX_VF(rd, rs1, rs2, _)
+    | @decode.VFRDIV_VF(rd, rs1, rs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector float min/max vv
+    @decode.VFMIN_VV(rd, rs1, rs2, _) | @decode.VFMAX_VV(rd, rs1, rs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector indexed load/store
+    @decode.VLOXEI64_V(rd, rs1, rs2, _)
+    | @decode.VLOXEI32_V(rd, rs1, rs2, _)
+    | @decode.VLOXEI16_V(rd, rs1, rs2, _)
+    | @decode.VLOXEI8_V(rd, rs1, rs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    @decode.VSOXEI64_V(rs1, rs2, rs3, _)
+    | @decode.VSOXEI32_V(rs1, rs2, rs3, _)
+    | @decode.VSOXEI16_V(rs1, rs2, rs3, _)
+    | @decode.VSOXEI8_V(rs1, rs2, rs3, _) => {
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs3 != 0U {
+        ops.push(RegOperand::{
+          reg: rs3 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // More vector loads (indexed)
+    @decode.VLSE64_V(rd, rs1, rs2, _)
+    | @decode.VLSE32_V(rd, rs1, rs2, _)
+    | @decode.VLSE16_V(rd, rs1, rs2, _)
+    | @decode.VLSE8_V(rd, rs1, rs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    @decode.VSSE64_V(rs1, rs2, rs3, _)
+    | @decode.VSSE32_V(rs1, rs2, rs3, _)
+    | @decode.VSSE16_V(rs1, rs2, rs3, _)
+    | @decode.VSSE8_V(rs1, rs2, rs3, _) => {
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs3 != 0U {
+        ops.push(RegOperand::{
+          reg: rs3 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // More vector stores
+    @decode.VS4R_V(rs1, rs2) | @decode.VS8R_V(rs1, rs2) => {
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector indexed unordered load
+    @decode.VLUXEI64_V(rd, rs1, rs2, _)
+    | @decode.VLUXEI32_V(rd, rs1, rs2, _)
+    | @decode.VLUXEI16_V(rd, rs1, rs2, _)
+    | @decode.VLUXEI8_V(rd, rs1, rs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector indexed unordered store
+    @decode.VSUXEI64_V(rs1, rs2, rs3, _)
+    | @decode.VSUXEI32_V(rs1, rs2, rs3, _)
+    | @decode.VSUXEI16_V(rs1, rs2, rs3, _)
+    | @decode.VSUXEI8_V(rs1, rs2, rs3, _) => {
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs3 != 0U {
+        ops.push(RegOperand::{
+          reg: rs3 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector sign/zero extend
+    @decode.VSEXT_VF2(rd, rs1, _)
+    | @decode.VZEXT_VF2(rd, rs1, _)
+    | @decode.VSEXT_VF4(rd, rs1, _)
+    | @decode.VZEXT_VF4(rd, rs1, _)
+    | @decode.VSEXT_VF8(rd, rs1, _)
+    | @decode.VZEXT_VF8(rd, rs1, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector scalar move
+    @decode.VMV_S_X(rd, rs1) | @decode.VMV_X_S(rd, rs1) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector integer move
+    @decode.VMV_V_I(rd, _, _) =>
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+    @decode.VMV_V_X(rd, rs1, _) | @decode.VMV_V_V(rd, rs1, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector merge
+    @decode.VMERGE_VIM(rd, _, rs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    @decode.VMERGE_VXM(rd, rs1, rs2, _) | @decode.VMERGE_VVM(rd, rs1, rs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector widening multiply (signed-unsigned)
+    @decode.VWMULSU_VX(rd, rs1, rs2, _) | @decode.VWMULSU_VV(rd, rs1, rs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector widening multiply
+    @decode.VWMUL_VX(rd, rs1, rs2, _)
+    | @decode.VWMUL_VV(rd, rs1, rs2, _)
+    | @decode.VWMULU_VX(rd, rs1, rs2, _)
+    | @decode.VWMULU_VV(rd, rs1, rs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector widening sub (wide)
+    @decode.VWSUB_WX(rd, rs1, rs2, _)
+    | @decode.VWSUB_WV(rd, rs1, rs2, _)
+    | @decode.VWSUBU_WX(rd, rs1, rs2, _)
+    | @decode.VWSUBU_WV(rd, rs1, rs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector widening add
+    @decode.VWADD_WX(rd, rs1, rs2, _)
+    | @decode.VWADD_WV(rd, rs1, rs2, _)
+    | @decode.VWADDU_WX(rd, rs1, rs2, _)
+    | @decode.VWADDU_WV(rd, rs1, rs2, _)
+    | @decode.VWSUB_VX(rd, rs1, rs2, _)
+    | @decode.VWSUB_VV(rd, rs1, rs2, _)
+    | @decode.VWSUBU_VX(rd, rs1, rs2, _)
+    | @decode.VWSUBU_VV(rd, rs1, rs2, _)
+    | @decode.VWADD_VX(rd, rs1, rs2, _)
+    | @decode.VWADD_VV(rd, rs1, rs2, _)
+    | @decode.VWADDU_VX(rd, rs1, rs2, _)
+    | @decode.VWADDU_VV(rd, rs1, rs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector division/remainder
+    @decode.VREM_VX(rd, rs1, rs2, _)
+    | @decode.VREMU_VX(rd, rs1, rs2, _)
+    | @decode.VDIV_VX(rd, rs1, rs2, _)
+    | @decode.VDIVU_VX(rd, rs1, rs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector multiply high
+    @decode.VMULHSU_VX(rd, rs1, rs2, _)
+    | @decode.VMULHU_VX(rd, rs1, rs2, _)
+    | @decode.VMULH_VX(rd, rs1, rs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector max/min
+    @decode.VMAX_VX(rd, rs1, rs2, _)
+    | @decode.VMAX_VV(rd, rs1, rs2, _)
+    | @decode.VMAXU_VX(rd, rs1, rs2, _)
+    | @decode.VMAXU_VV(rd, rs1, rs2, _)
+    | @decode.VMIN_VX(rd, rs1, rs2, _)
+    | @decode.VMIN_VV(rd, rs1, rs2, _)
+    | @decode.VMINU_VX(rd, rs1, rs2, _)
+    | @decode.VMINU_VV(rd, rs1, rs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector float division
+    @decode.VFDIV_VF(rd, rs1, rs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector mask compare (immediate)
+    @decode.VMSGT_VI(rd, _, vs2, _)
+    | @decode.VMSGTU_VI(rd, _, vs2, _)
+    | @decode.VMSLE_VI(rd, _, vs2, _)
+    | @decode.VMSLEU_VI(rd, _, vs2, _)
+    | @decode.VMSNE_VI(rd, _, vs2, _)
+    | @decode.VMSEQ_VI(rd, _, vs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if vs2 != 0U {
+        ops.push(RegOperand::{
+          reg: vs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector mask compare (register)
+    @decode.VMSGT_VX(rd, rs1, rs2, _)
+    | @decode.VMSGTU_VX(rd, rs1, rs2, _)
+    | @decode.VMSLE_VX(rd, rs1, rs2, _)
+    | @decode.VMSLEU_VX(rd, rs1, rs2, _)
+    | @decode.VMSLT_VX(rd, rs1, rs2, _)
+    | @decode.VMSLTU_VX(rd, rs1, rs2, _)
+    | @decode.VMSNE_VX(rd, rs1, rs2, _)
+    | @decode.VMSEQ_VX(rd, rs1, rs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector narrowing shift right (immediate)
+    @decode.VNSRA_VI(rd, _, vs2, _) | @decode.VNSRL_VI(rd, _, vs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if vs2 != 0U {
+        ops.push(RegOperand::{
+          reg: vs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector narrowing shift right (register)
+    @decode.VNSRA_VX(rd, rs1, vs2, _)
+    | @decode.VNSRA_VV(rd, rs1, vs2, _)
+    | @decode.VNSRL_VX(rd, rs1, vs2, _)
+    | @decode.VNSRL_VV(rd, rs1, vs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if vs2 != 0U {
+        ops.push(RegOperand::{
+          reg: vs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector shift (immediate)
+    @decode.VSRA_VI(rd, _, vs2, _)
+    | @decode.VSRL_VI(rd, _, vs2, _)
+    | @decode.VSLL_VI(rd, _, vs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if vs2 != 0U {
+        ops.push(RegOperand::{
+          reg: vs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector shift (register)
+    @decode.VSRA_VX(rd, rs1, vs2, _)
+    | @decode.VSRL_VX(rd, rs1, vs2, _)
+    | @decode.VSLL_VX(rd, rs1, vs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if vs2 != 0U {
+        ops.push(RegOperand::{
+          reg: vs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector logical (immediate)
+    @decode.VXOR_VI(rd, _, vs2, _)
+    | @decode.VOR_VI(rd, _, vs2, _)
+    | @decode.VAND_VI(rd, _, vs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if vs2 != 0U {
+        ops.push(RegOperand::{
+          reg: vs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector logical (register)
+    @decode.VXOR_VX(rd, rs1, vs2, _)
+    | @decode.VOR_VX(rd, rs1, vs2, _)
+    | @decode.VAND_VX(rd, rs1, vs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if vs2 != 0U {
+        ops.push(RegOperand::{
+          reg: vs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector rsub (immediate)
+    @decode.VRSUB_VI(rd, _, vs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if vs2 != 0U {
+        ops.push(RegOperand::{
+          reg: vs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector rsub (register)
+    @decode.VRSUB_VX(rd, rs1, vs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if vs2 != 0U {
+        ops.push(RegOperand::{
+          reg: vs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector sub
+    @decode.VSUB_VX(rd, rs1, rs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector add (immediate)
+    @decode.VADD_VI(rd, _, vs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if vs2 != 0U {
+        ops.push(RegOperand::{
+          reg: vs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector add (register)
+    @decode.VADD_VX(rd, rs1, vs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if vs2 != 0U {
+        ops.push(RegOperand::{
+          reg: vs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
+    // Vector mask logical
+    @decode.VMXNOR_MM(rd, rs1, rs2, _) => {
+      if rd != 0U {
+        ops.push(RegOperand::{
+          reg: rd + 32U,
+          is_float: false,
+          role: OperandRole::Def,
+        })
+      }
+      if rs1 != 0U {
+        ops.push(RegOperand::{
+          reg: rs1 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+      if rs2 != 0U {
+        ops.push(RegOperand::{
+          reg: rs2 + 32U,
+          is_float: false,
+          role: OperandRole::Use,
+        })
+      }
+    }
     // Invalid
     @decode.Invalid(_) => ignore(())
   }
