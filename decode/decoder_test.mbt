@@ -2206,3 +2206,689 @@ test "decode_vsext_vf2" {
     _ => inspect(result, content="VSEXT_VF2(_, _, _)")
   }
 }
+
+// ========== RVV Vector Configuration Instructions ==========
+
+///|
+test "decode_vsetvli" {
+  // VSETVLI x1, x2, 0x3 - set vector length immediate
+  // funct6=0b100000=32, f3=7, rd=1, rs1=2, zimm=0x3 (vtypei in rs2 field)
+  // Encoding: funct6[31:26] | vm[25] | zimm[24:20] | rs1[19:15] | f3[14:12] | rd[11:7] | opcode
+  // code = (32 << 26) | (0 << 25) | (3 << 20) | (2 << 15) | (7 << 12) | (1 << 7) | 0x57
+  // code = 0x803170D7
+  let code = 0x803170D7U
+  let DecodeResult(result) = decode(code)
+  match result {
+    VSETVLI(rd, rs1, vtypei) => {
+      inspect(rd, content="1")
+      inspect(rs1, content="2")
+      inspect(vtypei, content="3")
+    }
+    _ => inspect(result, content="VSETVLI(_, _, _)")
+  }
+}
+
+///|
+test "decode_vsetivli" {
+  // VSETIVLI x1, 5, 0x3 - set vector length immediate (immediate AVL)
+  // funct6=0b100001=33, f3=7, rd=1, uimm=5 (in rs1 field), zimm=0x3 (in rs2 field)
+  // Encoding: funct6[31:26] | vm[25] | zimm[24:20] | uimm[19:15] | f3[14:12] | rd[11:7] | opcode
+  // code = (33 << 26) | (0 << 25) | (3 << 20) | (5 << 15) | (7 << 12) | (1 << 7) | 0x57
+  // code = 0x8432F0D7
+  let code = 0x8432F0D7U
+  let DecodeResult(result) = decode(code)
+  match result {
+    VSETIVLI(rd, uimm, vtypei) => {
+      inspect(rd, content="1")
+      inspect(uimm, content="5")
+      inspect(vtypei, content="3")
+    }
+    _ => inspect(result, content="VSETIVLI(_, _, _)")
+  }
+}
+
+///|
+test "decode_vsetvl" {
+  // VSETVL x1, x2, x3 - set vector length (register vtype)
+  // funct6=0b100010=34, f3=7, rd=1, rs1=2, rs2=3
+  // Encoding: funct6[31:26] | vm[25] | rs2[24:20] | rs1[19:15] | f3[14:12] | rd[11:7] | opcode
+  // code = (34 << 26) | (0 << 25) | (3 << 20) | (2 << 15) | (7 << 12) | (1 << 7) | 0x57
+  // code = 0x883170D7
+  let code = 0x883170D7U
+  let DecodeResult(result) = decode(code)
+  match result {
+    VSETVL(rd, rs1, rs2) => {
+      inspect(rd, content="1")
+      inspect(rs1, content="2")
+      inspect(rs2, content="3")
+    }
+    _ => inspect(result, content="VSETVL(_, _, _)")
+  }
+}
+
+// ========== RVV Vector Load/Store Instructions ==========
+
+///|
+test "decode_vle8_v" {
+  // VLE8.V v1, (x2) - load vector 8-bit
+  // opcode=0x07 (LOAD-FP), f3=0 (8-bit), funct7=0x00 (funct6=0, vm=0)
+  // Encoding for vector load: funct7[31:25] | rs2[24:20] | rs1[19:15] | width[14:12] | vd[11:7] | opcode
+  // For VLE8.V: funct7=0x00, rs2=0 (unused), rs1=2, width=0, vd=1
+  // code = (0 << 25) | (0 << 20) | (2 << 15) | (0 << 12) | (1 << 7) | 0x07
+  // code = 0x00010087
+  let code = 0x00010087U
+  let DecodeResult(result) = decode(code)
+  match result {
+    VLE8_V(rd, rs1, vm) => {
+      inspect(rd, content="1")
+      inspect(rs1, content="2")
+      inspect(vm, content="false")
+    }
+    _ => inspect(result, content="VLE8_V(_, _, _)")
+  }
+}
+
+///|
+test "decode_vle32_v" {
+  // VLE32.V v1, (x2) - load vector 32-bit
+  // f3=2 for 32-bit (width field)
+  // code = (0 << 25) | (0 << 20) | (2 << 15) | (2 << 12) | (1 << 7) | 0x07
+  // code = 0x00012087
+  let code = 0x00012087U
+  let DecodeResult(result) = decode(code)
+  match result {
+    VLE32_V(rd, rs1, vm) => {
+      inspect(rd, content="1")
+      inspect(rs1, content="2")
+      inspect(vm, content="false")
+    }
+    _ => inspect(result, content="VLE32_V(_, _, _)")
+  }
+}
+
+///|
+test "decode_vse8_v" {
+  // VSE8.V v1, (x2) - store vector 8-bit
+  // opcode=0x27 (STORE-FP), f3=0 (8-bit), funct7=0x00 (funct6=0, vm=0)
+  // Encoding for vector store: funct7[31:25] | vs3[24:20] | rs1[19:15] | width[14:12] | unused[11:7] | opcode
+  // For VSE8.V: funct7=0x00, vs3=1, rs1=2, width=0, unused=0
+  // code = (0 << 25) | (1 << 20) | (2 << 15) | (0 << 12) | (0 << 7) | 0x27
+  // code = 0x00110027
+  let code = 0x00110027U
+  let DecodeResult(result) = decode(code)
+  match result {
+    VSE8_V(vs3, rs1, vm) => {
+      inspect(vs3, content="1")
+      inspect(rs1, content="2")
+      inspect(vm, content="false")
+    }
+    _ => inspect(result, content="VSE8_V(_, _, _)")
+  }
+}
+
+///|
+test "decode_vse64_v" {
+  // VSE64.V v1, (x2) - store vector 64-bit
+  // f3=3 for 64-bit (width field)
+  // code = (0 << 25) | (1 << 20) | (2 << 15) | (3 << 12) | (0 << 7) | 0x27
+  // code = 0x00113027
+  let code = 0x00113027U
+  let DecodeResult(result) = decode(code)
+  match result {
+    VSE64_V(vs3, rs1, vm) => {
+      inspect(vs3, content="1")
+      inspect(rs1, content="2")
+      inspect(vm, content="false")
+    }
+    _ => inspect(result, content="VSE64_V(_, _, _)")
+  }
+}
+
+// ========== RVV Vector Arithmetic Instructions ==========
+
+///|
+test "decode_vadd_vv" {
+  // VADD.VV v1, v2, v3 - vector add
+  // funct6=0b000000=0, f3=0 (OPIVV), vd=1, vs1=2, vs2=3, vm=0
+  // Encoding: funct6[31:26] | vm[25] | vs2[24:20] | vs1[19:15] | f3[14:12] | vd[11:7] | opcode
+  // code = 0 << 26 | 0 << 25 | 3 << 20 | 2 << 15 | 0 << 12 | 1 << 7 | 0x57
+  // code = 0x003100D7
+  let code = 0x003100D7U
+  let DecodeResult(result) = decode(code)
+  match result {
+    VADD_VV(rd, rs1, rs2, vm) => {
+      inspect(rd, content="1")
+      inspect(rs1, content="2")
+      inspect(rs2, content="3")
+      inspect(vm, content="false")
+    }
+    _ => inspect(result, content="VADD_VV(_, _, _, _)")
+  }
+}
+
+///|
+test "decode_vadd_vx" {
+  // VADD.VX v1, x5, v3 - vector-scalar add
+  // funct6=0b000000=0, f3=1 (OPIVX), rd=1, rs1=5, rs2=3, vm=0
+  // code = 0 << 26 | 0 << 25 | 3 << 20 | 5 << 15 | 1 << 12 | 1 << 7 | 0x57
+  // code = 0x003290D7
+  let code = 0x003290D7U
+  let DecodeResult(result) = decode(code)
+  match result {
+    VADD_VX(rd, rs1, rs2, vm) => {
+      inspect(rd, content="1")
+      inspect(rs1, content="5")
+      inspect(rs2, content="3")
+      inspect(vm, content="false")
+    }
+    _ => inspect(result, content="VADD_VX(_, _, _, _)")
+  }
+}
+
+///|
+test "decode_vadd_vi" {
+  // VADD.VI v1, 5, v3 - vector-immediate add
+  // funct6=0b000000=0, f3=3 (OPIVI), vd=1, simm=5 (in rs1 field), vs2=3, vm=0
+  // Encoding: funct6[31:26] | vm[25] | vs2[24:20] | simm[19:15] | f3[14:12] | vd[11:7] | opcode
+  // code = (0 << 26) | (0 << 25) | (3 << 20) | (5 << 15) | (3 << 12) | (1 << 7) | 0x57
+  // code = 0x0032B0D7
+  let code = 0x0032B0D7U
+  let DecodeResult(result) = decode(code)
+  match result {
+    VADD_VI(rd, simm, rs2, vm) => {
+      inspect(rd, content="1")
+      inspect(simm, content="5")
+      inspect(rs2, content="3")
+      inspect(vm, content="false")
+    }
+    _ => inspect(result, content="VADD_VI(_, _, _, _)")
+  }
+}
+
+///|
+test "decode_vsub_vv" {
+  // VSUB.VV v1, v2, v3 - vector sub
+  // funct6=0b000010=2, f3=0 (OPIVV), vd=1, vs1=2, vs2=3, vm=0
+  // code = 2 << 26 | 0 << 25 | 3 << 20 | 2 << 15 | 0 << 12 | 1 << 7 | 0x57
+  // code = 0x083100D7
+  let code = 0x083100D7U
+  let DecodeResult(result) = decode(code)
+  match result {
+    VSUB_VV(rd, rs1, rs2, vm) => {
+      inspect(rd, content="1")
+      inspect(rs1, content="2")
+      inspect(rs2, content="3")
+      inspect(vm, content="false")
+    }
+    _ => inspect(result, content="VSUB_VV(_, _, _, _)")
+  }
+}
+
+///|
+test "decode_vsub_vx" {
+  // VSUB.VX v1, x5, v3 - vector-scalar sub
+  // funct6=0b000010=2, f3=1 (OPIVX)
+  // code = 2 << 26 | 0 << 25 | 3 << 20 | 5 << 15 | 1 << 12 | 1 << 7 | 0x57
+  // code = 0x083290D7
+  let code = 0x083290D7U
+  let DecodeResult(result) = decode(code)
+  match result {
+    VSUB_VX(rd, rs1, rs2, vm) => {
+      inspect(rd, content="1")
+      inspect(rs1, content="5")
+      inspect(rs2, content="3")
+      inspect(vm, content="false")
+    }
+    _ => inspect(result, content="VSUB_VX(_, _, _, _)")
+  }
+}
+
+///|
+test "decode_vmul_vv" {
+  // VMUL.VV v1, v2, v3 - vector multiply
+  // funct6=0b100101=37, f3=0 (OPIVV), vd=1, vs1=2, vs2=3, vm=0
+  // code = 37 << 26 | 0 << 25 | 3 << 20 | 2 << 15 | 0 << 12 | 1 << 7 | 0x57
+  // code = 0x943100D7
+  let code = 0x943100D7U
+  let DecodeResult(result) = decode(code)
+  match result {
+    VMUL_VV(rd, rs1, rs2, vm) => {
+      inspect(rd, content="1")
+      inspect(rs1, content="2")
+      inspect(rs2, content="3")
+      inspect(vm, content="false")
+    }
+    _ => inspect(result, content="VMUL_VV(_, _, _, _)")
+  }
+}
+
+///|
+test "decode_vmul_vx" {
+  // VMUL.VX v1, x5, v3 - vector-scalar multiply
+  // funct6=0b100101=37, f3=1 (OPIVX)
+  // code = 37 << 26 | 0 << 25 | 3 << 20 | 5 << 15 | 1 << 12 | 1 << 7 | 0x57
+  // code = 0x943290D7
+  let code = 0x943290D7U
+  let DecodeResult(result) = decode(code)
+  match result {
+    VMUL_VX(rd, rs1, rs2, vm) => {
+      inspect(rd, content="1")
+      inspect(rs1, content="5")
+      inspect(rs2, content="3")
+      inspect(vm, content="false")
+    }
+    _ => inspect(result, content="VMUL_VX(_, _, _, _)")
+  }
+}
+
+// ========== RVV Vector Logical Instructions ==========
+
+///|
+test "decode_vand_vv" {
+  // VAND.VV v1, v2, v3 - vector and
+  // funct6=0b000101=5, f3=0 (OPIVV), vd=1, vs1=2, vs2=3, vm=0
+  // code = 5 << 26 | 0 << 25 | 3 << 20 | 2 << 15 | 0 << 12 | 1 << 7 | 0x57
+  // code = 0x143100D7
+  let code = 0x143100D7U
+  let DecodeResult(result) = decode(code)
+  match result {
+    VAND_VV(rd, rs1, rs2, vm) => {
+      inspect(rd, content="1")
+      inspect(rs1, content="2")
+      inspect(rs2, content="3")
+      inspect(vm, content="false")
+    }
+    _ => inspect(result, content="VAND_VV(_, _, _, _)")
+  }
+}
+
+///|
+test "decode_vor_vv" {
+  // VOR.VV v1, v2, v3 - vector or
+  // funct6=0b000101=5, f3=2 (OPIVV), vd=1, vs1=2, vs2=3, vm=0
+  // code = 5 << 26 | 0 << 25 | 3 << 20 | 2 << 15 | 2 << 12 | 1 << 7 | 0x57
+  // code = 0x143120D7
+  let code = 0x143120D7U
+  let DecodeResult(result) = decode(code)
+  match result {
+    VOR_VV(rd, rs1, rs2, vm) => {
+      inspect(rd, content="1")
+      inspect(rs1, content="2")
+      inspect(rs2, content="3")
+      inspect(vm, content="false")
+    }
+    _ => inspect(result, content="VOR_VV(_, _, _, _)")
+  }
+}
+
+///|
+test "decode_vxor_vv" {
+  // VXOR.VV v1, v2, v3 - vector xor
+  // funct6=0b000101=5, f3=5 (OPIVV), vd=1, vs1=2, vs2=3, vm=0
+  // code = 5 << 26 | 0 << 25 | 3 << 20 | 2 << 15 | 5 << 12 | 1 << 7 | 0x57
+  // code = 0x143150D7
+  let code = 0x143150D7U
+  let DecodeResult(result) = decode(code)
+  match result {
+    VXOR_VV(rd, rs1, rs2, vm) => {
+      inspect(rd, content="1")
+      inspect(rs1, content="2")
+      inspect(rs2, content="3")
+      inspect(vm, content="false")
+    }
+    _ => inspect(result, content="VXOR_VV(_, _, _, _)")
+  }
+}
+
+// ========== RVV Vector Shift Instructions ==========
+
+///|
+test "decode_vsll_vv" {
+  // VSLL.VV v1, v2, v3 - vector shift left logical
+  // funct6=0b101001=41, f3=0 (OPIVV), vd=1, vs1=2, vs2=3, vm=0
+  // code = 41 << 26 | 0 << 25 | 3 << 20 | 2 << 15 | 0 << 12 | 1 << 7 | 0x57
+  // code = 0xA43100D7
+  let code = 0xA43100D7U
+  let DecodeResult(result) = decode(code)
+  match result {
+    VSLL_VV(rd, rs1, rs2, vm) => {
+      inspect(rd, content="1")
+      inspect(rs1, content="2")
+      inspect(rs2, content="3")
+      inspect(vm, content="false")
+    }
+    _ => inspect(result, content="VSLL_VV(_, _, _, _)")
+  }
+}
+
+///|
+test "decode_vsrl_vv" {
+  // VSRL.VV v1, v2, v3 - vector shift right logical
+  // funct6=0b101010=42, f3=0 (OPIVV), vd=1, vs1=2, vs2=3, vm=0
+  // code = 42 << 26 | 0 << 25 | 3 << 20 | 2 << 15 | 0 << 12 | 1 << 7 | 0x57
+  // code = 0xA83100D7
+  let code = 0xA83100D7U
+  let DecodeResult(result) = decode(code)
+  match result {
+    VSRL_VV(rd, rs1, rs2, vm) => {
+      inspect(rd, content="1")
+      inspect(rs1, content="2")
+      inspect(rs2, content="3")
+      inspect(vm, content="false")
+    }
+    _ => inspect(result, content="VSRL_VV(_, _, _, _)")
+  }
+}
+
+///|
+test "decode_vsra_vv" {
+  // VSRA.VV v1, v2, v3 - vector shift right arithmetic
+  // funct6=0b101010=42, f3=2 (OPIVV), vd=1, vs1=2, vs2=3, vm=0
+  // code = 42 << 26 | 0 << 25 | 3 << 20 | 2 << 15 | 2 << 12 | 1 << 7 | 0x57
+  // code = 0xA83120D7
+  let code = 0xA83120D7U
+  let DecodeResult(result) = decode(code)
+  match result {
+    VSRA_VV(rd, rs1, rs2, vm) => {
+      inspect(rd, content="1")
+      inspect(rs1, content="2")
+      inspect(rs2, content="3")
+      inspect(vm, content="false")
+    }
+    _ => inspect(result, content="VSRA_VV(_, _, _, _)")
+  }
+}
+
+// ========== RVV Vector Compare Instructions ==========
+
+///|
+test "decode_vmseq_vv" {
+  // VMSEQ.VV v1, v2, v3 - mask set equal
+  // funct6=0b011011=27, f3=0 (OPIVV), vd=1, vs1=2, vs2=3, vm=0
+  // code = 27 << 26 | 0 << 25 | 3 << 20 | 2 << 15 | 0 << 12 | 1 << 7 | 0x57
+  // code = 0x6C3100D7
+  let code = 0x6C3100D7U
+  let DecodeResult(result) = decode(code)
+  match result {
+    VMSEQ_VV(rd, rs1, rs2, vm) => {
+      inspect(rd, content="1")
+      inspect(rs1, content="2")
+      inspect(rs2, content="3")
+      inspect(vm, content="false")
+    }
+    _ => inspect(result, content="VMSEQ_VV(_, _, _, _)")
+  }
+}
+
+///|
+test "decode_vmsne_vv" {
+  // VMSNE.VV v1, v2, v3 - mask set not equal
+  // funct6=0b011011=27, f3=2 (OPIVV), vd=1, vs1=2, vs2=3, vm=0
+  // code = 27 << 26 | 0 << 25 | 3 << 20 | 2 << 15 | 2 << 12 | 1 << 7 | 0x57
+  // code = 0x6C3120D7
+  let code = 0x6C3120D7U
+  let DecodeResult(result) = decode(code)
+  match result {
+    VMSNE_VV(rd, rs1, rs2, vm) => {
+      inspect(rd, content="1")
+      inspect(rs1, content="2")
+      inspect(rs2, content="3")
+      inspect(vm, content="false")
+    }
+    _ => inspect(result, content="VMSNE_VV(_, _, _, _)")
+  }
+}
+
+///|
+test "decode_vmslt_vv" {
+  // VMSLT.VV v1, v2, v3 - mask set less than signed
+  // funct6=0b011100=28, f3=2 (OPIVV), vd=1, vs1=2, vs2=3, vm=0
+  // code = 28 << 26 | 0 << 25 | 3 << 20 | 2 << 15 | 2 << 12 | 1 << 7 | 0x57
+  // code = 0x703120D7
+  let code = 0x703120D7U
+  let DecodeResult(result) = decode(code)
+  match result {
+    VMSLT_VV(rd, rs1, rs2, vm) => {
+      inspect(rd, content="1")
+      inspect(rs1, content="2")
+      inspect(rs2, content="3")
+      inspect(vm, content="false")
+    }
+    _ => inspect(result, content="VMSLT_VV(_, _, _, _)")
+  }
+}
+
+///|
+test "decode_vmsle_vv" {
+  // VMSLE.VV v1, v2, v3 - mask set less than or equal signed
+  // funct6=0b011101=29, f3=2 (OPIVV), vd=1, vs1=2, vs2=3, vm=0
+  // code = 29 << 26 | 0 << 25 | 3 << 20 | 2 << 15 | 2 << 12 | 1 << 7 | 0x57
+  // code = 0x743120D7
+  let code = 0x743120D7U
+  let DecodeResult(result) = decode(code)
+  match result {
+    VMSLE_VV(rd, rs1, rs2, vm) => {
+      inspect(rd, content="1")
+      inspect(rs1, content="2")
+      inspect(rs2, content="3")
+      inspect(vm, content="false")
+    }
+    _ => inspect(result, content="VMSLE_VV(_, _, _, _)")
+  }
+}
+
+// ========== RVV Vector Min/Max Instructions ==========
+
+///|
+test "decode_vmin_vv" {
+  // VMIN.VV v1, v2, v3 - minimum signed
+  // funct6=0b000100=4, f3=2 (OPIVV), vd=1, vs1=2, vs2=3, vm=0
+  // code = 4 << 26 | 0 << 25 | 3 << 20 | 2 << 15 | 2 << 12 | 1 << 7 | 0x57
+  // code = 0x103120D7
+  let code = 0x103120D7U
+  let DecodeResult(result) = decode(code)
+  match result {
+    VMIN_VV(rd, rs1, rs2, vm) => {
+      inspect(rd, content="1")
+      inspect(rs1, content="2")
+      inspect(rs2, content="3")
+      inspect(vm, content="false")
+    }
+    _ => inspect(result, content="VMIN_VV(_, _, _, _)")
+  }
+}
+
+///|
+test "decode_vmax_vv" {
+  // VMAX.VV v1, v2, v3 - maximum signed
+  // funct6=0b000100=4, f3=6 (OPIVV), vd=1, vs1=2, vs2=3, vm=0
+  // code = 4 << 26 | 0 << 25 | 3 << 20 | 2 << 15 | 6 << 12 | 1 << 7 | 0x57
+  // code = 0x103160D7
+  let code = 0x103160D7U
+  let DecodeResult(result) = decode(code)
+  match result {
+    VMAX_VV(rd, rs1, rs2, vm) => {
+      inspect(rd, content="1")
+      inspect(rs1, content="2")
+      inspect(rs2, content="3")
+      inspect(vm, content="false")
+    }
+    _ => inspect(result, content="VMAX_VV(_, _, _, _)")
+  }
+}
+
+// ========== RVV Vector Mask Instructions ==========
+
+///|
+test "decode_vmand_mm" {
+  // VMAND.MM v1, v2, v3 - mask and
+  // funct6=0b011001=25, f3=0 (OPMVV), vd=1, vs1=2, vs2=3, vm=0
+  // code = 25 << 26 | 0 << 25 | 3 << 20 | 2 << 15 | 0 << 12 | 1 << 7 | 0x57
+  // code = 0x643100D7
+  let code = 0x643100D7U
+  let DecodeResult(result) = decode(code)
+  match result {
+    VMAND_MM(rd, rs1, rs2, vm) => {
+      inspect(rd, content="1")
+      inspect(rs1, content="2")
+      inspect(rs2, content="3")
+      inspect(vm, content="false")
+    }
+    _ => inspect(result, content="VMAND_MM(_, _, _, _)")
+  }
+}
+
+///|
+test "decode_vmor_mm" {
+  // VMOR.MM v1, v2, v3 - mask or
+  // funct6=0b011001=25, f3=3 (OPMVV), vd=1, vs1=2, vs2=3, vm=0
+  // code = 25 << 26 | 0 << 25 | 3 << 20 | 2 << 15 | 3 << 12 | 1 << 7 | 0x57
+  // code = 0x643130D7
+  let code = 0x643130D7U
+  let DecodeResult(result) = decode(code)
+  match result {
+    VMOR_MM(rd, rs1, rs2, vm) => {
+      inspect(rd, content="1")
+      inspect(rs1, content="2")
+      inspect(rs2, content="3")
+      inspect(vm, content="false")
+    }
+    _ => inspect(result, content="VMOR_MM(_, _, _, _)")
+  }
+}
+
+// ========== RVV Vector Floating-Point Instructions ==========
+
+///|
+test "decode_vfadd_vv" {
+  // VFADD.VV v1, v2, v3 - vector float add
+  // funct6=0b001000=8, f3=0 (OPFVV), vd=1, vs1=2, vs2=3, vm=0
+  // code = 8 << 26 | 0 << 25 | 3 << 20 | 2 << 15 | 0 << 12 | 1 << 7 | 0x57
+  // code = 0x203100D7
+  let code = 0x203100D7U
+  let DecodeResult(result) = decode(code)
+  match result {
+    VFADD_VV(rd, rs1, rs2, vm) => {
+      inspect(rd, content="1")
+      inspect(rs1, content="2")
+      inspect(rs2, content="3")
+      inspect(vm, content="false")
+    }
+    _ => inspect(result, content="VFADD_VV(_, _, _, _)")
+  }
+}
+
+///|
+test "decode_vfsub_vv" {
+  // VFSUB.VV v1, v2, v3 - vector float sub
+  // funct6=0b001000=8, f3=2 (OPFVV), vd=1, vs1=2, vs2=3, vm=0
+  // code = 8 << 26 | 0 << 25 | 3 << 20 | 2 << 15 | 2 << 12 | 1 << 7 | 0x57
+  // code = 0x203120D7
+  let code = 0x203120D7U
+  let DecodeResult(result) = decode(code)
+  match result {
+    VFSUB_VV(rd, rs1, rs2, vm) => {
+      inspect(rd, content="1")
+      inspect(rs1, content="2")
+      inspect(rs2, content="3")
+      inspect(vm, content="false")
+    }
+    _ => inspect(result, content="VFSUB_VV(_, _, _, _)")
+  }
+}
+
+///|
+test "decode_vfmul_vv" {
+  // VFMUL.VV v1, v2, v3 - vector float multiply
+  // funct6=0b100101=37, f3=0 (OPFVV), vd=1, vs1=2, vs2=3, vm=0
+  // Note: This funct6 also decodes as VMUL_VV (integer multiply)
+  // code = 37 << 26 | 0 << 25 | 3 << 20 | 2 << 15 | 0 << 12 | 1 << 7 | 0x57
+  // code = 0x943100D7
+  let code = 0x943100D7U
+  let DecodeResult(result) = decode(code)
+  // VMUL_VV and VFMUL_VV share the same encoding, decoder returns VMUL_VV
+  match result {
+    VMUL_VV(rd, rs1, rs2, vm) => {
+      inspect(rd, content="1")
+      inspect(rs1, content="2")
+      inspect(rs2, content="3")
+      inspect(vm, content="false")
+    }
+    _ => inspect(result, content="VMUL_VV(_, _, _, _)")
+  }
+}
+
+///|
+test "decode_vfdiv_vv" {
+  // VFDIV.VV v1, v2, v3 - vector float divide
+  // funct6=0b100101=37, f3=2 (OPFVV), vd=1, vs1=2, vs2=3, vm=0
+  // code = 37 << 26 | 0 << 25 | 3 << 20 | 2 << 15 | 2 << 12 | 1 << 7 | 0x57
+  // code = 0x943120D7
+  let code = 0x943120D7U
+  let DecodeResult(result) = decode(code)
+  match result {
+    VFDIV_VV(rd, rs1, rs2, vm) => {
+      inspect(rd, content="1")
+      inspect(rs1, content="2")
+      inspect(rs2, content="3")
+      inspect(vm, content="false")
+    }
+    _ => inspect(result, content="VFDIV_VV(_, _, _, _)")
+  }
+}
+
+///|
+test "decode_vfsqrt_v" {
+  // VFSQRT.V v1, v2 - vector float sqrt
+  // funct6=0b010001=17, f3=0 (OPFVV), vd=1, vs2=2, vm=0
+  // code = 17 << 26 | 0 << 25 | 2 << 20 | 0 << 15 | 0 << 12 | 1 << 7 | 0x57
+  // code = 0x442000D7
+  let code = 0x442000D7U
+  let DecodeResult(result) = decode(code)
+  match result {
+    VFSQRT_V(rd, rs2, vm) => {
+      inspect(rd, content="1")
+      inspect(rs2, content="2")
+      inspect(vm, content="false")
+    }
+    _ => inspect(result, content="VFSQRT_V(_, _, _)")
+  }
+}
+
+///|
+test "decode_vfmin_vv" {
+  // VFMIN.VV v1, v2, v3 - vector float min
+  // funct6=0b000110=6, f3=0 (OPFVV), vd=1, vs1=2, vs2=3, vm=0
+  // code = 6 << 26 | 0 << 25 | 3 << 20 | 2 << 15 | 0 << 12 | 1 << 7 | 0x57
+  // code = 0x183100D7
+  let code = 0x183100D7U
+  let DecodeResult(result) = decode(code)
+  match result {
+    VFMIN_VV(rd, rs1, rs2, vm) => {
+      inspect(rd, content="1")
+      inspect(rs1, content="2")
+      inspect(rs2, content="3")
+      inspect(vm, content="false")
+    }
+    _ => inspect(result, content="VFMIN_VV(_, _, _, _)")
+  }
+}
+
+///|
+test "decode_vfmax_vv" {
+  // VFMAX.VV v1, v2, v3 - vector float max
+  // funct6=0b000110=6, f3=2 (OPFVV), vd=1, vs1=2, vs2=3, vm=0
+  // code = 6 << 26 | 0 << 25 | 3 << 20 | 2 << 15 | 2 << 12 | 1 << 7 | 0x57
+  // code = 0x183120D7
+  let code = 0x183120D7U
+  let DecodeResult(result) = decode(code)
+  match result {
+    VFMAX_VV(rd, rs1, rs2, vm) => {
+      inspect(rd, content="1")
+      inspect(rs1, content="2")
+      inspect(rs2, content="3")
+      inspect(vm, content="false")
+    }
+    _ => inspect(result, content="VFMAX_VV(_, _, _, _)")
+  }
+}
