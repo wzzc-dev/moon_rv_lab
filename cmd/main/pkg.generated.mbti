@@ -9,9 +9,18 @@ pub fn parse_args(Array[String]) -> Command?
 // Errors
 
 // Types and methods
+pub struct AnalyzeOptions {
+  file_path : String
+  format : OutputFormat
+  output : String
+  detailed : Bool
+}
+pub impl Show for AnalyzeOptions
+
 pub struct CallGraphOptions {
   file_path : String
   format : OutputFormat
+  output : String
 }
 pub impl Show for CallGraphOptions
 
@@ -19,6 +28,7 @@ pub struct CfgOptions {
   file_path : String
   function : String
   format : OutputFormat
+  output : String
 }
 pub impl Show for CfgOptions
 
@@ -41,6 +51,8 @@ pub enum Command {
   Symbols(SymbolsOptions)
   Cfg(CfgOptions)
   CallGraph(CallGraphOptions)
+  Hex(HexOptions)
+  Analyze(AnalyzeOptions)
   Help
   Version
   Demo
@@ -52,12 +64,20 @@ pub struct DisasmOptions {
   base_addr : UInt
   format : OutputFormat
   raw_mode : Bool
+  output : String
 }
 pub impl Show for DisasmOptions
+
+pub struct HexOptions {
+  code : String
+  format : OutputFormat
+}
+pub impl Show for HexOptions
 
 pub struct InfoOptions {
   file_path : String
   format : OutputFormat
+  output : String
 }
 pub impl Show for InfoOptions
 
@@ -73,6 +93,7 @@ pub struct SymbolsOptions {
   file_path : String
   format : OutputFormat
   show_all : Bool
+  output : String
 }
 pub impl Show for SymbolsOptions
 

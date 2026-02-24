@@ -30,6 +30,8 @@ pub enum Command {
   Symbols(SymbolsOptions)
   Cfg(CfgOptions)
   CallGraph(CallGraphOptions)
+  Hex(HexOptions)
+  Analyze(AnalyzeOptions)
   Help
   Version
   Demo
@@ -42,6 +44,7 @@ pub struct DisasmOptions {
   base_addr : UInt
   format : OutputFormat
   raw_mode : Bool // Treat as raw binary instead of ELF
+  output : String // Output file path (empty for stdout)
 } derive(Show)
 
 ///|
@@ -49,6 +52,7 @@ pub struct DisasmOptions {
 pub struct InfoOptions {
   file_path : String
   format : OutputFormat
+  output : String
 } derive(Show)
 
 ///|
@@ -57,6 +61,7 @@ pub struct SymbolsOptions {
   file_path : String
   format : OutputFormat
   show_all : Bool // Show all symbols including local
+  output : String
 } derive(Show)
 
 ///|
@@ -65,6 +70,7 @@ pub struct CfgOptions {
   file_path : String
   function : String // Function name or address
   format : OutputFormat
+  output : String
 } derive(Show)
 
 ///|
@@ -72,6 +78,23 @@ pub struct CfgOptions {
 pub struct CallGraphOptions {
   file_path : String
   format : OutputFormat
+  output : String
+} derive(Show)
+
+///|
+/// Options for hex command (decode hex instruction)
+pub struct HexOptions {
+  code : String // Hex code string
+  format : OutputFormat
+} derive(Show)
+
+///|
+/// Options for analyze command (comprehensive analysis)
+pub struct AnalyzeOptions {
+  file_path : String
+  format : OutputFormat
+  output : String
+  detailed : Bool
 } derive(Show)
 
 ///|
@@ -222,6 +245,8 @@ pub fn parse_args(args : Array[String]) -> Command? {
     "symbols" | "syms" => parse_symbols_args(args)
     "cfg" => parse_cfg_args(args)
     "callgraph" | "cg" => parse_callgraph_args(args)
+    "hex" => parse_hex_args(args)
+    "analyze" => parse_analyze_args(args)
     _ => None
   }
 }
@@ -237,6 +262,7 @@ fn parse_disasm_args(args : Array[String]) -> Command? {
   let mut base_addr = 0U
   let mut format = OutputFormat::Text
   let mut raw_mode = false
+  let mut output = ""
   let mut i = 1
 
   while i < args.length() {
@@ -258,6 +284,13 @@ fn parse_disasm_args(args : Array[String]) -> Command? {
       } else {
         return None
       }
+    } else if arg == "--output" || arg == "-o" {
+      if i + 1 < args.length() {
+        output = args[i + 1]
+        i = i + 2
+      } else {
+        return None
+      }
     } else if arg == "--raw" || arg == "-r" {
       raw_mode = true
       i = i + 1
@@ -273,7 +306,7 @@ fn parse_disasm_args(args : Array[String]) -> Command? {
     return None
   }
 
-  Some(Command::Disasm({ file_path, base_addr, format, raw_mode }))
+  Some(Command::Disasm({ file_path, base_addr, format, raw_mode, output }))
 }
 
 ///|
@@ -285,6 +318,7 @@ fn parse_info_args(args : Array[String]) -> Command? {
 
   let mut file_path = ""
   let mut format = OutputFormat::Text
+  let mut output = ""
   let mut i = 1
 
   while i < args.length() {
@@ -292,6 +326,13 @@ fn parse_info_args(args : Array[String]) -> Command? {
     if arg == "--format" || arg == "-f" {
       if i + 1 < args.length() {
         format = parse_format(args[i + 1])
+        i = i + 2
+      } else {
+        return None
+      }
+    } else if arg == "--output" || arg == "-o" {
+      if i + 1 < args.length() {
+        output = args[i + 1]
         i = i + 2
       } else {
         return None
@@ -308,7 +349,7 @@ fn parse_info_args(args : Array[String]) -> Command? {
     return None
   }
 
-  Some(Command::Info({ file_path, format }))
+  Some(Command::Info({ file_path, format, output }))
 }
 
 ///|
@@ -321,6 +362,7 @@ fn parse_symbols_args(args : Array[String]) -> Command? {
   let mut file_path = ""
   let mut format = OutputFormat::Text
   let mut show_all = false
+  let mut output = ""
   let mut i = 1
 
   while i < args.length() {
@@ -328,6 +370,13 @@ fn parse_symbols_args(args : Array[String]) -> Command? {
     if arg == "--format" || arg == "-f" {
       if i + 1 < args.length() {
         format = parse_format(args[i + 1])
+        i = i + 2
+      } else {
+        return None
+      }
+    } else if arg == "--output" || arg == "-o" {
+      if i + 1 < args.length() {
+        output = args[i + 1]
         i = i + 2
       } else {
         return None
@@ -347,7 +396,7 @@ fn parse_symbols_args(args : Array[String]) -> Command? {
     return None
   }
 
-  Some(Command::Symbols({ file_path, format, show_all }))
+  Some(Command::Symbols({ file_path, format, show_all, output }))
 }
 
 ///|
@@ -360,6 +409,7 @@ fn parse_cfg_args(args : Array[String]) -> Command? {
   let mut file_path = ""
   let mut function = ""
   let mut format = OutputFormat::Dot
+  let mut output = ""
   let mut i = 1
 
   while i < args.length() {
@@ -378,37 +428,9 @@ fn parse_cfg_args(args : Array[String]) -> Command? {
       } else {
         return None
       }
-    } else if arg[0] != '-' {
-      file_path = arg
-      i = i + 1
-    } else {
-      i = i + 1
-    }
-  }
-
-  if file_path == "" {
-    return None
-  }
-
-  Some(Command::Cfg({ file_path, function, format }))
-}
-
-///|
-/// Parse callgraph command arguments
-fn parse_callgraph_args(args : Array[String]) -> Command? {
-  if args.length() < 2 {
-    return None
-  }
-
-  let mut file_path = ""
-  let mut format = OutputFormat::Dot
-  let mut i = 1
-
-  while i < args.length() {
-    let arg = args[i]
-    if arg == "--format" || arg == "-f" {
+    } else if arg == "--output" || arg == "-o" {
       if i + 1 < args.length() {
-        format = parse_format(args[i + 1])
+        output = args[i + 1]
         i = i + 2
       } else {
         return None
@@ -425,7 +447,132 @@ fn parse_callgraph_args(args : Array[String]) -> Command? {
     return None
   }
 
-  Some(Command::CallGraph({ file_path, format }))
+  Some(Command::Cfg({ file_path, function, format, output }))
+}
+
+///|
+/// Parse callgraph command arguments
+fn parse_callgraph_args(args : Array[String]) -> Command? {
+  if args.length() < 2 {
+    return None
+  }
+
+  let mut file_path = ""
+  let mut format = OutputFormat::Dot
+  let mut output = ""
+  let mut i = 1
+
+  while i < args.length() {
+    let arg = args[i]
+    if arg == "--format" || arg == "-f" {
+      if i + 1 < args.length() {
+        format = parse_format(args[i + 1])
+        i = i + 2
+      } else {
+        return None
+      }
+    } else if arg == "--output" || arg == "-o" {
+      if i + 1 < args.length() {
+        output = args[i + 1]
+        i = i + 2
+      } else {
+        return None
+      }
+    } else if arg[0] != '-' {
+      file_path = arg
+      i = i + 1
+    } else {
+      i = i + 1
+    }
+  }
+
+  if file_path == "" {
+    return None
+  }
+
+  Some(Command::CallGraph({ file_path, format, output }))
+}
+
+///|
+/// Parse hex command arguments
+fn parse_hex_args(args : Array[String]) -> Command? {
+  if args.length() < 2 {
+    return None
+  }
+
+  let mut code = ""
+  let mut format = OutputFormat::Text
+  let mut i = 1
+
+  while i < args.length() {
+    let arg = args[i]
+    if arg == "--format" || arg == "-f" {
+      if i + 1 < args.length() {
+        format = parse_format(args[i + 1])
+        i = i + 2
+      } else {
+        return None
+      }
+    } else if arg[0] != '-' {
+      code = arg
+      i = i + 1
+    } else {
+      i = i + 1
+    }
+  }
+
+  if code == "" {
+    return None
+  }
+
+  Some(Command::Hex({ code, format }))
+}
+
+///|
+/// Parse analyze command arguments
+fn parse_analyze_args(args : Array[String]) -> Command? {
+  if args.length() < 2 {
+    return None
+  }
+
+  let mut file_path = ""
+  let mut format = OutputFormat::Text
+  let mut output = ""
+  let mut detailed = false
+  let mut i = 1
+
+  while i < args.length() {
+    let arg = args[i]
+    if arg == "--format" || arg == "-f" {
+      if i + 1 < args.length() {
+        format = parse_format(args[i + 1])
+        i = i + 2
+      } else {
+        return None
+      }
+    } else if arg == "--output" || arg == "-o" {
+      if i + 1 < args.length() {
+        output = args[i + 1]
+        i = i + 2
+      } else {
+        return None
+      }
+    } else if arg == "--detailed" || arg == "-d" {
+      detailed = true
+      i = i + 1
+    } else if arg[0] != '-' {
+      file_path = arg
+      i = i + 1
+    } else {
+      i = i + 1
+    }
+  }
+
+  if file_path == "" {
+    return None
+  }
+
+  Some(Command::Analyze({ file_path, format, output, detailed }))
 }
 
 ///|
@@ -441,39 +588,40 @@ fn print_usage() -> Unit {
   println("  symbols <file>          List symbols in the file")
   println("  cfg <file>              Generate control flow graph")
   println("  callgraph <file>        Generate call graph")
+  println("  hex <code>              Decode a hex instruction")
+  println("  analyze <file>          Comprehensive binary analysis")
   println("  demo                    Run demonstration")
   println("  help                    Show this help message")
   println("  version                 Show version information")
+  println("")
+  println("Global Options:")
+  println("  --output, -o <file>     Write output to file (default: stdout)")
+  println("  --format, -f <fmt>      Output format: text, json, dot")
   println("")
   println("Disasm Options:")
   println(
     "  --base, -b <addr>       Base address for raw binaries (default: 0)",
   )
   println("  --raw, -r               Treat as raw binary (not ELF)")
-  println("  --format, -f <fmt>      Output format: text, json (default: text)")
   println("")
   println("Symbols Options:")
   println("  --all, -a               Show all symbols including local")
-  println("  --format, -f <fmt>      Output format: text, json (default: text)")
   println("")
   println("CFG Options:")
   println("  --function, -n <name>   Function name or address to analyze")
-  println(
-    "  --format, -f <fmt>      Output format: dot, text, json (default: dot)",
-  )
   println("")
-  println("CallGraph Options:")
-  println(
-    "  --format, -f <fmt>      Output format: dot, text, json (default: dot)",
-  )
+  println("Analyze Options:")
+  println("  --detailed, -d          Show detailed analysis")
   println("")
   println("Examples:")
   println("  rv-analyzer disasm program.elf")
   println("  rv-analyzer disasm --raw --base 0x8000 firmware.bin")
   println("  rv-analyzer info program.elf")
   println("  rv-analyzer symbols program.elf")
-  println("  rv-analyzer cfg program.elf --function main")
-  println("  rv-analyzer callgraph program.elf > callgraph.dot")
+  println("  rv-analyzer cfg program.elf --function main -o cfg.dot")
+  println("  rv-analyzer callgraph program.elf -o callgraph.dot")
+  println("  rv-analyzer hex 0x123452B7")
+  println("  rv-analyzer analyze program.elf --detailed")
 }
 
 ///|
@@ -634,13 +782,29 @@ fn run_demo() -> Unit {
 // ============================================================================
 
 ///|
-/// Read file contents as bytes (MoonBit foreign function interface)
+/// Read file contents as bytes using moonbitlang/x/fs
 fn read_file_bytes(path : String) -> FixedArray[Byte]? {
-  // Use MoonBit's io module for file reading
-  // This is a placeholder - actual implementation depends on platform
-  // For now, return None to indicate file reading needs platform support
-  ignore(path)
-  None
+  if !@fs.path_exists(path) {
+    None
+  } else {
+    try {
+      let bytes = @fs.read_file_to_bytes(path)
+      Some(bytes.to_fixedarray())
+    } catch {
+      _ => None
+    }
+  }
+}
+
+///|
+/// Write string to file
+fn write_output_file(path : String, content : String) -> Bool {
+  try {
+    @fs.write_string_to_file(path, content)
+    true
+  } catch {
+    _ => false
+  }
 }
 
 // ============================================================================
@@ -654,7 +818,8 @@ fn execute_disasm(opts : DisasmOptions) -> Unit {
     Some(bytes) =>
       if opts.raw_mode {
         let instructions = @analysis.decode_instructions(bytes, opts.base_addr)
-        output_disasm(instructions, opts.format)
+        let output = format_disasm(instructions, opts.format)
+        write_or_print(output, opts.output)
       } else {
         if !@format.is_elf(bytes) {
           println("Error: Not a valid ELF file: \{opts.file_path}")
@@ -674,45 +839,58 @@ fn execute_disasm(opts : DisasmOptions) -> Unit {
             }
             let (vaddr, code) = code_sections[0]
             let instructions = @analysis.decode_instructions(code, vaddr)
-            output_disasm(instructions, opts.format)
+            let output = format_disasm(instructions, opts.format)
+            write_or_print(output, opts.output)
           }
           None => println("Error: Failed to parse ELF file")
         }
       }
-    None => {
-      println("Error: Cannot read file: \{opts.file_path}")
-      println("Note: File I/O requires platform support")
-    }
+    None => println("Error: Cannot read file: \{opts.file_path}")
   }
 }
 
 ///|
-/// Output disassembly results
-fn output_disasm(
+/// Format disassembly results as string
+fn format_disasm(
   instructions : FixedArray[@analysis.DecodedInst],
   format : OutputFormat,
-) -> Unit {
+) -> String {
   match format {
     OutputFormat::Json => {
-      println("[")
+      let mut result = "[\n"
       let len = instructions.length()
       for i = 0; i < len; i = i + 1 {
         let inst_info = instructions[i]
         let addr_str = format_hex(inst_info.addr)
         let asm_str = escape_json_string(@disasm.disassemble(inst_info.inst))
         let comma = if i < len - 1 { "," } else { "" }
-        println(
-          "  {\"addr\": \"\{addr_str}\", \"inst\": \"\{asm_str}\"}\{comma}",
-        )
+        result = result +
+          "  {\"addr\": \"\{addr_str}\", \"inst\": \"\{asm_str}\"}\{comma}\n"
       }
-      println("]")
+      result = result + "]"
+      result
     }
-    OutputFormat::Text | OutputFormat::Dot =>
+    OutputFormat::Text | OutputFormat::Dot => {
+      let mut result = ""
       for inst_info in instructions {
         let addr_str = format_hex_padded(inst_info.addr)
         let disasm_str = @disasm.disassemble(inst_info.inst)
-        println("\{addr_str}: \{disasm_str}")
+        result = result + "\{addr_str}: \{disasm_str}\n"
       }
+      result
+    }
+  }
+}
+
+///|
+/// Write output to file or print to stdout
+fn write_or_print(content : String, output_path : String) -> Unit {
+  if output_path == "" {
+    println(content)
+  } else if write_output_file(output_path, content) {
+    println("Output written to: \{output_path}")
+  } else {
+    println("Error: Failed to write output file: \{output_path}")
   }
 }
 
@@ -746,11 +924,13 @@ fn execute_info(opts : InfoOptions) -> Unit {
         return
       }
       match @format.parse_elf(bytes) {
-        Some(elf) =>
-          match opts.format {
-            OutputFormat::Json => output_elf_info_json(elf)
-            OutputFormat::Text | OutputFormat::Dot => output_elf_info_text(elf)
+        Some(elf) => {
+          let output = match opts.format {
+            OutputFormat::Json => format_elf_info_json(elf)
+            OutputFormat::Text | OutputFormat::Dot => format_elf_info_text(elf)
           }
+          write_or_print(output, opts.output)
+        }
         None => println("Error: Failed to parse ELF file")
       }
     }
@@ -759,45 +939,46 @@ fn execute_info(opts : InfoOptions) -> Unit {
 }
 
 ///|
-/// Output ELF info as text
-fn output_elf_info_text(elf : @format.ElfFile) -> Unit {
-  println("ELF File Information")
-  println("====================")
-  println("")
+/// Format ELF info as text string
+fn format_elf_info_text(elf : @format.ElfFile) -> String {
+  let mut result = ""
+  result = result + "ELF File Information\n"
+  result = result + "====================\n\n"
   let class_str = elf_class_str(elf)
   let arch = arch_str(elf)
-  println("Class: \{class_str}")
-  println("Architecture: \{arch}")
-  println("Entry Point: \{format_hex(elf.entry_point())}")
-  println("Sections: \{elf.section_count()}")
-  println("Program Headers: \{elf.program_count()}")
-  println("")
-  println("Sections:")
+  result = result + "Class: \{class_str}\n"
+  result = result + "Architecture: \{arch}\n"
+  result = result + "Entry Point: \{format_hex(elf.entry_point())}\n"
+  result = result + "Sections: \{elf.section_count()}\n"
+  result = result + "Program Headers: \{elf.program_count()}\n\n"
+  result = result + "Sections:\n"
   for i = 0; i < elf.section_count(); i = i + 1 {
     let name = elf.get_section_name(i)
     match elf.get_section(i) {
       Some((addr, _offset, size)) => {
         let addr_str = format_hex(addr)
-        println("  [\{i}] \{name}: addr=\{addr_str}, size=\{size}")
+        result = result + "  [\{i}] \{name}: addr=\{addr_str}, size=\{size}\n"
       }
       None => ignore(())
     }
   }
+  result
 }
 
 ///|
-/// Output ELF info as JSON
-fn output_elf_info_json(elf : @format.ElfFile) -> Unit {
+/// Format ELF info as JSON string
+fn format_elf_info_json(elf : @format.ElfFile) -> String {
   let class_str = elf_class_str(elf)
   let arch = arch_str(elf)
   let entry_str = format_hex(elf.entry_point())
-  println("{")
-  println("  \"class\": \"\{class_str}\",")
-  println("  \"architecture\": \"\{arch}\",")
-  println("  \"entry_point\": \"\{entry_str}\",")
-  println("  \"section_count\": \{elf.section_count()},")
-  println("  \"program_count\": \{elf.program_count()}")
-  println("}")
+  let mut result = "{\n"
+  result = result + "  \"class\": \"\{class_str}\",\n"
+  result = result + "  \"architecture\": \"\{arch}\",\n"
+  result = result + "  \"entry_point\": \"\{entry_str}\",\n"
+  result = result + "  \"section_count\": \{elf.section_count()},\n"
+  result = result + "  \"program_count\": \{elf.program_count()}\n"
+  result = result + "}"
+  result
 }
 
 ///|
@@ -845,11 +1026,12 @@ fn execute_symbols(opts : SymbolsOptions) -> Unit {
       match @format.parse_elf(bytes) {
         Some(elf) => {
           let symbols = elf.get_symbols()
-          match opts.format {
-            OutputFormat::Json => output_symbols_json(symbols, opts.show_all)
+          let output = match opts.format {
+            OutputFormat::Json => format_symbols_json(symbols, opts.show_all)
             OutputFormat::Text | OutputFormat::Dot =>
-              output_symbols_text(symbols, opts.show_all)
+              format_symbols_text(symbols, opts.show_all)
           }
+          write_or_print(output, opts.output)
         }
         None => println("Error: Failed to parse ELF file")
       }
@@ -859,14 +1041,12 @@ fn execute_symbols(opts : SymbolsOptions) -> Unit {
 }
 
 ///|
-/// Output symbols as text
-fn output_symbols_text(
+/// Format symbols as text string
+fn format_symbols_text(
   symbols : Array[@format.Symbol],
   show_all : Bool,
-) -> Unit {
-  println("Symbols")
-  println("=======")
-  println("")
+) -> String {
+  let mut result = "Symbols\n=======\n\n"
   for sym in symbols {
     if !show_all && is_local_binding(sym.binding) {
       continue
@@ -874,8 +1054,9 @@ fn output_symbols_text(
     let addr_str = format_hex_padded(sym.value)
     let binding_str = binding_to_str(sym.binding)
     let type_str = sym_type_to_str(sym.sym_type)
-    println("\{addr_str} \{type_str} \{binding_str} \{sym.name}")
+    result = result + "\{addr_str} \{type_str} \{binding_str} \{sym.name}\n"
   }
+  result
 }
 
 ///|
@@ -903,29 +1084,30 @@ fn sym_type_to_json_str(sym_type : @format.SymbolType) -> String {
 }
 
 ///|
-/// Output symbols as JSON
-fn output_symbols_json(
+/// Format symbols as JSON string
+fn format_symbols_json(
   symbols : Array[@format.Symbol],
   show_all : Bool,
-) -> Unit {
-  println("[")
+) -> String {
+  let mut result = "[\n"
   let mut first = true
   for sym in symbols {
     if !show_all && is_local_binding(sym.binding) {
       continue
     }
     if !first {
-      println(",")
+      result = result + ",\n"
     }
     first = false
     let name_str = escape_json_string(sym.name)
     let addr_str = format_hex(sym.value)
     let type_str = sym_type_to_json_str(sym.sym_type)
     let binding_str = binding_to_json_str(sym.binding)
-    let line = "  {\"name\": \"\{name_str}\", \"value\": \"\{addr_str}\", \"size\": \{sym.size}, \"type\": \"\{type_str}\", \"binding\": \"\{binding_str}\"}"
-    println(line)
+    result = result +
+      "  {\"name\": \"\{name_str}\", \"value\": \"\{addr_str}\", \"size\": \{sym.size}, \"type\": \"\{type_str}\", \"binding\": \"\{binding_str}\"}"
   }
-  println("]")
+  result = result + "\n]"
+  result
 }
 
 ///|
@@ -951,10 +1133,22 @@ fn execute_cfg(opts : CfgOptions) -> Unit {
           let (vaddr, code) = code_sections[0]
           let cfg = @analysis.analyze_code(code, vaddr)
           let name = if opts.function == "" { "main" } else { opts.function }
-          match opts.format {
-            OutputFormat::Dot => println(@analysis.cfg_to_dot(cfg, name))
-            OutputFormat::Json => println(@analysis.cfg_to_json(cfg))
-            OutputFormat::Text => @analysis.print_cfg(cfg)
+          let output = match opts.format {
+            OutputFormat::Dot => @analysis.cfg_to_dot(cfg, name)
+            OutputFormat::Json => @analysis.cfg_to_json(cfg)
+            OutputFormat::Text => {
+              @analysis.print_cfg(cfg)
+              ""
+            }
+          }
+          if opts.output != "" && output != "" {
+            if write_output_file(opts.output, output) {
+              println("Output written to: \{opts.output}")
+            } else {
+              println("Error: Failed to write output file")
+            }
+          } else if output != "" {
+            println(output)
           }
         }
         None => println("Error: Failed to parse ELF file")
@@ -988,11 +1182,20 @@ fn execute_callgraph(opts : CallGraphOptions) -> Unit {
           let instructions = @analysis.decode_instructions(code, vaddr)
           let cfg = @analysis.build_cfg(instructions, vaddr)
           let cg = @analysis.build_call_graph(instructions, cfg)
-          match opts.format {
-            OutputFormat::Dot =>
-              println(@analysis.callgraph_to_dot(cg, "callgraph"))
-            OutputFormat::Json => println(@analysis.callgraph_to_json(cg))
-            OutputFormat::Text => @analysis.print_call_graph(cg)
+          let output = match opts.format {
+            OutputFormat::Dot => @analysis.callgraph_to_dot(cg, "callgraph")
+            OutputFormat::Json => @analysis.callgraph_to_json(cg)
+            OutputFormat::Text => {
+              @analysis.print_call_graph(cg)
+              ""
+            }
+          }
+          if opts.output != "" && output != "" {
+            if write_output_file(opts.output, output) {
+              println("Output written to: \{opts.output}")
+            } else {
+              println("Error: Failed to write output file")
+            }
           }
         }
         None => println("Error: Failed to parse ELF file")
@@ -1000,6 +1203,233 @@ fn execute_callgraph(opts : CallGraphOptions) -> Unit {
     }
     None => println("Error: Cannot read file: \{opts.file_path}")
   }
+}
+
+///|
+/// Execute hex command (decode single hex instruction)
+fn execute_hex(opts : HexOptions) -> Unit {
+  let code = opts.code
+  match parse_number(code) {
+    Some(inst_code) => {
+      let is_compressed = @decode.is_compressed(inst_code)
+      let (inst, length) = if is_compressed {
+        let @decode.DecodeResult(inst) = @decode.decode_compressed(
+          inst_code & 0xFFFFU,
+        )
+        (inst, 2)
+      } else {
+        let @decode.DecodeResult(inst) = @decode.decode(inst_code)
+        (inst, 4)
+      }
+      let disasm_str = @disasm.disassemble(inst)
+      let category = inst.category()
+      let category_str = category_to_string(category)
+
+      match opts.format {
+        OutputFormat::Json => {
+          let inst_json = escape_json_string(disasm_str)
+          let cat_json = escape_json_string(category_str)
+          println("{")
+          println("  \"code\": \"\{code}\",")
+          println("  \"length\": \{length},")
+          println("  \"disassembly\": \"\{inst_json}\",")
+          println("  \"category\": \"\{cat_json}\"")
+          println("}")
+        }
+        OutputFormat::Text | OutputFormat::Dot => {
+          println("Code: \{code} (\{length} bytes)")
+          println("Disassembly: \{disasm_str}")
+          println("Category: \{category_str}")
+        }
+      }
+    }
+    None => println("Error: Invalid hex code: \{code}")
+  }
+}
+
+///|
+/// Convert instruction category to string
+fn category_to_string(cat : @decode.InstructionCategory) -> String {
+  match cat {
+    @decode.InstructionCategory::Arithmetic => "Arithmetic"
+    @decode.InstructionCategory::Logical => "Logical"
+    @decode.InstructionCategory::Compare => "Compare"
+    @decode.InstructionCategory::Branch => "Branch"
+    @decode.InstructionCategory::Jump => "Jump"
+    @decode.InstructionCategory::Load => "Load"
+    @decode.InstructionCategory::Store => "Store"
+    @decode.InstructionCategory::System => "System"
+    @decode.InstructionCategory::Float => "Float"
+    @decode.InstructionCategory::Vector => "Vector"
+    @decode.InstructionCategory::Unknown => "Unknown"
+  }
+}
+
+///|
+/// Execute analyze command (comprehensive analysis)
+fn execute_analyze(opts : AnalyzeOptions) -> Unit {
+  match read_file_bytes(opts.file_path) {
+    Some(bytes) => {
+      if !@format.is_elf(bytes) {
+        println("Error: Not a valid ELF file: \{opts.file_path}")
+        return
+      }
+      match @format.parse_elf(bytes) {
+        Some(elf) => {
+          if !elf.is_riscv() {
+            println("Error: Not a RISC-V ELF file")
+            return
+          }
+          let output = analyze_elf(elf, opts.detailed, opts.format)
+          if opts.output != "" {
+            if write_output_file(opts.output, output) {
+              println("Analysis written to: \{opts.output}")
+            } else {
+              println("Error: Failed to write output file")
+            }
+          } else {
+            println(output)
+          }
+        }
+        None => println("Error: Failed to parse ELF file")
+      }
+    }
+    None => println("Error: Cannot read file: \{opts.file_path}")
+  }
+}
+
+///|
+/// Perform comprehensive ELF analysis
+fn analyze_elf(
+  elf : @format.ElfFile,
+  detailed : Bool,
+  format : OutputFormat,
+) -> String {
+  match format {
+    OutputFormat::Json => analyze_elf_json(elf, detailed)
+    OutputFormat::Text | OutputFormat::Dot => analyze_elf_text(elf, detailed)
+  }
+}
+
+///|
+/// Analyze ELF and return text output
+fn analyze_elf_text(elf : @format.ElfFile, detailed : Bool) -> String {
+  let mut result = ""
+  result = result + "=== ELF Binary Analysis ===\n\n"
+
+  // Basic info
+  let class_str = elf_class_str(elf)
+  let arch = arch_str(elf)
+  result = result + "File Type: \{class_str}\n"
+  result = result + "Architecture: \{arch}\n"
+  result = result + "Entry Point: \{format_hex(elf.entry_point())}\n"
+  result = result + "Sections: \{elf.section_count()}\n"
+  result = result + "Program Headers: \{elf.program_count()}\n\n"
+
+  // Symbols
+  let symbols = elf.get_symbols()
+  let func_symbols = elf.get_function_symbols()
+  result = result +
+    "Symbols: \{symbols.length()} total, \{func_symbols.length()} functions\n\n"
+
+  // Code analysis
+  let code_sections = elf.get_code_sections()
+  if code_sections.length() > 0 {
+    let (vaddr, code) = code_sections[0]
+    let instructions = @analysis.decode_instructions(code, vaddr)
+    result = result + "Code Analysis:\n"
+    result = result + "  Instructions: \{instructions.length()}\n"
+
+    // CFG analysis
+    let cfg = @analysis.build_cfg(instructions, vaddr)
+    result = result + "  Basic Blocks: \{cfg.blocks.length()}\n"
+    result = result + "  CFG Edges: \{cfg.edges.length()}\n"
+
+    // Call graph
+    let cg = @analysis.build_call_graph(instructions, cfg)
+    result = result + "  Functions in Call Graph: \{cg.nodes.length()}\n"
+
+    if detailed {
+      result = result + "\n--- Detailed Analysis ---\n\n"
+
+      // Instruction categories
+      result = result + "Instruction Categories:\n"
+      let categories = count_instruction_categories(instructions)
+      for item in categories {
+        let (cat, count) = item
+        result = result + "  \{cat}: \{count}\n"
+      }
+
+      // Control flow summary
+      result = result + "\nControl Flow:\n"
+      result = result + "  Entry Points: \{cfg.entry_points.length()}\n"
+
+      // Call targets
+      result = result + "\nCall Targets:\n"
+      for node in cg.nodes {
+        if node.calls.length() > 0 {
+          result = result +
+            "  \{format_hex(node.address)} (\{node.name}): \{node.calls.length()} calls\n"
+        }
+      }
+    }
+  } else {
+    result = result + "No executable code sections found\n"
+  }
+
+  result
+}
+
+///|
+/// Count instruction categories
+fn count_instruction_categories(
+  instructions : FixedArray[@analysis.DecodedInst],
+) -> Array[(String, Int)] {
+  let counts : Map[String, Int] = {}
+  for inst_info in instructions {
+    let cat = inst_info.inst.category()
+    let cat_str = category_to_string(cat)
+    let current = counts.get_or_default(cat_str, 0)
+    counts.set(cat_str, current + 1)
+  }
+  counts.to_array()
+}
+
+///|
+/// Analyze ELF and return JSON output
+fn analyze_elf_json(elf : @format.ElfFile, detailed : Bool) -> String {
+  let mut result = "{\n"
+  let class_str = elf_class_str(elf)
+  let arch = arch_str(elf)
+
+  result = result + "  \"file_type\": \"\{class_str}\",\n"
+  result = result + "  \"architecture\": \"\{arch}\",\n"
+  result = result + "  \"entry_point\": \"\{format_hex(elf.entry_point())}\",\n"
+  result = result + "  \"section_count\": \{elf.section_count()},\n"
+  result = result + "  \"program_count\": \{elf.program_count()},\n"
+
+  let symbols = elf.get_symbols()
+  let func_symbols = elf.get_function_symbols()
+  result = result + "  \"symbol_count\": \{symbols.length()},\n"
+  result = result + "  \"function_count\": \{func_symbols.length()}"
+
+  let code_sections = elf.get_code_sections()
+  if code_sections.length() > 0 {
+    let (vaddr, code) = code_sections[0]
+    let instructions = @analysis.decode_instructions(code, vaddr)
+    let cfg = @analysis.build_cfg(instructions, vaddr)
+    let cg = @analysis.build_call_graph(instructions, cfg)
+
+    result = result + ",\n  \"analysis\": {\n"
+    result = result + "    \"instruction_count\": \{instructions.length()},\n"
+    result = result + "    \"basic_blocks\": \{cfg.blocks.length()},\n"
+    result = result + "    \"cfg_edges\": \{cfg.edges.length()},\n"
+    result = result + "    \"call_graph_nodes\": \{cg.nodes.length()}\n"
+    result = result + "  }"
+  }
+
+  result = result + "\n}"
+  result
 }
 
 ///|
@@ -1031,21 +1461,31 @@ pub fn execute(cmd : Command) -> Unit {
     Command::Symbols(opts) => execute_symbols(opts)
     Command::Cfg(opts) => execute_cfg(opts)
     Command::CallGraph(opts) => execute_callgraph(opts)
+    Command::Hex(opts) => execute_hex(opts)
+    Command::Analyze(opts) => execute_analyze(opts)
   }
 }
 
 ///|
 /// Main entry point
 fn main {
-  // Run demo by default since MoonBit doesn't support command line args yet
-  // In a real deployment with platform support:
-  //   let args = get_command_line_args()
-  //   match parse_args(args) {
-  //     Some(cmd) => execute(cmd)
-  //     None => {
-  //       println("Error: Invalid arguments")
-  //       print_usage()
-  //     }
-  //   }
-  run_demo()
+  let args = @sys.get_cli_args()
+  // args[0] is program name, skip it
+  let cmd_args : Array[String] = if args.length() > 1 {
+    let result = []
+    for i = 1; i < args.length(); i = i + 1 {
+      result.push(args[i])
+    }
+    result
+  } else {
+    []
+  }
+  match parse_args(cmd_args) {
+    Some(cmd) => execute(cmd)
+    None => {
+      println("Error: Invalid arguments")
+      println("")
+      print_usage()
+    }
+  }
 }
