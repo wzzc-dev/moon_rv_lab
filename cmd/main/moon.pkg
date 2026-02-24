@@ -1,6 +1,8 @@
 import {
   "wzzc-dev/riscv_analyzer/decode" @decode,
   "wzzc-dev/riscv_analyzer/disasm" @disasm,
+  "wzzc-dev/riscv_analyzer/format" @format,
+  "wzzc-dev/riscv_analyzer/analysis" @analysis,
 }
 
 options(

@@ -9,6 +9,20 @@
 const VERSION : String = "0.4.0"
 
 ///|
+/// Error types for CLI operations
+pub enum CliError {
+  FileNotFound(String)
+  FileReadError(String)
+  InvalidFormat(String)
+  ParseError(String)
+  InvalidArguments(String)
+  NotAnElf(String)
+  NotRiscV(String)
+  NoCodeSection(String)
+  FunctionNotFound(String)
+} derive(Show)
+
+///|
 /// Command types
 pub enum Command {
   Disasm(DisasmOptions)
@@ -174,7 +188,7 @@ fn uint_to_hex(value : UInt) -> String {
 
 ///|
 /// Format UInt as hex with 0x prefix
-fn _format_hex(value : UInt) -> String {
+fn format_hex(value : UInt) -> String {
   "0x" + uint_to_hex(value)
 }
 
@@ -416,7 +430,7 @@ fn parse_callgraph_args(args : Array[String]) -> Command? {
 
 ///|
 /// Print usage information
-fn _print_usage() -> Unit {
+fn print_usage() -> Unit {
   println("RISC-V Binary Analyzer v\{VERSION}")
   println("")
   println("Usage: rv-analyzer <command> [options] <file>")
@@ -425,8 +439,8 @@ fn _print_usage() -> Unit {
   println("  disasm <file>           Disassemble a binary file")
   println("  info <file>             Show ELF file information")
   println("  symbols <file>          List symbols in the file")
-  println("  cfg <file>              Generate control flow graph (DOT format)")
-  println("  callgraph <file>        Generate call graph (DOT format)")
+  println("  cfg <file>              Generate control flow graph")
+  println("  callgraph <file>        Generate call graph")
   println("  demo                    Run demonstration")
   println("  help                    Show this help message")
   println("  version                 Show version information")
@@ -448,6 +462,11 @@ fn _print_usage() -> Unit {
     "  --format, -f <fmt>      Output format: dot, text, json (default: dot)",
   )
   println("")
+  println("CallGraph Options:")
+  println(
+    "  --format, -f <fmt>      Output format: dot, text, json (default: dot)",
+  )
+  println("")
   println("Examples:")
   println("  rv-analyzer disasm program.elf")
   println("  rv-analyzer disasm --raw --base 0x8000 firmware.bin")
@@ -459,11 +478,11 @@ fn _print_usage() -> Unit {
 
 ///|
 /// Print version information
-fn _print_version() -> Unit {
+fn print_version() -> Unit {
   println("rv-analyzer \{VERSION}")
   println("RISC-V Binary Analyzer")
   println(
-    "Supported architectures: RV32I, RV32M, RV32C, RV64I, RV64M, RV32A, RV64A, RV32F, RV64F, RV32D, RV64D, Zicsr, Zba, Zbb, Zbc, Zbs",
+    "Supported: RV32I, RV32M, RV32C, RV64I, RV64M, RV32A, RV64A, RV32F, RV64F, RV32D, RV64D, RVV, Zicsr, Zba, Zbb, Zbc, Zbs",
   )
 }
 
@@ -591,9 +610,10 @@ fn run_demo() -> Unit {
   println("- RV32A/RV64A: Atomic operations (22 instructions)")
   println("- RV32F/RV64F: Single-precision floating-point (30+ instructions)")
   println("- RV32D/RV64D: Double-precision floating-point (30+ instructions)")
+  println("- RVV: Vector extension (200+ instructions)")
   println("- Zicsr: CSR instructions (6 instructions)")
-  println("- Zba: Address generation (3 instructions)")
-  println("- Zbb: Basic bit manipulation (16+ instructions)")
+  println("- Zba: Address generation (6 instructions)")
+  println("- Zbb: Basic bit manipulation (20+ instructions)")
   println("- Zbc: Carry-less multiplication (3 instructions)")
   println("- Zbs: Single-bit instructions (8 instructions)")
   println("")
@@ -609,10 +629,423 @@ fn run_demo() -> Unit {
   println("- DOT/JSON export for visualization")
 }
 
+// ============================================================================
+// File I/O Operations
+// ============================================================================
+
+///|
+/// Read file contents as bytes (MoonBit foreign function interface)
+fn read_file_bytes(path : String) -> FixedArray[Byte]? {
+  // Use MoonBit's io module for file reading
+  // This is a placeholder - actual implementation depends on platform
+  // For now, return None to indicate file reading needs platform support
+  ignore(path)
+  None
+}
+
+// ============================================================================
+// Command Execution Functions
+// ============================================================================
+
+///|
+/// Execute disasm command
+fn execute_disasm(opts : DisasmOptions) -> Unit {
+  match read_file_bytes(opts.file_path) {
+    Some(bytes) =>
+      if opts.raw_mode {
+        let instructions = @analysis.decode_instructions(bytes, opts.base_addr)
+        output_disasm(instructions, opts.format)
+      } else {
+        if !@format.is_elf(bytes) {
+          println("Error: Not a valid ELF file: \{opts.file_path}")
+          println("Use --raw option for raw binary files")
+          return
+        }
+        match @format.parse_elf(bytes) {
+          Some(elf) => {
+            if !elf.is_riscv() {
+              println("Error: Not a RISC-V ELF file")
+              return
+            }
+            let code_sections = elf.get_code_sections()
+            if code_sections.length() == 0 {
+              println("Error: No executable code sections found")
+              return
+            }
+            let (vaddr, code) = code_sections[0]
+            let instructions = @analysis.decode_instructions(code, vaddr)
+            output_disasm(instructions, opts.format)
+          }
+          None => println("Error: Failed to parse ELF file")
+        }
+      }
+    None => {
+      println("Error: Cannot read file: \{opts.file_path}")
+      println("Note: File I/O requires platform support")
+    }
+  }
+}
+
+///|
+/// Output disassembly results
+fn output_disasm(
+  instructions : FixedArray[@analysis.DecodedInst],
+  format : OutputFormat,
+) -> Unit {
+  match format {
+    OutputFormat::Json => {
+      println("[")
+      let len = instructions.length()
+      for i = 0; i < len; i = i + 1 {
+        let inst_info = instructions[i]
+        let addr_str = format_hex(inst_info.addr)
+        let asm_str = escape_json_string(@disasm.disassemble(inst_info.inst))
+        let comma = if i < len - 1 { "," } else { "" }
+        println(
+          "  {\"addr\": \"\{addr_str}\", \"inst\": \"\{asm_str}\"}\{comma}",
+        )
+      }
+      println("]")
+    }
+    OutputFormat::Text | OutputFormat::Dot =>
+      for inst_info in instructions {
+        let addr_str = format_hex_padded(inst_info.addr)
+        let disasm_str = @disasm.disassemble(inst_info.inst)
+        println("\{addr_str}: \{disasm_str}")
+      }
+  }
+}
+
+///|
+/// Get ELF class string
+fn elf_class_str(elf : @format.ElfFile) -> String {
+  if elf.is_64bit {
+    "ELF64"
+  } else {
+    "ELF32"
+  }
+}
+
+///|
+/// Get architecture string
+fn arch_str(elf : @format.ElfFile) -> String {
+  if elf.is_riscv() {
+    "RISC-V"
+  } else {
+    "Unknown"
+  }
+}
+
+///|
+/// Execute info command
+fn execute_info(opts : InfoOptions) -> Unit {
+  match read_file_bytes(opts.file_path) {
+    Some(bytes) => {
+      if !@format.is_elf(bytes) {
+        println("Error: Not a valid ELF file: \{opts.file_path}")
+        return
+      }
+      match @format.parse_elf(bytes) {
+        Some(elf) =>
+          match opts.format {
+            OutputFormat::Json => output_elf_info_json(elf)
+            OutputFormat::Text | OutputFormat::Dot => output_elf_info_text(elf)
+          }
+        None => println("Error: Failed to parse ELF file")
+      }
+    }
+    None => println("Error: Cannot read file: \{opts.file_path}")
+  }
+}
+
+///|
+/// Output ELF info as text
+fn output_elf_info_text(elf : @format.ElfFile) -> Unit {
+  println("ELF File Information")
+  println("====================")
+  println("")
+  let class_str = elf_class_str(elf)
+  let arch = arch_str(elf)
+  println("Class: \{class_str}")
+  println("Architecture: \{arch}")
+  println("Entry Point: \{format_hex(elf.entry_point())}")
+  println("Sections: \{elf.section_count()}")
+  println("Program Headers: \{elf.program_count()}")
+  println("")
+  println("Sections:")
+  for i = 0; i < elf.section_count(); i = i + 1 {
+    let name = elf.get_section_name(i)
+    match elf.get_section(i) {
+      Some((addr, _offset, size)) => {
+        let addr_str = format_hex(addr)
+        println("  [\{i}] \{name}: addr=\{addr_str}, size=\{size}")
+      }
+      None => ignore(())
+    }
+  }
+}
+
+///|
+/// Output ELF info as JSON
+fn output_elf_info_json(elf : @format.ElfFile) -> Unit {
+  let class_str = elf_class_str(elf)
+  let arch = arch_str(elf)
+  let entry_str = format_hex(elf.entry_point())
+  println("{")
+  println("  \"class\": \"\{class_str}\",")
+  println("  \"architecture\": \"\{arch}\",")
+  println("  \"entry_point\": \"\{entry_str}\",")
+  println("  \"section_count\": \{elf.section_count()},")
+  println("  \"program_count\": \{elf.program_count()}")
+  println("}")
+}
+
+///|
+/// Check if symbol binding is local
+fn is_local_binding(binding : @format.SymbolBinding) -> Bool {
+  match binding {
+    @format.SymbolBinding::Local => true
+    _ => false
+  }
+}
+
+///|
+/// Get binding string
+fn binding_to_str(binding : @format.SymbolBinding) -> String {
+  match binding {
+    @format.SymbolBinding::Local => "LOCAL"
+    @format.SymbolBinding::Global => "GLOBAL"
+    @format.SymbolBinding::Weak => "WEAK"
+    _ => "UNKNOWN"
+  }
+}
+
+///|
+/// Get symbol type string
+fn sym_type_to_str(sym_type : @format.SymbolType) -> String {
+  match sym_type {
+    @format.SymbolType::Func => "FUNC"
+    @format.SymbolType::Object => "OBJECT"
+    @format.SymbolType::Section => "SECTION"
+    @format.SymbolType::File => "FILE"
+    @format.SymbolType::NoType => "NOTYPE"
+    _ => "UNKNOWN"
+  }
+}
+
+///|
+/// Execute symbols command
+fn execute_symbols(opts : SymbolsOptions) -> Unit {
+  match read_file_bytes(opts.file_path) {
+    Some(bytes) => {
+      if !@format.is_elf(bytes) {
+        println("Error: Not a valid ELF file: \{opts.file_path}")
+        return
+      }
+      match @format.parse_elf(bytes) {
+        Some(elf) => {
+          let symbols = elf.get_symbols()
+          match opts.format {
+            OutputFormat::Json => output_symbols_json(symbols, opts.show_all)
+            OutputFormat::Text | OutputFormat::Dot =>
+              output_symbols_text(symbols, opts.show_all)
+          }
+        }
+        None => println("Error: Failed to parse ELF file")
+      }
+    }
+    None => println("Error: Cannot read file: \{opts.file_path}")
+  }
+}
+
+///|
+/// Output symbols as text
+fn output_symbols_text(
+  symbols : Array[@format.Symbol],
+  show_all : Bool,
+) -> Unit {
+  println("Symbols")
+  println("=======")
+  println("")
+  for sym in symbols {
+    if !show_all && is_local_binding(sym.binding) {
+      continue
+    }
+    let addr_str = format_hex_padded(sym.value)
+    let binding_str = binding_to_str(sym.binding)
+    let type_str = sym_type_to_str(sym.sym_type)
+    println("\{addr_str} \{type_str} \{binding_str} \{sym.name}")
+  }
+}
+
+///|
+/// Get binding string for JSON
+fn binding_to_json_str(binding : @format.SymbolBinding) -> String {
+  match binding {
+    @format.SymbolBinding::Local => "local"
+    @format.SymbolBinding::Global => "global"
+    @format.SymbolBinding::Weak => "weak"
+    _ => "unknown"
+  }
+}
+
+///|
+/// Get symbol type string for JSON
+fn sym_type_to_json_str(sym_type : @format.SymbolType) -> String {
+  match sym_type {
+    @format.SymbolType::Func => "func"
+    @format.SymbolType::Object => "object"
+    @format.SymbolType::Section => "section"
+    @format.SymbolType::File => "file"
+    @format.SymbolType::NoType => "notype"
+    _ => "unknown"
+  }
+}
+
+///|
+/// Output symbols as JSON
+fn output_symbols_json(
+  symbols : Array[@format.Symbol],
+  show_all : Bool,
+) -> Unit {
+  println("[")
+  let mut first = true
+  for sym in symbols {
+    if !show_all && is_local_binding(sym.binding) {
+      continue
+    }
+    if !first {
+      println(",")
+    }
+    first = false
+    let name_str = escape_json_string(sym.name)
+    let addr_str = format_hex(sym.value)
+    let type_str = sym_type_to_json_str(sym.sym_type)
+    let binding_str = binding_to_json_str(sym.binding)
+    let line = "  {\"name\": \"\{name_str}\", \"value\": \"\{addr_str}\", \"size\": \{sym.size}, \"type\": \"\{type_str}\", \"binding\": \"\{binding_str}\"}"
+    println(line)
+  }
+  println("]")
+}
+
+///|
+/// Execute cfg command
+fn execute_cfg(opts : CfgOptions) -> Unit {
+  match read_file_bytes(opts.file_path) {
+    Some(bytes) => {
+      if !@format.is_elf(bytes) {
+        println("Error: Not a valid ELF file: \{opts.file_path}")
+        return
+      }
+      match @format.parse_elf(bytes) {
+        Some(elf) => {
+          if !elf.is_riscv() {
+            println("Error: Not a RISC-V ELF file")
+            return
+          }
+          let code_sections = elf.get_code_sections()
+          if code_sections.length() == 0 {
+            println("Error: No executable code sections found")
+            return
+          }
+          let (vaddr, code) = code_sections[0]
+          let cfg = @analysis.analyze_code(code, vaddr)
+          let name = if opts.function == "" { "main" } else { opts.function }
+          match opts.format {
+            OutputFormat::Dot => println(@analysis.cfg_to_dot(cfg, name))
+            OutputFormat::Json => println(@analysis.cfg_to_json(cfg))
+            OutputFormat::Text => @analysis.print_cfg(cfg)
+          }
+        }
+        None => println("Error: Failed to parse ELF file")
+      }
+    }
+    None => println("Error: Cannot read file: \{opts.file_path}")
+  }
+}
+
+///|
+/// Execute callgraph command
+fn execute_callgraph(opts : CallGraphOptions) -> Unit {
+  match read_file_bytes(opts.file_path) {
+    Some(bytes) => {
+      if !@format.is_elf(bytes) {
+        println("Error: Not a valid ELF file: \{opts.file_path}")
+        return
+      }
+      match @format.parse_elf(bytes) {
+        Some(elf) => {
+          if !elf.is_riscv() {
+            println("Error: Not a RISC-V ELF file")
+            return
+          }
+          let code_sections = elf.get_code_sections()
+          if code_sections.length() == 0 {
+            println("Error: No executable code sections found")
+            return
+          }
+          let (vaddr, code) = code_sections[0]
+          let instructions = @analysis.decode_instructions(code, vaddr)
+          let cfg = @analysis.build_cfg(instructions, vaddr)
+          let cg = @analysis.build_call_graph(instructions, cfg)
+          match opts.format {
+            OutputFormat::Dot =>
+              println(@analysis.callgraph_to_dot(cg, "callgraph"))
+            OutputFormat::Json => println(@analysis.callgraph_to_json(cg))
+            OutputFormat::Text => @analysis.print_call_graph(cg)
+          }
+        }
+        None => println("Error: Failed to parse ELF file")
+      }
+    }
+    None => println("Error: Cannot read file: \{opts.file_path}")
+  }
+}
+
+///|
+/// Escape special characters for JSON strings
+fn escape_json_string(s : String) -> String {
+  let mut result = ""
+  for c in s {
+    match c {
+      '"' => result = result + "\\\""
+      '\\' => result = result + "\\\\"
+      '\n' => result = result + "\\n"
+      '\r' => result = result + "\\r"
+      '\t' => result = result + "\\t"
+      _ => result = result + c.to_string()
+    }
+  }
+  result
+}
+
+///|
+/// Execute a parsed command
+pub fn execute(cmd : Command) -> Unit {
+  match cmd {
+    Command::Help => print_usage()
+    Command::Version => print_version()
+    Command::Demo => run_demo()
+    Command::Disasm(opts) => execute_disasm(opts)
+    Command::Info(opts) => execute_info(opts)
+    Command::Symbols(opts) => execute_symbols(opts)
+    Command::Cfg(opts) => execute_cfg(opts)
+    Command::CallGraph(opts) => execute_callgraph(opts)
+  }
+}
+
 ///|
 /// Main entry point
 fn main {
-  // For now, run demo since we can't access actual command line args
-  // In a real deployment, use: let args = ... (platform-specific)
+  // Run demo by default since MoonBit doesn't support command line args yet
+  // In a real deployment with platform support:
+  //   let args = get_command_line_args()
+  //   match parse_args(args) {
+  //     Some(cmd) => execute(cmd)
+  //     None => {
+  //       println("Error: Invalid arguments")
+  //       print_usage()
+  //     }
+  //   }
   run_demo()
 }

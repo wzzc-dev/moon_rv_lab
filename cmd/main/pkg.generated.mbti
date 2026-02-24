@@ -2,6 +2,8 @@
 package "wzzc-dev/riscv_analyzer/cmd/main"
 
 // Values
+pub fn execute(Command) -> Unit
+
 pub fn parse_args(Array[String]) -> Command?
 
 // Errors
@@ -19,6 +21,19 @@ pub struct CfgOptions {
   format : OutputFormat
 }
 pub impl Show for CfgOptions
+
+pub enum CliError {
+  FileNotFound(String)
+  FileReadError(String)
+  InvalidFormat(String)
+  ParseError(String)
+  InvalidArguments(String)
+  NotAnElf(String)
+  NotRiscV(String)
+  NoCodeSection(String)
+  FunctionNotFound(String)
+}
+pub impl Show for CliError
 
 pub enum Command {
   Disasm(DisasmOptions)
