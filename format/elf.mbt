@@ -441,41 +441,81 @@ pub fn ElfFile::is_riscv(self : ElfFile) -> Bool {
 
 ///|
 /// Get code section data (executable sections)
+/// First tries Section Headers, then falls back to Program Headers
 pub fn ElfFile::get_code_sections(
   self : ElfFile,
 ) -> Array[(UInt, FixedArray[Byte])] {
   let result : Array[(UInt, FixedArray[Byte])] = []
+
+  // First try Section Headers (more accurate)
   if self.is_64bit {
-    for phdr in self.programs64 {
-      // Check if this is a LOAD segment with execute permission
-      if phdr.p_type == PT_LOAD && (phdr.p_flags & PF_X) != 0U {
-        let offset = phdr.p_offset.reinterpret_as_int()
-        let filesz = phdr.p_filesz.reinterpret_as_int()
-        if offset + filesz <= self.raw_data.length() && filesz > 0 {
-          let code : FixedArray[Byte] = FixedArray::make(filesz, b'\x00')
-          for i = 0; i < filesz; i = i + 1 {
+    for shdr in self.sections64 {
+      // Check if this section has executable flag
+      if (shdr.sh_flags & SHF_EXECINSTR) != 0U && shdr.sh_size > 0U {
+        let offset = shdr.sh_offset.reinterpret_as_int()
+        let size = shdr.sh_size.reinterpret_as_int()
+        if offset + size <= self.raw_data.length() {
+          let code : FixedArray[Byte] = FixedArray::make(size, b'\x00')
+          for i = 0; i < size; i = i + 1 {
             code[i] = self.raw_data[offset + i]
           }
-          result.push((phdr.p_vaddr, code))
+          result.push((shdr.sh_addr, code))
         }
       }
     }
   } else {
-    for phdr in self.programs32 {
-      // Check if this is a LOAD segment with execute permission
-      if phdr.p_type == PT_LOAD && (phdr.p_flags & PF_X) != 0U {
-        let offset = phdr.p_offset.reinterpret_as_int()
-        let filesz = phdr.p_filesz.reinterpret_as_int()
-        if offset + filesz <= self.raw_data.length() && filesz > 0 {
-          let code : FixedArray[Byte] = FixedArray::make(filesz, b'\x00')
-          for i = 0; i < filesz; i = i + 1 {
+    for shdr in self.sections32 {
+      // Check if this section has executable flag
+      if (shdr.sh_flags & SHF_EXECINSTR) != 0U && shdr.sh_size > 0U {
+        let offset = shdr.sh_offset.reinterpret_as_int()
+        let size = shdr.sh_size.reinterpret_as_int()
+        if offset + size <= self.raw_data.length() {
+          let code : FixedArray[Byte] = FixedArray::make(size, b'\x00')
+          for i = 0; i < size; i = i + 1 {
             code[i] = self.raw_data[offset + i]
           }
-          result.push((phdr.p_vaddr, code))
+          result.push((shdr.sh_addr, code))
         }
       }
     }
   }
+
+  // If no sections found with executable flag, fall back to Program Headers
+  // This handles ELF files without section headers (e.g., stripped binaries)
+  if result.length() == 0 {
+    if self.is_64bit {
+      for phdr in self.programs64 {
+        // Check if this is a LOAD segment with execute permission
+        if phdr.p_type == PT_LOAD && (phdr.p_flags & PF_X) != 0U {
+          let offset = phdr.p_offset.reinterpret_as_int()
+          let filesz = phdr.p_filesz.reinterpret_as_int()
+          if offset + filesz <= self.raw_data.length() && filesz > 0 {
+            let code : FixedArray[Byte] = FixedArray::make(filesz, b'\x00')
+            for i = 0; i < filesz; i = i + 1 {
+              code[i] = self.raw_data[offset + i]
+            }
+            result.push((phdr.p_vaddr, code))
+          }
+        }
+      }
+    } else {
+      for phdr in self.programs32 {
+        // Check if this is a LOAD segment with execute permission
+        if phdr.p_type == PT_LOAD && (phdr.p_flags & PF_X) != 0U {
+          let offset = phdr.p_offset.reinterpret_as_int()
+          let filesz = phdr.p_filesz.reinterpret_as_int()
+          if offset + filesz <= self.raw_data.length() && filesz > 0 {
+            let code : FixedArray[Byte] = FixedArray::make(filesz, b'\x00')
+            for i = 0; i < filesz; i = i + 1 {
+              code[i] = self.raw_data[offset + i]
+            }
+            result.push((phdr.p_vaddr, code))
+          }
+        }
+      }
+    }
+  }
+
   result
 }
 

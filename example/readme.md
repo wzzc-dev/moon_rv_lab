@@ -7,3 +7,11 @@ riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d hello.s -o a.out
 cp ../_build/native/debug/build/cmd/main/main.exe rv-analyzer
 ./rv-analyzer disasm a.out >> output.txt
 ```
+
+```shell
+# 分析一个 RISC-V 固件
+rv-analyzer info firmware.bin        # 查看文件类型和结构
+rv-analyzer symbols firmware.bin     # 查看有哪些函数
+rv-analyzer cfg firmware.bin -n main -o main.dot  # 生成 main 函数的控制流图
+rv-analyzer disasm firmware.bin      # 反汇编查看实际指令
+```

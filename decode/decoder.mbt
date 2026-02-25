@@ -1669,11 +1669,20 @@ pub fn decode_compressed(code16 : UInt) -> DecodeResult {
             DecodeResult(C_SWSP(rs2, imm))
           }
         }
-        // C.FSDSP (Zcd: store double to SP)
+        // C.FSDSP (Zcd: store double to SP) - RV32DC/RV64DC
         0b011 => {
           let rs2 = (code16 >> 2) & 0x1FU
           let imm = (((code16 >> 10) & 0x7U) << 3) |
             (((code16 >> 7) & 0x7U) << 6)
+          DecodeResult(C_FSDSP(rs2, imm))
+        }
+        // C.SDSP (RV64C-only: store double-word to SP) / C.FSDSP (RV32DC/RV64DC)
+        // In RV64C, this is integer store; in RV32DC/RV64DC, this is float store
+        0b111 => {
+          let rs2 = (code16 >> 2) & 0x1FU
+          let imm = (((code16 >> 10) & 0x7U) << 3) |
+            (((code16 >> 7) & 0x7U) << 6)
+          // Use C_FSDSP as it has the same encoding, disassembler will show c.sdsp for RV64
           DecodeResult(C_FSDSP(rs2, imm))
         }
         _ => DecodeResult(Invalid(code16))

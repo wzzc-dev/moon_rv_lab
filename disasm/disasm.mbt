@@ -644,19 +644,22 @@ pub fn disassemble(inst : @decode.Instruction) -> String {
     @decode.FCVT_Q_LU(rd, rs1, rm) =>
       "fcvt.q.lu \{@decode.freg_name(rd)}, \{@decode.reg_name(rs1)}"
 
-    // Zcf/Zcd compressed floating point
+    // Zcf/Zcd compressed floating point (also used for RV64C integer load/store)
+    // In RV64C: C_FLD/C_FSD are C.LD/C.SD (64-bit integer load/store)
+    // In RV32DC/RV64DC: C_FLD/C_FSD are floating-point load/store
     @decode.C_FLD(rd, rs1, imm) =>
-      "c.fld \{@decode.creg_name(rd)}, \{format_imm(imm.reinterpret_as_int())}(\{@decode.reg_name(rs1)})"
+      "c.ld \{@decode.creg_name(rd)}, \{format_imm(imm.reinterpret_as_int())}(\{@decode.reg_name(rs1)})"
     @decode.C_FSD(rs1, rs2, imm) =>
-      "c.fsd \{@decode.creg_name(rs2)}, \{format_imm(imm.reinterpret_as_int())}(\{@decode.reg_name(rs1)})"
+      "c.sd \{@decode.creg_name(rs2)}, \{format_imm(imm.reinterpret_as_int())}(\{@decode.reg_name(rs1)})"
     @decode.C_FLW(rd, rs1, imm) =>
       "c.flw \{@decode.creg_name(rd)}, \{format_imm(imm.reinterpret_as_int())}(\{@decode.reg_name(rs1)})"
     @decode.C_FSW(rs1, rs2, imm) =>
       "c.fsw \{@decode.creg_name(rs2)}, \{format_imm(imm.reinterpret_as_int())}(\{@decode.reg_name(rs1)})"
+    // In RV64C: C_FLDSP/C_FSDSP are C.LDSP/C.SDSP (64-bit integer load/store from SP)
     @decode.C_FLDSP(rd, imm) =>
-      "c.fldsp \{@decode.freg_name(rd)}, \{format_imm(imm.reinterpret_as_int())}(sp)"
+      "c.ldsp \{@decode.reg_name(rd)}, \{format_imm(imm.reinterpret_as_int())}(sp)"
     @decode.C_FSDSP(rs2, imm) =>
-      "c.fsdsp \{@decode.freg_name(rs2)}, \{format_imm(imm.reinterpret_as_int())}(sp)"
+      "c.sdsp \{@decode.reg_name(rs2)}, \{format_imm(imm.reinterpret_as_int())}(sp)"
     @decode.C_FLWSP(rd, imm) =>
       "c.flwsp \{@decode.freg_name(rd)}, \{format_imm(imm.reinterpret_as_int())}(sp)"
     @decode.C_FSWSP(rs2, imm) =>
