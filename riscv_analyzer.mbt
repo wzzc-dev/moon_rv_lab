@@ -267,3 +267,34 @@ pub fn print_live_set(set : LiveSet) -> String {
 pub fn print_def_use_chains(chains : FixedArray[DefUseChain]) -> Unit {
   @analysis.print_def_use_chains(chains)
 }
+
+///|
+/// Re-export decompiler module types
+pub type ControlStructure = @analysis.ControlStructure
+
+///|
+pub type ConditionExpr = @analysis.ConditionExpr
+
+///|
+pub type CompareOp = @analysis.CompareOp
+
+///|
+/// Re-export decompiler functions
+pub fn decompile(
+  cfg : CFG,
+  instructions : FixedArray[DecodedInst],
+  symbol_map : Map[UInt, String],
+  string_map : Map[UInt, String],
+) -> String {
+  @analysis.decompile(cfg, instructions, symbol_map, string_map)
+}
+
+///|
+pub fn decompile_function(
+  instructions : FixedArray[DecodedInst],
+  cfg : CFG,
+  symbol_map : Map[UInt, String],
+  string_map : Map[UInt, String],
+) -> String {
+  @analysis.decompile_function(instructions, cfg, symbol_map, string_map)
+}

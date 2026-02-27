@@ -26,7 +26,13 @@ pub fn compute_liveness(CFG, FixedArray[DecodedInst]) -> FixedArray[BlockLivenes
 
 pub fn decode_instructions(FixedArray[Byte], UInt) -> FixedArray[DecodedInst]
 
+pub fn decompile(CFG, FixedArray[DecodedInst], Map[UInt, String], Map[UInt, String]) -> String
+
+pub fn decompile_function(FixedArray[DecodedInst], CFG, Map[UInt, String], Map[UInt, String]) -> String
+
 pub fn find_entry_points(CFG) -> FixedArray[UInt]
+
+pub fn format_hex_uint(UInt) -> String
 
 pub fn get_branch_target(@decode.Instruction) -> Int
 
@@ -52,6 +58,8 @@ pub fn print_live_set(LiveSet) -> String
 
 pub fn reachable_functions(CallGraph) -> FixedArray[UInt]
 
+pub fn uint_to_hex(UInt) -> String
+
 // Errors
 
 // Types and methods
@@ -62,6 +70,20 @@ pub struct BasicBlock {
   is_terminated : Bool
 }
 pub impl Show for BasicBlock
+
+pub enum BinOp {
+  Add
+  Sub
+  And
+  Or
+  Xor
+  Shl
+  Shr
+  Mul
+  Div
+  Mod
+}
+pub impl Show for BinOp
 
 pub struct BlockLiveness {
   block_addr : UInt
@@ -96,6 +118,34 @@ pub struct CallGraphNode {
 }
 pub impl Show for CallGraphNode
 
+pub enum CompareOp {
+  Eq
+  Ne
+  Lt
+  Le
+  Gt
+  Ge
+}
+pub impl Show for CompareOp
+
+pub enum ConditionExpr {
+  Compare(CompareOp, String, String)
+  Single(String)
+  True
+}
+pub impl Show for ConditionExpr
+
+pub enum ControlStructure {
+  Sequence(Array[ControlStructure])
+  IfThenElse(ConditionExpr, ControlStructure, ControlStructure?)
+  WhileLoop(ConditionExpr, ControlStructure)
+  BasicBlock(UInt, UInt, Array[Statement])
+  Call(String)
+  Return
+  Unknown(String)
+}
+pub impl Show for ControlStructure
+
 pub struct DecodedInst {
   addr : UInt
   inst : @decode.Instruction
@@ -103,6 +153,13 @@ pub struct DecodedInst {
   length : Int
 }
 pub impl Show for DecodedInst
+
+pub struct DecompileContext {
+  symbol_map : Map[UInt, String]
+  string_map : Map[UInt, String]
+  reg_values : Map[UInt, RegValue]
+}
+pub impl Show for DecompileContext
 
 pub struct DefUseChain {
   reg : UInt
@@ -173,6 +230,35 @@ pub struct RegOperand {
   role : OperandRole
 }
 pub impl Show for RegOperand
+
+pub enum RegValue {
+  Unknown
+  Constant(Int)
+  StringAddr(String)
+  Address(UInt)
+  Expression(String)
+}
+pub impl Show for RegValue
+
+pub enum StackOpType {
+  Push
+  Pop
+  Adjust
+}
+pub impl Show for StackOpType
+
+pub enum Statement {
+  Assign(String, String)
+  BinOp(String, String, BinOp, String)
+  Load(String, String, String?)
+  Store(String, String, String?)
+  Call(String, Array[String])
+  Return(String?)
+  StackOp(StackOpType, String?, Int)
+  Comment(String)
+  Raw(String)
+}
+pub impl Show for Statement
 
 // Type aliases
 

@@ -430,7 +430,7 @@ fn json_escape(s : String) -> String {
 
 ///|
 /// Convert UInt to hex string (without 0x prefix)
-fn uint_to_hex(value : UInt) -> String {
+pub fn uint_to_hex(value : UInt) -> String {
   if value == 0U {
     "0"
   } else {
@@ -452,7 +452,7 @@ fn uint_to_hex(value : UInt) -> String {
 
 ///|
 /// Format a UInt as hex string
-fn format_hex_uint(value : UInt) -> String {
+pub fn format_hex_uint(value : UInt) -> String {
   "0x" + uint_to_hex(value)
 }
 

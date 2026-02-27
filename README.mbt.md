@@ -16,6 +16,7 @@ A MoonBit library for analyzing RISC-V binaries, providing instruction decoding,
   - Zicsr: CSR instructions
 
 - **Disassembly**: Convert decoded instructions to human-readable assembly
+- **Decompilation**: Convert machine code to structured pseudo-code with register tracking and string recovery
 - **Control Flow Analysis**: Build Control Flow Graphs (CFG) from binary code
 - **Call Graph Analysis**: Analyze function call relationships
 - **Data Flow Analysis**: Def-use chains and liveness analysis
@@ -200,6 +201,12 @@ rv-analyzer cfg program.elf --function main > cfg.dot
 
 # Generate call graph
 rv-analyzer callgraph program.elf > callgraph.dot
+
+# Decompile a function (control flow summary)
+rv-analyzer decompile program.elf --function main
+
+# Decompile with pseudo-code output
+rv-analyzer decompile program.elf --function main --code
 
 # Decode a hex instruction
 rv-analyzer hex 0x007302B3

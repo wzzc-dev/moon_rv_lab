@@ -228,10 +228,12 @@ pub struct ElfFile {
 }
 pub fn ElfFile::entry_point(Self) -> UInt
 pub fn ElfFile::extract_bytes(Self, UInt, UInt) -> FixedArray[Byte]?
+pub fn ElfFile::extract_strings(Self) -> Map[UInt, String]
 pub fn ElfFile::find_section_by_name(Self, String) -> Int
 pub fn ElfFile::find_symbol_by_addr(Self, UInt) -> Symbol?
 pub fn ElfFile::get_code_sections(Self) -> Array[(UInt, FixedArray[Byte])]
 pub fn ElfFile::get_function_symbols(Self) -> Array[Symbol]
+pub fn ElfFile::get_rodata_section(Self) -> FixedArray[Byte]?
 pub fn ElfFile::get_section(Self, Int) -> (UInt, UInt, UInt)?
 pub fn ElfFile::get_section_name(Self, Int) -> String
 pub fn ElfFile::get_symbols(Self) -> Array[Symbol]

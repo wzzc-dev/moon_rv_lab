@@ -931,3 +931,104 @@ pub fn ElfFile::find_section_by_name(self : ElfFile, name : String) -> Int {
   }
   -1
 }
+
+///|
+/// Get .rodata section (read-only data)
+pub fn ElfFile::get_rodata_section(self : ElfFile) -> FixedArray[Byte]? {
+  let idx = self.find_section_by_name(".rodata")
+  if idx < 0 {
+    return None
+  }
+
+  match self.get_section(idx) {
+    Some((addr, offset, size)) => {
+      let off = offset.reinterpret_as_int()
+      let sz = size.reinterpret_as_int()
+      if off + sz <= self.raw_data.length() && sz > 0 {
+        let data : FixedArray[Byte] = FixedArray::make(sz, b'\x00')
+        for i = 0; i < sz; i = i + 1 {
+          data[i] = self.raw_data[off + i]
+        }
+        Some(data)
+      } else {
+        None
+      }
+    }
+    None => None
+  }
+}
+
+///|
+/// Extract string literals from .rodata section
+/// Returns a map of virtual address to string content
+pub fn ElfFile::extract_strings(self : ElfFile) -> Map[UInt, String] {
+  let result : Map[UInt, String] = {}
+
+  // Find .rodata section
+  let idx = self.find_section_by_name(".rodata")
+  if idx < 0 {
+    return result
+  }
+
+  match self.get_section(idx) {
+    Some((vaddr, offset, size)) => {
+      let off = offset.reinterpret_as_int()
+      let sz = size.reinterpret_as_int()
+      if off + sz > self.raw_data.length() || sz <= 0 {
+        return result
+      }
+
+      // Scan for null-terminated strings
+      let mut i = 0
+      while i < sz {
+        // Skip non-printable characters
+        while i < sz {
+          let c = self.raw_data[off + i].to_int()
+          if c >= 32 && c < 127 { // Printable ASCII
+            break
+          }
+          i = i + 1
+        }
+
+        if i >= sz {
+          break
+        }
+
+        // Start of potential string
+        let start = i
+        let str_addr = vaddr + i.reinterpret_as_uint()
+
+        // Collect printable characters
+        let chars : Array[Char] = []
+        while i < sz {
+          let c = self.raw_data[off + i].to_int()
+          if c == 0 { // Null terminator
+            break
+          }
+          if c >= 32 && c < 127 {
+            chars.push(c.unsafe_to_char())
+          } else {
+            // Non-printable in middle, discard this string
+            chars.clear()
+            break
+          }
+          i = i + 1
+        }
+
+        // Save if valid string (at least 2 chars)
+        if chars.length() >= 2 {
+          let mut s = ""
+          for c in chars {
+            s = s + c.to_string()
+          }
+          result[str_addr] = s
+        }
+
+        i = i + 1 // Skip null terminator
+      }
+    }
+    None => ()
+  }
+
+  result
+}

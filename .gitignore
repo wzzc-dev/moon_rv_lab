@@ -9,3 +9,6 @@ example/a.out
 example/log.txt
 example/hello.s
 example/main.dot
+example/out.txt
+.gitignore
+example/output.s

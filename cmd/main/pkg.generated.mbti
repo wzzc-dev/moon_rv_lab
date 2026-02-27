@@ -53,11 +53,19 @@ pub enum Command {
   CallGraph(CallGraphOptions)
   Hex(HexOptions)
   Analyze(AnalyzeOptions)
+  Decompile(DecompileOptions)
   Help
   Version
   Demo
 }
 pub impl Show for Command
+
+pub struct DecompileOptions {
+  file_path : String
+  function : String
+  output : String
+}
+pub impl Show for DecompileOptions
 
 pub struct DisasmOptions {
   file_path : String

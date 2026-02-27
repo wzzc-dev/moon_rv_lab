@@ -26,6 +26,10 @@ pub fn decode_compressed(UInt) -> @decode.DecodeResult
 
 pub fn decode_instructions(FixedArray[Byte], UInt) -> FixedArray[@analysis.DecodedInst]
 
+pub fn decompile(@analysis.CFG, FixedArray[@analysis.DecodedInst], Map[UInt, String], Map[UInt, String]) -> String
+
+pub fn decompile_function(FixedArray[@analysis.DecodedInst], @analysis.CFG, Map[UInt, String], Map[UInt, String]) -> String
+
 pub fn disassemble(@decode.Instruction) -> String
 
 pub fn disassemble_bytes(FixedArray[Byte], UInt) -> String
@@ -82,6 +86,12 @@ pub using @analysis {type CFG}
 pub using @analysis {type CallGraph}
 
 pub using @analysis {type CallGraphNode}
+
+pub using @analysis {type CompareOp}
+
+pub using @analysis {type ConditionExpr}
+
+pub using @analysis {type ControlStructure}
 
 pub using @decode {type DecodeResult}
 

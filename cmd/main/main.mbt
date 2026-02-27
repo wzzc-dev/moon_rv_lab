@@ -32,6 +32,7 @@ pub enum Command {
   CallGraph(CallGraphOptions)
   Hex(HexOptions)
   Analyze(AnalyzeOptions)
+  Decompile(DecompileOptions)
   Help
   Version
   Demo
@@ -95,6 +96,15 @@ pub struct AnalyzeOptions {
   format : OutputFormat
   output : String
   detailed : Bool
+} derive(Show)
+
+///|
+/// Options for decompile command (pseudo-code generation)
+pub struct DecompileOptions {
+  file_path : String
+  function : String // Function name or address (empty for entry point)
+  output : String
+  show_code : Bool // Show pseudo-code (default: false, only show control flow)
 } derive(Show)
 
 ///|
@@ -247,6 +257,7 @@ pub fn parse_args(args : Array[String]) -> Command? {
     "callgraph" | "cg" => parse_callgraph_args(args)
     "hex" => parse_hex_args(args)
     "analyze" => parse_analyze_args(args)
+    "decompile" | "dec" => parse_decompile_args(args)
     _ => None
   }
 }
@@ -576,6 +587,53 @@ fn parse_analyze_args(args : Array[String]) -> Command? {
 }
 
 ///|
+/// Parse decompile command arguments
+fn parse_decompile_args(args : Array[String]) -> Command? {
+  if args.length() < 2 {
+    return None
+  }
+
+  let mut file_path = ""
+  let mut function = ""
+  let mut output = ""
+  let mut show_code = false
+  let mut i = 1
+
+  while i < args.length() {
+    let arg = args[i]
+    if arg == "--function" || arg == "-n" {
+      if i + 1 < args.length() {
+        function = args[i + 1]
+        i = i + 2
+      } else {
+        return None
+      }
+    } else if arg == "--output" || arg == "-o" {
+      if i + 1 < args.length() {
+        output = args[i + 1]
+        i = i + 2
+      } else {
+        return None
+      }
+    } else if arg == "--code" || arg == "-c" {
+      show_code = true
+      i = i + 1
+    } else if arg[0] != '-' {
+      file_path = arg
+      i = i + 1
+    } else {
+      i = i + 1
+    }
+  }
+
+  if file_path == "" {
+    return None
+  }
+
+  Some(Command::Decompile({ file_path, function, output, show_code }))
+}
+
+///|
 /// Print usage information
 fn print_usage() -> Unit {
   println("RISC-V Binary Analyzer v\{VERSION}")
@@ -590,6 +648,7 @@ fn print_usage() -> Unit {
   println("  callgraph <file>        Generate call graph")
   println("  hex <code>              Decode a hex instruction")
   println("  analyze <file>          Comprehensive binary analysis")
+  println("  decompile <file>        Generate pseudo-code from binary")
   println("  demo                    Run demonstration")
   println("  help                    Show this help message")
   println("  version                 Show version information")
@@ -613,6 +672,12 @@ fn print_usage() -> Unit {
   println("Analyze Options:")
   println("  --detailed, -d          Show detailed analysis")
   println("")
+  println("Decompile Options:")
+  println("  --function, -n <name>   Function name or address to decompile")
+  println(
+    "  --code, -c              Show pseudo-code (default: control flow only)",
+  )
+  println("")
   println("Examples:")
   println("  rv-analyzer disasm program.elf")
   println("  rv-analyzer disasm --raw --base 0x8000 firmware.bin")
@@ -622,6 +687,10 @@ fn print_usage() -> Unit {
   println("  rv-analyzer callgraph program.elf -o callgraph.dot")
   println("  rv-analyzer hex 0x123452B7")
   println("  rv-analyzer analyze program.elf --detailed")
+  println("  rv-analyzer decompile program.elf --function main")
+  println(
+    "  rv-analyzer decompile program.elf --function main --code -o pseudo.c",
+  )
 }
 
 ///|
@@ -1450,6 +1519,215 @@ fn escape_json_string(s : String) -> String {
 }
 
 ///|
+/// Execute decompile command
+fn execute_decompile(opts : DecompileOptions) -> Unit {
+  match read_file_bytes(opts.file_path) {
+    Some(bytes) => {
+      if !@format.is_elf(bytes) {
+        println("Error: Not a valid ELF file: \{opts.file_path}")
+        return
+      }
+      match @format.parse_elf(bytes) {
+        Some(elf) => {
+          if !elf.is_riscv() {
+            println("Error: Not a RISC-V ELF file")
+            return
+          }
+          let code_sections = elf.get_code_sections()
+          if code_sections.length() == 0 {
+            println("Error: No executable code sections found")
+            return
+          }
+
+          // Build symbol map for function name lookup
+          let symbol_map : Map[UInt, String] = {}
+          let symbols = elf.get_function_symbols()
+          for sym in symbols {
+            symbol_map[sym.value] = sym.name
+          }
+
+          // Extract string literals from .rodata
+          let string_map = elf.extract_strings()
+
+          // Determine function address to decompile
+          let mut func_addr : UInt = 0U
+          let mut func_name = "entry"
+          let mut func_size = 0U
+
+          if opts.function != "" {
+            // Try to find function by name in symbol table
+            let mut found = false
+            for sym in symbols {
+              if sym.name == opts.function {
+                func_addr = sym.value
+                func_name = sym.name
+                func_size = sym.size
+                found = true
+                break
+              }
+            }
+            // If not found by name, try parsing as hex address
+            if !found {
+              match parse_number(opts.function) {
+                Some(addr) => {
+                  func_addr = addr
+                  func_name = "func_" + format_hex(addr)
+                  // Find size if in symbol table
+                  for sym in symbols {
+                    if sym.value == addr {
+                      func_size = sym.size
+                      func_name = sym.name
+                      break
+                    }
+                  }
+                }
+                None => {
+                  println("Error: Function not found: \{opts.function}")
+                  return
+                }
+              }
+            }
+          } else {
+            // Use entry point
+            func_addr = elf.entry_point()
+            func_name = "_start"
+            // Try to find _start symbol
+            for sym in symbols {
+              if sym.name == "_start" {
+                func_addr = sym.value
+                func_size = sym.size
+                break
+              }
+            }
+          }
+
+          // Find which code section contains this function
+          let mut target_section_idx = -1
+          let mut section_base = 0U
+          for i = 0; i < code_sections.length(); i = i + 1 {
+            let (vaddr, code) = code_sections[i]
+            let end_addr = vaddr + code.length().reinterpret_as_uint()
+            if func_addr >= vaddr && func_addr < end_addr {
+              target_section_idx = i
+              section_base = vaddr
+              break
+            }
+          }
+
+          if target_section_idx < 0 {
+            println(
+              "Error: Function address not in code sections: \{format_hex(func_addr)}",
+            )
+            return
+          }
+
+          // Decode all instructions in the section
+          let (section_vaddr, section_code) = code_sections[target_section_idx]
+          let all_instructions = @analysis.decode_instructions(
+            section_code, section_vaddr,
+          )
+
+          // Extract instructions within function bounds
+          let func_end = if func_size > 0U {
+            func_addr + func_size
+          } else {
+            // Estimate function end by looking for next function or return
+            section_vaddr + section_code.length().reinterpret_as_uint()
+          }
+
+          let func_instructions : Array[@analysis.DecodedInst] = []
+          for inst in all_instructions {
+            if inst.addr >= func_addr && inst.addr < func_end {
+              func_instructions.push(inst)
+            }
+          }
+
+          if func_instructions.length() == 0 {
+            println(
+              "Error: No instructions found for function at \{format_hex(func_addr)}",
+            )
+            return
+          }
+
+          // Build CFG for function
+          let func_cfg = @analysis.build_cfg(
+            FixedArray::from_array(func_instructions),
+            func_addr,
+          )
+
+          // Generate output based on show_code option
+          let mut output = ""
+
+          if opts.show_code {
+            // Generate pseudo-code with enhanced analysis
+            let pseudo_code = @analysis.decompile(
+              func_cfg,
+              FixedArray::from_array(func_instructions),
+              symbol_map,
+              string_map,
+            )
+
+            output = "// Pseudo-code generated by RISC-V Binary Analyzer\n"
+            output = output +
+              "// Function: \{func_name} @ \{format_hex(func_addr)}\n\n"
+            output = output + "void \{func_name}() {\n"
+            output = output + pseudo_code
+            output = output + "}\n"
+          } else {
+            // Generate simplified output (control flow summary)
+            output = "// Function: \{func_name} @ \{format_hex(func_addr)}\n\n"
+            output = output + "// Basic Blocks: \{func_cfg.blocks.length()}\n"
+            output = output + "// Edges: \{func_cfg.edges.length()}\n\n"
+
+            // Show control flow structure
+            for block in func_cfg.blocks {
+              output = output + "Block \{format_hex(block.start_addr)}:\n"
+
+              // Find outgoing edges
+              let outgoing : Array[String] = []
+              for edge in func_cfg.edges {
+                if edge.from_block == block.start_addr {
+                  let edge_desc = match edge.edge_type {
+                    @analysis.Jump => "jump"
+                    @analysis.BranchTaken => "branch (taken)"
+                    @analysis.BranchNotTaken => "branch (not taken)"
+                    @analysis.Call => "call"
+                    @analysis.Return => "return"
+                  }
+                  outgoing.push(
+                    "  -> \{format_hex(edge.to_block)} (" + edge_desc + ")",
+                  )
+                }
+              }
+
+              for desc in outgoing {
+                output = output + desc + "\n"
+              }
+
+              if outgoing.length() > 0 {
+                output = output + "\n"
+              }
+            }
+          }
+
+          if opts.output != "" {
+            if write_output_file(opts.output, output) {
+              println("Pseudo-code written to: \{opts.output}")
+            } else {
+              println("Error: Failed to write output file")
+            }
+          } else {
+            println(output)
+          }
+        }
+        None => println("Error: Failed to parse ELF file")
+      }
+    }
+    None => println("Error: Cannot read file: \{opts.file_path}")
+  }
+}
+
+///|
 /// Execute a parsed command
 pub fn execute(cmd : Command) -> Unit {
   match cmd {
@@ -1463,6 +1741,7 @@ pub fn execute(cmd : Command) -> Unit {
     Command::CallGraph(opts) => execute_callgraph(opts)
     Command::Hex(opts) => execute_hex(opts)
     Command::Analyze(opts) => execute_analyze(opts)
+    Command::Decompile(opts) => execute_decompile(opts)
   }
 }
 
