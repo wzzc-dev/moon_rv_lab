@@ -12,6 +12,8 @@ pub fn build_call_graph(FixedArray[DecodedInst], CFG) -> CallGraph
 
 pub fn build_cfg(FixedArray[DecodedInst], UInt) -> CFG
 
+pub fn build_dominator_tree(CFG) -> DominatorTree
+
 pub fn callgraph_to_dot(CallGraph, String) -> String
 
 pub fn callgraph_to_json(CallGraph) -> String
@@ -30,7 +32,15 @@ pub fn decompile(CFG, FixedArray[DecodedInst], Map[UInt, String], Map[UInt, Stri
 
 pub fn decompile_function(FixedArray[DecodedInst], CFG, Map[UInt, String], Map[UInt, String]) -> String
 
+pub fn decompile_structured(CFG, FixedArray[DecodedInst], Map[UInt, String], Map[UInt, String]) -> String
+
+pub fn detect_loops(CFG, DominatorTree) -> LoopInfo
+
+pub fn extract_condition(@decode.Instruction) -> ConditionExpr
+
 pub fn find_entry_points(CFG) -> FixedArray[UInt]
+
+pub fn format_control_structure(ControlStructure, Int) -> String
 
 pub fn format_hex_uint(UInt) -> String
 
@@ -48,6 +58,8 @@ pub fn is_terminator(@decode.Instruction) -> Bool
 
 pub fn is_unconditional_jump(@decode.Instruction) -> Bool
 
+pub fn negate_condition(ConditionExpr) -> ConditionExpr
+
 pub fn print_call_graph(CallGraph) -> Unit
 
 pub fn print_cfg(CFG) -> Unit
@@ -57,6 +69,8 @@ pub fn print_def_use_chains(FixedArray[DefUseChain]) -> Unit
 pub fn print_live_set(LiveSet) -> String
 
 pub fn reachable_functions(CallGraph) -> FixedArray[UInt]
+
+pub fn structure_cfg(CFG, FixedArray[DecodedInst]) -> StructuredCFG
 
 pub fn uint_to_hex(UInt) -> String
 
@@ -125,13 +139,20 @@ pub enum CompareOp {
   Le
   Gt
   Ge
+  Ltu
+  Geu
 }
+pub impl Eq for CompareOp
 pub impl Show for CompareOp
 
 pub enum ConditionExpr {
   Compare(CompareOp, String, String)
   Single(String)
   True
+  False
+  Not(ConditionExpr)
+  And(ConditionExpr, ConditionExpr)
+  Or(ConditionExpr, ConditionExpr)
 }
 pub impl Show for ConditionExpr
 
@@ -139,10 +160,16 @@ pub enum ControlStructure {
   Sequence(Array[ControlStructure])
   IfThenElse(ConditionExpr, ControlStructure, ControlStructure?)
   WhileLoop(ConditionExpr, ControlStructure)
+  DoWhileLoop(ConditionExpr, ControlStructure)
+  ForLoop(ForInit, ConditionExpr, ForUpdate, ControlStructure)
+  Switch(String, Array[SwitchCase], ControlStructure?)
   BasicBlock(UInt, UInt, Array[Statement])
   Call(String)
-  Return
+  Return(String?)
+  Break
+  Continue
   Unknown(String)
+  Empty
 }
 pub impl Show for ControlStructure
 
@@ -178,6 +205,14 @@ pub struct DefUseEntry {
 }
 pub impl Show for DefUseEntry
 
+pub struct DominatorTree {
+  idom : Map[UInt, UInt]
+  dom_children : Map[UInt, Array[UInt]]
+  dom_frontier : Map[UInt, Array[UInt]]
+  post_idom : Map[UInt, UInt]
+}
+pub impl Show for DominatorTree
+
 pub struct Edge {
   from_block : UInt
   to_block : UInt
@@ -194,6 +229,21 @@ pub enum EdgeType {
 }
 pub impl Eq for EdgeType
 pub impl Show for EdgeType
+
+pub enum ForInit {
+  VarDecl(String, String, String)
+  Assign(String, String)
+  None
+}
+pub impl Eq for ForInit
+pub impl Show for ForInit
+
+pub enum ForUpdate {
+  Expr(Statement)
+  Multi(Array[Statement])
+  None
+}
+pub impl Show for ForUpdate
 
 pub struct InstOperands {
   operands : FixedArray[RegOperand]
@@ -215,6 +265,33 @@ pub fn LiveSet::remove_int(Self, UInt) -> Self
 pub fn LiveSet::union(Self, Self) -> Self
 pub impl Eq for LiveSet
 pub impl Show for LiveSet
+
+pub struct LoopInfo {
+  loops : Array[NaturalLoop]
+  block_to_loops : Map[UInt, Array[Int]]
+  max_depth : Int
+}
+pub impl Show for LoopInfo
+
+pub enum LoopType {
+  While
+  DoWhile
+  For
+  Infinite
+  Unknown
+}
+pub impl Eq for LoopType
+pub impl Show for LoopType
+
+pub struct NaturalLoop {
+  header : UInt
+  back_edges : Array[UInt]
+  body : Array[UInt]
+  depth : Int
+  parent : UInt?
+  loop_type : LoopType
+}
+pub impl Show for NaturalLoop
 
 pub enum OperandRole {
   Use
@@ -257,8 +334,28 @@ pub enum Statement {
   StackOp(StackOpType, String?, Int)
   Comment(String)
   Raw(String)
+  VarDecl(String, String, String)
+  Break
+  Continue
+  Label(String)
+  Goto(String)
 }
 pub impl Show for Statement
+
+pub struct StructuredCFG {
+  cfg : CFG
+  dom_tree : DominatorTree
+  loop_info : LoopInfo
+  structure : ControlStructure
+}
+pub impl Show for StructuredCFG
+
+pub struct SwitchCase {
+  values : Array[Int]
+  body : ControlStructure
+  fallthrough : Bool
+}
+pub impl Show for SwitchCase
 
 // Type aliases
 

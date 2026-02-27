@@ -394,3 +394,115 @@ test "call_graph_called_by" {
     assert_true(node.called_by.length() >= 0)
   }
 }
+
+///|
+test "build_dominator_tree_empty" {
+  let bytes : FixedArray[Byte] = FixedArray::make(0, b'\x00')
+  let instructions = decode_instructions(bytes, 0U)
+  let cfg = build_cfg(instructions, 0U)
+  let dom_tree = build_dominator_tree(cfg)
+
+  // Empty CFG should have empty dominator tree
+  inspect(dom_tree.idom.length(), content="0")
+}
+
+///|
+test "build_dominator_tree_single_block" {
+  // Single block with no branches
+  let addi_bytes = make_u32_bytes(0x06400293U) // ADDI x5, x0, 100
+  let add_bytes = make_u32_bytes(0x006282B3U) // ADD x5, x5, x6
+  let bytes = concat_bytes([addi_bytes, add_bytes])
+
+  let instructions = decode_instructions(bytes, 0U)
+  let cfg = build_cfg(instructions, 0U)
+  let dom_tree = build_dominator_tree(cfg)
+
+  // Entry block dominates itself
+  assert_true(dom_tree.idom.contains(0U))
+}
+
+///|
+test "build_dominator_tree_with_branch" {
+  // BEQ x1, x2, 8
+  // This creates two paths
+  let beq_bytes = make_u32_bytes(0x00208463U)
+  let bytes = beq_bytes
+
+  let instructions = decode_instructions(bytes, 0U)
+  let cfg = build_cfg(instructions, 0U)
+  let dom_tree = build_dominator_tree(cfg)
+
+  // Entry block should dominate itself
+  assert_true(dom_tree.idom.contains(0U))
+}
+
+///|
+test "detect_loops_no_loop" {
+  // Simple sequence without loops
+  let addi_bytes = make_u32_bytes(0x06400293U) // ADDI x5, x0, 100
+  let ret_bytes = make_u32_bytes(0x00008067U) // JALR x0, ra, 0 (ret)
+  let bytes = concat_bytes([addi_bytes, ret_bytes])
+
+  let instructions = decode_instructions(bytes, 0U)
+  let cfg = build_cfg(instructions, 0U)
+  let dom_tree = build_dominator_tree(cfg)
+  let loop_info = detect_loops(cfg, dom_tree)
+
+  // Should have no loops
+  inspect(loop_info.loops.length(), content="0")
+}
+
+///|
+test "extract_condition_beq" {
+  // BEQ x1, x2, 8
+  let code = 0x00208463U
+  let @decode.DecodeResult(inst) = @decode.decode(code)
+  let cond = extract_condition(inst)
+
+  match cond {
+    ConditionExpr::Compare(CompareOp::Eq, left, right) => {
+      inspect(left, content="ra")
+      inspect(right, content="sp")
+    }
+    _ => assert_true(false) // Should not reach here
+  }
+}
+
+///|
+test "extract_condition_bne" {
+  // BNE x1, x2, 8
+  let code = 0x00209463U
+  let @decode.DecodeResult(inst) = @decode.decode(code)
+  let cond = extract_condition(inst)
+
+  match cond {
+    ConditionExpr::Compare(CompareOp::Ne, _, _) => ()
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "extract_condition_blt" {
+  // BLT x1, x2, 8
+  let code = 0x0020C463U
+  let @decode.DecodeResult(inst) = @decode.decode(code)
+  let cond = extract_condition(inst)
+
+  match cond {
+    ConditionExpr::Compare(CompareOp::Lt, _, _) => ()
+    _ => assert_true(false)
+  }
+}
+
+///|
+test "extract_condition_bge" {
+  // BGE x1, x2, 8
+  let code = 0x0020D463U
+  let @decode.DecodeResult(inst) = @decode.decode(code)
+  let cond = extract_condition(inst)
+
+  match cond {
+    ConditionExpr::Compare(CompareOp::Ge, _, _) => ()
+    _ => assert_true(false)
+  }
+}

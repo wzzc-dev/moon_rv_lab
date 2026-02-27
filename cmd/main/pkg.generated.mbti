@@ -64,6 +64,7 @@ pub struct DecompileOptions {
   file_path : String
   function : String
   output : String
+  show_code : Bool
 }
 pub impl Show for DecompileOptions
 
