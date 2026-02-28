@@ -6084,3 +6084,550 @@ pub fn format_interval_state(state : IntervalState) -> String {
   }
   result
 }
+
+// ============================================================================
+// Interprocedural Analysis (过程间分析)
+// ============================================================================
+
+///|
+/// Effect on a global variable
+pub enum GlobalEffect {
+  /// Read from global
+  Read(UInt) // address
+  /// Write to global
+  Write(UInt) // address
+  /// Read and write
+  ReadWrite(UInt) // address
+  /// Address taken (may be accessed indirectly)
+  AddressTaken(UInt)
+} derive(Show, Eq)
+
+///|
+/// Function summary for interprocedural analysis
+pub struct FunctionSummary {
+  /// Function start address
+  addr : UInt
+  /// Function name (if known)
+  name : String
+  /// Parameter registers used (a0-a7, fa0-fa7)
+  params : FixedArray[ParamInfo]
+  /// Return value info
+  return_info : ReturnInfo
+  /// Global variable effects
+  global_effects : FixedArray[GlobalEffect]
+  /// Functions called by this function
+  calls : FixedArray[UInt]
+  /// Whether this function has indirect calls
+  has_indirect_call : Bool
+  /// Whether this function is a leaf (no calls)
+  is_leaf : Bool
+  /// Stack frame size (if determinable)
+  stack_size : Int?
+  /// Saved registers
+  saved_regs : FixedArray[UInt]
+  /// Modified registers (excluding saved regs)
+  modified_regs : FixedArray[UInt]
+  /// Summary confidence (0-100)
+  confidence : Int
+} derive(Show)
+
+///|
+/// Parameter information
+pub struct ParamInfo {
+  /// Register number (10-17 for a0-a7, 32-39 for fa0-fa7)
+  reg : UInt
+  /// Parameter index
+  index : Int
+  /// Inferred type
+  typ : VarType
+  /// Whether this parameter is used
+  is_used : Bool
+  /// Interval constraints on this parameter
+  interval : Interval
+} derive(Show)
+
+///|
+/// Return value information
+pub struct ReturnInfo {
+  /// Return register (a0 for int, fa0 for float)
+  reg : UInt?
+  /// Return type
+  typ : VarType
+  /// Return interval (for integer returns)
+  interval : Interval
+  /// Whether function returns a value
+  has_return : Bool
+  /// Whether function returns through memory
+  memory_return : Bool
+} derive(Show)
+
+///|
+/// Call site information for interprocedural analysis
+pub struct CallSite {
+  /// Address of call instruction
+  addr : UInt
+  /// Target function address (None for indirect calls)
+  target : UInt?
+  /// Argument values at call site
+  args : FixedArray[ArgValue]
+  /// Return address (address after call)
+  return_addr : UInt
+  /// Caller's state before call
+  caller_state : IntervalState
+} derive(Show)
+
+///|
+/// Argument value at call site
+pub struct ArgValue {
+  /// Argument register
+  reg : UInt
+  /// Argument value (interval)
+  value : Interval
+  /// Argument index
+  index : Int
+} derive(Show)
+
+///|
+/// Interprocedural analysis context
+pub struct InterproceduralContext {
+  /// Function summaries indexed by function address
+  summaries : FixedArray[(UInt, FunctionSummary)]
+  /// Call graph edges (caller -> callees)
+  call_graph : FixedArray[(UInt, FixedArray[UInt])]
+  /// Global variable assignments
+  globals : FixedArray[GlobalVarInfo]
+  /// Analysis iteration count
+  iteration : Int
+} derive(Show)
+
+///|
+/// Global variable information
+pub struct GlobalVarInfo {
+  /// Address of global variable
+  addr : UInt
+  /// Size in bytes
+  size : Int
+  /// Name (if available from symbol table)
+  name : String
+  /// Initial value interval
+  initial_value : Interval
+  /// Functions that read this global
+  readers : FixedArray[UInt]
+  /// Functions that write this global
+  writers : FixedArray[UInt]
+} derive(Show)
+
+///|
+/// Create empty function summary
+pub fn FunctionSummary::empty(addr : UInt) -> FunctionSummary {
+  FunctionSummary::{
+    addr,
+    name: "sub_" + format_hex_uint(addr),
+    params: FixedArray::from_array([]),
+    return_info: ReturnInfo::{
+      reg: None,
+      typ: VarType::Unknown,
+      interval: Interval::full(),
+      has_return: false,
+      memory_return: false,
+    },
+    global_effects: FixedArray::from_array([]),
+    calls: FixedArray::from_array([]),
+    has_indirect_call: false,
+    is_leaf: true,
+    stack_size: None,
+    saved_regs: FixedArray::from_array([]),
+    modified_regs: FixedArray::from_array([]),
+    confidence: 0,
+  }
+}
+
+///|
+/// Analyze a function to build its summary
+pub fn analyze_function_summary(
+  instructions : FixedArray[DecodedInst],
+  cfg : CFG,
+  func_addr : UInt,
+  func_name : String?,
+) -> FunctionSummary {
+  let params : Array[ParamInfo] = []
+  let mut return_reg : UInt? = None
+  let return_interval = Interval::full()
+  let mut has_return = false
+  let global_effects : Array[GlobalEffect] = []
+  let calls : Array[UInt] = []
+  let mut has_indirect_call = false
+  let mut is_leaf = true
+  let mut stack_size : Int? = None
+  let saved_regs : Array[UInt] = []
+  let modified_regs : Array[UInt] = []
+  let mut ra_saved = false
+  ignore(ra_saved) // Will be used in future enhancements
+  let frame_setup_detected = false
+  ignore(frame_setup_detected) // Will be used in future enhancements
+
+  // Track which argument registers are used
+  let arg_regs_used : Array[Bool] = []
+  // Note: We'll track arg usage through operand analysis below
+
+  // Analyze each instruction
+  for inst_info in instructions {
+    ignore(inst_info.addr)
+
+    match inst_info.inst {
+      // Stack frame setup
+      @decode.ADDI(2U, 2U, imm) =>
+        if imm < 0 {
+          // addi sp, sp, -imm (allocating stack)
+          stack_size = Some(-imm)
+        }
+      @decode.ADDI(8U, 2U, 0) =>
+        // addi fp, sp, 0 (setting frame pointer)
+        ()
+
+      // Save return address
+      @decode.SD(1U, 2U, _off) | @decode.SW(1U, 2U, _off) => ra_saved = true
+
+      // Function calls
+      @decode.JAL(1U, _target) =>
+        // target is Int (signed offset), would need conversion for address
+        is_leaf = false
+      @decode.JALR(1U, _rs1, _off) => {
+        // Indirect call (via function pointer)
+        has_indirect_call = true
+        is_leaf = false
+      }
+      @decode.C_JAL(_target) => is_leaf = false
+
+      // Return handling - check what's in a0
+      @decode.JALR(0U, 1U, 0) | @decode.C_JR(1U) => {
+        // Return instruction - a0 contains return value
+        has_return = true
+        return_reg = Some(10U) // a0
+      }
+
+      // Memory operations - potential global access
+      @decode.LB(_, _, _)
+      | @decode.LH(_, _, _)
+      | @decode.LW(_, _, _)
+      | @decode.LD(_, _, _)
+      | @decode.LBU(_, _, _)
+      | @decode.LHU(_, _, _)
+      | @decode.LWU(_, _, _) =>
+        // Check if loading from global (rs1 could be address from LUI/AUIPC)
+        ()
+      @decode.SB(_, _, _)
+      | @decode.SH(_, _, _)
+      | @decode.SW(_, _, _)
+      | @decode.SD(_, _, _) =>
+        // Store to potential global
+        ()
+      _ => ()
+    }
+  }
+
+  let name = match func_name {
+    Some(n) => n
+    None => "sub_" + format_hex_uint(func_addr)
+  }
+
+  FunctionSummary::{
+    addr: func_addr,
+    name,
+    params: FixedArray::from_array(params),
+    return_info: ReturnInfo::{
+      reg: return_reg,
+      typ: VarType::Unknown,
+      interval: return_interval,
+      has_return,
+      memory_return: false,
+    },
+    global_effects: FixedArray::from_array(global_effects),
+    calls: FixedArray::from_array(calls),
+    has_indirect_call,
+    is_leaf,
+    stack_size,
+    saved_regs: FixedArray::from_array(saved_regs),
+    modified_regs: FixedArray::from_array(modified_regs),
+    confidence: 80, // Base confidence
+  }
+}
+
+///|
+/// Propagate argument values to callee
+pub fn propagate_args_to_callee(
+  caller_state : IntervalState,
+  summary : FunctionSummary,
+) -> IntervalState {
+  let mut callee_state = IntervalState::new()
+
+  // Copy argument values to callee's parameter positions
+  for param in summary.params {
+    let arg_value = caller_state.get_int(param.reg)
+    callee_state = callee_state.set_int(param.reg, arg_value)
+  }
+
+  callee_state
+}
+
+///|
+/// Propagate return value from callee to caller
+pub fn propagate_return_to_caller(
+  caller_state : IntervalState,
+  callee_summary : FunctionSummary,
+) -> IntervalState {
+  let mut new_state = caller_state
+
+  // If callee returns a value, update caller's a0
+  if callee_summary.return_info.has_return {
+    match callee_summary.return_info.reg {
+      Some(reg) =>
+        new_state = new_state.set_int(reg, callee_summary.return_info.interval)
+      None => ()
+    }
+  }
+
+  // Mark modified registers as potentially changed
+  for reg in callee_summary.modified_regs {
+    // Check if it's a caller-saved register that wasn't saved
+    let is_caller_saved = (reg >= 10U && reg <= 17U) || // a0-a7
+      (reg >= 5U && reg <= 7U) // t0-t2
+
+    if is_caller_saved {
+      // Clear the value since it might be clobbered
+      new_state = new_state.set_int(reg, Interval::full())
+    }
+  }
+
+  new_state
+}
+
+///|
+/// Build interprocedural context from call graph
+pub fn build_interprocedural_context(
+  functions : FixedArray[(UInt, FixedArray[DecodedInst], CFG, String?)],
+) -> InterproceduralContext {
+  let summaries : Array[(UInt, FunctionSummary)] = []
+  let call_edges : Array[(UInt, FixedArray[UInt])] = []
+  let globals : Array[GlobalVarInfo] = []
+
+  // First pass: build summaries for each function
+  for i = 0; i < functions.length(); i = i + 1 {
+    let tuple = functions[i]
+    let addr = tuple.0
+    let instructions = tuple.1
+    let cfg = tuple.2
+    let name = tuple.3
+    let summary = analyze_function_summary(instructions, cfg, addr, name)
+    ignore(summary)
+    // Record call edges - simplified for now
+    ()
+  }
+
+  // Second pass: resolve indirect calls and propagate information
+  // (This would require more complex analysis)
+
+  InterproceduralContext::{
+    summaries: FixedArray::from_array(summaries),
+    call_graph: FixedArray::from_array(call_edges),
+    globals: FixedArray::from_array(globals),
+    iteration: 0,
+  }
+}
+
+///|
+/// Get function summary by address
+pub fn get_function_summary(
+  ctx : InterproceduralContext,
+  addr : UInt,
+) -> FunctionSummary? {
+  for i = 0; i < ctx.summaries.length(); i = i + 1 {
+    let tuple = ctx.summaries[i]
+    if tuple.0 == addr {
+      return Some(tuple.1)
+    }
+  }
+  None
+}
+
+///|
+/// Analyze call graph for topological order
+pub fn compute_call_graph_order(
+  ctx : InterproceduralContext,
+) -> FixedArray[UInt] {
+  let order : Array[UInt] = []
+  let visited : Array[UInt] = []
+
+  // Simple reverse topological order using DFS
+  fn visit(
+    addr : UInt,
+    ctx : InterproceduralContext,
+    visited : Array[UInt],
+    order : Array[UInt],
+  ) -> Unit {
+    // Check if already visited
+    for v in visited {
+      if v == addr {
+        return
+      }
+    }
+    visited.push(addr)
+
+    // Visit callees first
+    match get_function_summary(ctx, addr) {
+      Some(summary) =>
+        for target in summary.calls {
+          visit(target, ctx, visited, order)
+        }
+      None => ()
+    }
+
+    order.push(addr)
+  }
+
+  // Visit all functions
+  for i = 0; i < ctx.summaries.length(); i = i + 1 {
+    let tuple = ctx.summaries[i]
+    visit(tuple.0, ctx, visited, order)
+  }
+
+  FixedArray::from_array(order)
+}
+
+///|
+/// Perform interprocedural interval analysis
+pub fn compute_interprocedural_intervals(
+  functions : FixedArray[(UInt, FixedArray[DecodedInst], CFG, String?)],
+  max_iterations : Int,
+) -> InterproceduralContext {
+  let ctx = build_interprocedural_context(functions)
+
+  // Iterate until fixpoint
+  for iter = 0; iter < max_iterations; iter = iter + 1 {
+    let changed = false
+
+    // Process functions in reverse topological order
+    let order = compute_call_graph_order(ctx)
+
+    for addr in order {
+      // Find function in input
+      for i = 0; i < functions.length(); i = i + 1 {
+        let tuple = functions[i]
+        if tuple.0 == addr {
+          // Get current summary
+          match get_function_summary(ctx, addr) {
+            Some(_summary) => {
+              // Compute intraprocedural analysis with current context
+              let _block_states = compute_interval_analysis(tuple.2, tuple.1)
+              // Update summary based on analysis results
+              // (simplified - would need more complex merging)
+              ()
+            }
+            None => ()
+          }
+        }
+      }
+    }
+
+    if !changed {
+      break
+    }
+  }
+
+  ctx
+}
+
+///|
+/// Format function summary
+pub fn format_function_summary(summary : FunctionSummary) -> String {
+  let mut result = "Function: " +
+    summary.name +
+    " @ " +
+    format_hex_uint(summary.addr) +
+    "\n"
+
+  result = result +
+    "  Parameters: " +
+    summary.params.length().to_string() +
+    "\n"
+  for param in summary.params {
+    result = result +
+      "    a" +
+      param.index.to_string() +
+      ": " +
+      format_interval(param.interval) +
+      "\n"
+  }
+
+  result = result + "  Returns: "
+  if summary.return_info.has_return {
+    result = result +
+      "a0 = " +
+      format_interval(summary.return_info.interval) +
+      "\n"
+  } else {
+    result = result + "void\n"
+  }
+
+  result = result + "  Stack size: "
+  match summary.stack_size {
+    Some(size) => result = result + size.to_string() + " bytes\n"
+    None => result = result + "unknown\n"
+  }
+
+  result = result + "  Is leaf: " + summary.is_leaf.to_string() + "\n"
+  result = result +
+    "  Has indirect call: " +
+    summary.has_indirect_call.to_string() +
+    "\n"
+
+  if summary.calls.length() > 0 {
+    result = result + "  Calls:\n"
+    for target in summary.calls {
+      result = result + "    " + format_hex_uint(target) + "\n"
+    }
+  }
+
+  result = result + "  Saved regs: "
+  for reg in summary.saved_regs {
+    result = result + @decode.reg_name(reg) + " "
+  }
+  result = result + "\n"
+
+  result = result + "  Modified regs: "
+  for reg in summary.modified_regs {
+    result = result + @decode.reg_name(reg) + " "
+  }
+  result = result + "\n"
+
+  result = result + "  Confidence: " + summary.confidence.to_string() + "%\n"
+
+  result
+}
+
+///|
+/// Format interprocedural context
+pub fn format_interprocedural_context(ctx : InterproceduralContext) -> String {
+  let mut result = "=== Interprocedural Analysis Results ===\n\n"
+
+  result = result +
+    "Functions analyzed: " +
+    ctx.summaries.length().to_string() +
+    "\n"
+  result = result +
+    "Call graph edges: " +
+    ctx.call_graph.length().to_string() +
+    "\n"
+  result = result +
+    "Globals tracked: " +
+    ctx.globals.length().to_string() +
+    "\n"
+  result = result + "Iterations: " + ctx.iteration.to_string() + "\n\n"
+
+  for i = 0; i < ctx.summaries.length(); i = i + 1 {
+    let tuple = ctx.summaries[i]
+    result = result + format_function_summary(tuple.1) + "\n"
+  }
+
+  result
+}

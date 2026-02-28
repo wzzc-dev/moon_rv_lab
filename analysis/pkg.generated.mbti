@@ -8,6 +8,8 @@ import {
 // Values
 pub fn analyze_code(FixedArray[Byte], UInt) -> CFG
 
+pub fn analyze_function_summary(FixedArray[DecodedInst], CFG, UInt, String?) -> FunctionSummary
+
 pub fn analyze_indirect_jumps(FixedArray[DecodedInst], FixedArray[Byte], UInt, UInt) -> IndirectJumpInfo
 
 pub fn analyze_pointer_source(FixedArray[DecodedInst], Int, UInt) -> PointerSource
@@ -22,6 +24,8 @@ pub fn build_dominator_tree(CFG) -> DominatorTree
 
 pub fn build_enhanced_dom_tree(CFG) -> EnhancedDomTree
 
+pub fn build_interprocedural_context(FixedArray[(UInt, FixedArray[DecodedInst], CFG, String?)]) -> InterproceduralContext
+
 pub fn build_post_dominator_tree(CFG) -> DominatorTree
 
 pub fn callgraph_to_dot(CallGraph, String) -> String
@@ -34,11 +38,15 @@ pub fn cfg_to_json(CFG) -> String
 
 pub fn check_array_bounds(Interval, Int) -> Bool
 
+pub fn compute_call_graph_order(InterproceduralContext) -> FixedArray[UInt]
+
 pub fn compute_conditional_constant_propagation(CFG, FixedArray[DecodedInst]) -> ConditionalConstInfo
 
 pub fn compute_constant_propagation(CFG, FixedArray[DecodedInst]) -> FixedArray[BlockConstState]
 
 pub fn compute_def_use_chains(FixedArray[DecodedInst]) -> FixedArray[DefUseChain]
+
+pub fn compute_interprocedural_intervals(FixedArray[(UInt, FixedArray[DecodedInst], CFG, String?)], Int) -> InterproceduralContext
 
 pub fn compute_interval_analysis(CFG, FixedArray[DecodedInst]) -> FixedArray[BlockIntervalState]
 
@@ -92,9 +100,13 @@ pub fn format_enhanced_dom_tree(EnhancedDomTree) -> String
 
 pub fn format_function_signature(FunctionSignature) -> String
 
+pub fn format_function_summary(FunctionSummary) -> String
+
 pub fn format_hex_uint(UInt) -> String
 
 pub fn format_indirect_call(IndirectCall) -> String
+
+pub fn format_interprocedural_context(InterproceduralContext) -> String
 
 pub fn format_interval(Interval) -> String
 
@@ -113,6 +125,8 @@ pub fn format_unreachable_blocks(FixedArray[UInt]) -> String
 pub fn get_branch_target(@decode.Instruction) -> Int
 
 pub fn get_const_at_point(FixedArray[BlockConstState], CFG, FixedArray[DecodedInst], UInt, UInt) -> ConstValue
+
+pub fn get_function_summary(InterproceduralContext, UInt) -> FunctionSummary?
 
 pub fn get_operands(@decode.Instruction) -> InstOperands
 
@@ -150,9 +164,13 @@ pub fn print_def_use_chains(FixedArray[DefUseChain]) -> Unit
 
 pub fn print_live_set(LiveSet) -> String
 
+pub fn propagate_args_to_callee(IntervalState, FunctionSummary) -> IntervalState
+
 pub fn propagate_instruction(ConstState, @decode.Instruction, UInt) -> ConstState
 
 pub fn propagate_interval(IntervalState, @decode.Instruction, UInt) -> IntervalState
+
+pub fn propagate_return_to_caller(IntervalState, FunctionSummary) -> IntervalState
 
 pub fn reachable_functions(CallGraph) -> FixedArray[UInt]
 
@@ -167,6 +185,13 @@ pub fn uint_to_hex(UInt) -> String
 // Errors
 
 // Types and methods
+pub struct ArgValue {
+  reg : UInt
+  value : Interval
+  index : Int
+}
+pub impl Show for ArgValue
+
 pub struct BasicBlock {
   start_addr : UInt
   end_addr : UInt
@@ -238,6 +263,15 @@ pub struct CallGraphNode {
   called_by : FixedArray[UInt]
 }
 pub impl Show for CallGraphNode
+
+pub struct CallSite {
+  addr : UInt
+  target : UInt?
+  args : FixedArray[ArgValue]
+  return_addr : UInt
+  caller_state : IntervalState
+}
+pub impl Show for CallSite
 
 pub enum CompareOp {
   Eq
@@ -396,6 +430,42 @@ pub struct FunctionSignature {
 }
 pub impl Show for FunctionSignature
 
+pub struct FunctionSummary {
+  addr : UInt
+  name : String
+  params : FixedArray[ParamInfo]
+  return_info : ReturnInfo
+  global_effects : FixedArray[GlobalEffect]
+  calls : FixedArray[UInt]
+  has_indirect_call : Bool
+  is_leaf : Bool
+  stack_size : Int?
+  saved_regs : FixedArray[UInt]
+  modified_regs : FixedArray[UInt]
+  confidence : Int
+}
+pub fn FunctionSummary::empty(UInt) -> Self
+pub impl Show for FunctionSummary
+
+pub enum GlobalEffect {
+  Read(UInt)
+  Write(UInt)
+  ReadWrite(UInt)
+  AddressTaken(UInt)
+}
+pub impl Eq for GlobalEffect
+pub impl Show for GlobalEffect
+
+pub struct GlobalVarInfo {
+  addr : UInt
+  size : Int
+  name : String
+  initial_value : Interval
+  readers : FixedArray[UInt]
+  writers : FixedArray[UInt]
+}
+pub impl Show for GlobalVarInfo
+
 pub struct IndirectCall {
   addr : UInt
   reg : UInt
@@ -415,6 +485,14 @@ pub struct InstOperands {
   operands : FixedArray[RegOperand]
 }
 pub impl Show for InstOperands
+
+pub struct InterproceduralContext {
+  summaries : FixedArray[(UInt, FunctionSummary)]
+  call_graph : FixedArray[(UInt, FixedArray[UInt])]
+  globals : FixedArray[GlobalVarInfo]
+  iteration : Int
+}
+pub impl Show for InterproceduralContext
 
 pub struct Interval {
   lower : IntervalBound
@@ -558,6 +636,15 @@ pub struct Param {
 }
 pub impl Show for Param
 
+pub struct ParamInfo {
+  reg : UInt
+  index : Int
+  typ : VarType
+  is_used : Bool
+  interval : Interval
+}
+pub impl Show for ParamInfo
+
 pub enum PointerSource {
   Global(UInt)
   VTable(UInt, Int)
@@ -584,6 +671,15 @@ pub enum RegValue {
   Expression(String)
 }
 pub impl Show for RegValue
+
+pub struct ReturnInfo {
+  reg : UInt?
+  typ : VarType
+  interval : Interval
+  has_return : Bool
+  memory_return : Bool
+}
+pub impl Show for ReturnInfo
 
 pub struct StackFrame {
   size : Int
