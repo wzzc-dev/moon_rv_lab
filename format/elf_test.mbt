@@ -449,3 +449,146 @@ test "is_elf_too_short_for_class" {
   enough_for_class[4] = b'\x00' // Invalid class
   inspect(get_elf_class(enough_for_class), content="Unknown")
 }
+
+///|
+/// Test parse_elf with truncated header
+test "parse_elf_truncated_header" {
+  // Create bytes that are too short for ELF32 header (52 bytes)
+  let short : FixedArray[Byte] = FixedArray::make(30, b'\x00')
+  short[0] = b'\x7f'
+  short[1] = b'E'
+  short[2] = b'L'
+  short[3] = b'F'
+  short[4] = b'\x01' // 32-bit
+
+  let result = parse_elf(short)
+  inspect(result, content="None")
+}
+
+///|
+/// Test parse_elf with corrupted program header offset
+test "parse_elf_bad_phoff" {
+  let bytes = make_minimal_elf32_header()
+  // Set program header offset beyond file size
+  bytes[28] = 0xFFU.to_byte()
+  bytes[29] = 0xFFU.to_byte()
+  bytes[30] = 0xFFU.to_byte()
+  bytes[31] = 0xFFU.to_byte()
+  // Set e_phnum to 1
+  bytes[44] = 0x01U.to_byte()
+
+  // Should still parse the header, but fail on program headers
+  match parse_elf(bytes) {
+    Some(elf) =>
+      // Should have parsed the header
+      assert_true(elf.is_riscv())
+    None => inspect("failed", content="should_not_fail")
+  }
+}
+
+///|
+/// Test parse_elf with big endian (may or may not be supported)
+test "parse_elf_big_endian" {
+  let bytes : FixedArray[Byte] = FixedArray::make(64, b'\x00')
+  bytes[0] = b'\x7f'
+  bytes[1] = b'E'
+  bytes[2] = b'L'
+  bytes[3] = b'F'
+  bytes[4] = b'\x01' // 32-bit
+  bytes[5] = b'\x02' // Big endian
+
+  // Big endian may be parsed, but values will be interpreted differently
+  // The parser should handle it gracefully
+  match parse_elf(bytes) {
+    Some(elf) =>
+      // Parser accepted it (values may be wrong due to endianness)
+      assert_false(elf.is_64bit)
+    None =>
+      // Or it may be rejected - either is acceptable
+      ignore(())
+  }
+}
+
+///|
+/// Test get_function_symbols with empty symbol table
+test "elf_get_function_symbols_empty" {
+  let bytes = make_minimal_elf32_header()
+
+  match parse_elf(bytes) {
+    Some(elf) => {
+      let funcs = elf.get_function_symbols()
+      inspect(funcs.length(), content="0")
+    }
+    None => inspect("failed", content="should_not_fail")
+  }
+}
+
+///|
+/// Test get_symbols with no symbol table
+test "elf_get_symbols_empty" {
+  let bytes = make_minimal_elf32_header()
+
+  match parse_elf(bytes) {
+    Some(elf) => {
+      let symbols = elf.get_symbols()
+      inspect(symbols.length(), content="0")
+    }
+    None => inspect("failed", content="should_not_fail")
+  }
+}
+
+///|
+/// Test get_section_name with invalid index
+test "elf_get_section_name_invalid" {
+  let bytes = make_minimal_elf32_header()
+
+  match parse_elf(bytes) {
+    Some(elf) => {
+      let name = elf.get_section_name(0)
+      inspect(name, content="")
+    }
+    None => inspect("failed", content="should_not_fail")
+  }
+}
+
+///|
+/// Test find_section_by_name when no sections exist
+test "elf_find_section_by_name_empty" {
+  let bytes = make_minimal_elf32_header()
+
+  match parse_elf(bytes) {
+    Some(elf) => {
+      let idx = elf.find_section_by_name(".text")
+      inspect(idx, content="-1")
+    }
+    None => inspect("failed", content="should_not_fail")
+  }
+}
+
+///|
+/// Test get_rodata_section when no .rodata exists
+test "elf_get_rodata_section_none" {
+  let bytes = make_minimal_elf32_header()
+
+  match parse_elf(bytes) {
+    Some(elf) => {
+      let rodata = elf.get_rodata_section()
+      inspect(rodata, content="None")
+    }
+    None => inspect("failed", content="should_not_fail")
+  }
+}
+
+///|
+/// Test extract_strings with no .rodata
+test "elf_extract_strings_none" {
+  let bytes = make_minimal_elf32_header()
+
+  match parse_elf(bytes) {
+    Some(elf) => {
+      let strings = elf.extract_strings()
+      inspect(strings.length(), content="0")
+    }
+    None => inspect("failed", content="should_not_fail")
+  }
+}
