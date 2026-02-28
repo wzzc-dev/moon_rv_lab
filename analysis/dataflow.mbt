@@ -3523,3 +3523,1470 @@ fn _uint_to_hex(value : UInt) -> String {
     result
   }
 }
+
+// ============================================================================
+// Phase 4: Constant Propagation Analysis
+// ============================================================================
+
+///|
+/// Constant value representation for constant propagation
+pub enum ConstValue {
+  /// Value is a known constant
+  Constant(Int)
+  /// Value is not a constant (could be any value)
+  NotConstant
+  /// Value is unknown (uninitialized or from unknown source)
+  Unknown
+  /// Value is an address (from LUI/AUIPC)
+  Address(UInt)
+} derive(Show, Eq)
+
+///|
+/// Constant propagation state for all registers
+pub struct ConstState {
+  /// Integer register values
+  int_regs : FixedArray[ConstValue]
+  /// Floating-point register values
+  float_regs : FixedArray[ConstValue]
+} derive(Show)
+
+///|
+/// Create initial constant state (all unknown)
+pub fn ConstState::new() -> ConstState {
+  let int_vals : Array[ConstValue] = []
+  let float_vals : Array[ConstValue] = []
+  for i = 0; i < 32; i = i + 1 {
+    int_vals.push(ConstValue::Unknown)
+    float_vals.push(ConstValue::Unknown)
+  }
+  {
+    int_regs: FixedArray::from_array(int_vals),
+    float_regs: FixedArray::from_array(float_vals),
+  }
+}
+
+///|
+/// Get integer register value
+pub fn ConstState::get_int(self : ConstState, reg : UInt) -> ConstValue {
+  if reg >= 32U {
+    return ConstValue::Unknown
+  }
+  self.int_regs[reg.reinterpret_as_int()]
+}
+
+///|
+/// Set integer register value
+pub fn ConstState::set_int(
+  self : ConstState,
+  reg : UInt,
+  value : ConstValue,
+) -> ConstState {
+  if reg >= 32U {
+    return self
+  }
+  let idx = reg.reinterpret_as_int()
+  let new_vals : Array[ConstValue] = []
+  for i = 0; i < 32; i = i + 1 {
+    if i == idx {
+      new_vals.push(value)
+    } else {
+      new_vals.push(self.int_regs[i])
+    }
+  }
+  { int_regs: FixedArray::from_array(new_vals), float_regs: self.float_regs }
+}
+
+///|
+/// Get float register value
+pub fn ConstState::get_float(self : ConstState, reg : UInt) -> ConstValue {
+  if reg >= 32U {
+    return ConstValue::Unknown
+  }
+  self.float_regs[reg.reinterpret_as_int()]
+}
+
+///|
+/// Set float register value
+pub fn ConstState::set_float(
+  self : ConstState,
+  reg : UInt,
+  value : ConstValue,
+) -> ConstState {
+  if reg >= 32U {
+    return self
+  }
+  let idx = reg.reinterpret_as_int()
+  let new_vals : Array[ConstValue] = []
+  for i = 0; i < 32; i = i + 1 {
+    if i == idx {
+      new_vals.push(value)
+    } else {
+      new_vals.push(self.float_regs[i])
+    }
+  }
+  { int_regs: self.int_regs, float_regs: FixedArray::from_array(new_vals) }
+}
+
+///|
+/// Merge two constant states (meet operation)
+pub fn ConstState::merge(self : ConstState, other : ConstState) -> ConstState {
+  let int_vals : Array[ConstValue] = []
+  let float_vals : Array[ConstValue] = []
+
+  for i = 0; i < 32; i = i + 1 {
+    int_vals.push(merge_const_values(self.int_regs[i], other.int_regs[i]))
+    float_vals.push(merge_const_values(self.float_regs[i], other.float_regs[i]))
+  }
+
+  {
+    int_regs: FixedArray::from_array(int_vals),
+    float_regs: FixedArray::from_array(float_vals),
+  }
+}
+
+///|
+/// Merge two constant values
+fn merge_const_values(a : ConstValue, b : ConstValue) -> ConstValue {
+  match (a, b) {
+    (ConstValue::Constant(va), ConstValue::Constant(vb)) =>
+      if va == vb {
+        ConstValue::Constant(va)
+      } else {
+        ConstValue::NotConstant
+      }
+    (ConstValue::Address(va), ConstValue::Address(vb)) =>
+      if va == vb {
+        ConstValue::Address(va)
+      } else {
+        ConstValue::NotConstant
+      }
+    (ConstValue::Unknown, other) => other
+    (other, ConstValue::Unknown) => other
+    _ => ConstValue::NotConstant
+  }
+}
+
+///|
+/// Check if two states are equal
+pub fn ConstState::equal(self : ConstState, other : ConstState) -> Bool {
+  let mut equal = true
+  for i = 0; i < 32; i = i + 1 {
+    if self.int_regs[i] != other.int_regs[i] {
+      equal = false
+      break
+    }
+    if self.float_regs[i] != other.float_regs[i] {
+      equal = false
+      break
+    }
+  }
+  equal
+}
+
+///|
+/// Constant propagation result for a basic block
+pub struct BlockConstState {
+  /// Block start address
+  block_addr : UInt
+  /// State at entry
+  state_in : ConstState
+  /// State at exit
+  state_out : ConstState
+} derive(Show)
+
+///|
+/// Propagate constant through an instruction
+pub fn propagate_instruction(
+  state : ConstState,
+  inst : @decode.Instruction,
+  inst_addr : UInt,
+) -> ConstState {
+  let mut new_state = state
+
+  match inst {
+    // LUI: Load upper immediate
+    @decode.LUI(rd, imm) =>
+      if rd != 0U {
+        // LUI loads the immediate into the upper 12 bits
+        let value = (imm & 0xFFFFF) << 12
+        new_state = new_state.set_int(rd, ConstValue::Constant(value))
+      }
+
+    // AUIPC: Add upper immediate to PC
+    @decode.AUIPC(rd, imm) =>
+      if rd != 0U {
+        // AUIPC result depends on PC, which may not be constant
+        // But for position-independent code analysis, we can track the address
+        let offset = (imm & 0xFFFFF) << 12
+        new_state = new_state.set_int(
+          rd,
+          ConstValue::Address(
+            (inst_addr.reinterpret_as_int() + offset).reinterpret_as_uint(),
+          ),
+        )
+      }
+
+    // ADDI: Add immediate
+    @decode.ADDI(rd, rs1, imm) =>
+      if rd != 0U {
+        let rs1_val = state.get_int(rs1)
+        match rs1_val {
+          ConstValue::Constant(v) =>
+            new_state = new_state.set_int(rd, ConstValue::Constant(v + imm))
+          ConstValue::Address(addr) =>
+            new_state = new_state.set_int(
+              rd,
+              ConstValue::Address(
+                (addr.reinterpret_as_int() + imm).reinterpret_as_uint(),
+              ),
+            )
+          _ => new_state = new_state.set_int(rd, ConstValue::NotConstant)
+        }
+      }
+
+    // ADDIW: Add immediate (32-bit, sign-extend)
+    @decode.ADDIW(rd, rs1, imm) =>
+      if rd != 0U {
+        let rs1_val = state.get_int(rs1)
+        match rs1_val {
+          ConstValue::Constant(v) => {
+            // Sign-extend to 32 bits, then add, then sign-extend result
+            let v32 = sign_extend_32(v)
+            let result = sign_extend_64_32(v32 + imm)
+            new_state = new_state.set_int(rd, ConstValue::Constant(result))
+          }
+          _ => new_state = new_state.set_int(rd, ConstValue::NotConstant)
+        }
+      }
+
+    // ADD: Add registers
+    @decode.ADD(rd, rs1, rs2) =>
+      if rd != 0U {
+        let rs1_val = state.get_int(rs1)
+        let rs2_val = state.get_int(rs2)
+        new_state = new_state.set_int(rd, add_const_values(rs1_val, rs2_val))
+      }
+
+    // ADDW: Add registers (32-bit)
+    @decode.ADDW(rd, rs1, rs2) =>
+      if rd != 0U {
+        let rs1_val = state.get_int(rs1)
+        let rs2_val = state.get_int(rs2)
+        new_state = new_state.set_int(rd, add_const_values_32(rs1_val, rs2_val))
+      }
+
+    // SUB: Subtract registers
+    @decode.SUB(rd, rs1, rs2) =>
+      if rd != 0U {
+        let rs1_val = state.get_int(rs1)
+        let rs2_val = state.get_int(rs2)
+        new_state = new_state.set_int(rd, sub_const_values(rs1_val, rs2_val))
+      }
+
+    // SUBW: Subtract registers (32-bit)
+    @decode.SUBW(rd, rs1, rs2) =>
+      if rd != 0U {
+        let rs1_val = state.get_int(rs1)
+        let rs2_val = state.get_int(rs2)
+        new_state = new_state.set_int(rd, sub_const_values_32(rs1_val, rs2_val))
+      }
+
+    // ANDI: AND immediate
+    @decode.ANDI(rd, rs1, imm) =>
+      if rd != 0U {
+        let rs1_val = state.get_int(rs1)
+        match rs1_val {
+          ConstValue::Constant(v) =>
+            new_state = new_state.set_int(rd, ConstValue::Constant(v & imm))
+          _ => new_state = new_state.set_int(rd, ConstValue::NotConstant)
+        }
+      }
+
+    // ORI: OR immediate
+    @decode.ORI(rd, rs1, imm) =>
+      if rd != 0U {
+        let rs1_val = state.get_int(rs1)
+        match rs1_val {
+          ConstValue::Constant(v) =>
+            new_state = new_state.set_int(rd, ConstValue::Constant(v | imm))
+          _ => new_state = new_state.set_int(rd, ConstValue::NotConstant)
+        }
+      }
+
+    // XORI: XOR immediate
+    @decode.XORI(rd, rs1, imm) =>
+      if rd != 0U {
+        let rs1_val = state.get_int(rs1)
+        match rs1_val {
+          ConstValue::Constant(v) =>
+            new_state = new_state.set_int(rd, ConstValue::Constant(v ^ imm))
+          _ => new_state = new_state.set_int(rd, ConstValue::NotConstant)
+        }
+      }
+
+    // SLLI: Shift left logical immediate
+    @decode.SLLI(rd, rs1, shamt) =>
+      if rd != 0U {
+        let rs1_val = state.get_int(rs1)
+        let shift_amount = shamt.reinterpret_as_int() & 63
+        match rs1_val {
+          ConstValue::Constant(v) =>
+            new_state = new_state.set_int(
+              rd,
+              ConstValue::Constant(v << shift_amount),
+            )
+          _ => new_state = new_state.set_int(rd, ConstValue::NotConstant)
+        }
+      }
+
+    // SRLI: Shift right logical immediate
+    @decode.SRLI(rd, rs1, shamt) =>
+      if rd != 0U {
+        let rs1_val = state.get_int(rs1)
+        let shift_amount = shamt.reinterpret_as_int() & 63
+        match rs1_val {
+          ConstValue::Constant(v) =>
+            // Logical right shift (treat as unsigned)
+            new_state = new_state.set_int(
+              rd,
+              ConstValue::Constant(lshr(v, shift_amount)),
+            )
+          _ => new_state = new_state.set_int(rd, ConstValue::NotConstant)
+        }
+      }
+
+    // SRAI: Shift right arithmetic immediate
+    @decode.SRAI(rd, rs1, shamt) =>
+      if rd != 0U {
+        let rs1_val = state.get_int(rs1)
+        let shift_amount = shamt.reinterpret_as_int() & 63
+        match rs1_val {
+          ConstValue::Constant(v) =>
+            new_state = new_state.set_int(
+              rd,
+              ConstValue::Constant(v >> shift_amount),
+            )
+          _ => new_state = new_state.set_int(rd, ConstValue::NotConstant)
+        }
+      }
+
+    // SLLIW/SRLIW/SRAIW: 32-bit shift operations
+    @decode.SLLIW(rd, rs1, shamt) =>
+      if rd != 0U {
+        let rs1_val = state.get_int(rs1)
+        let shift_amount = shamt.reinterpret_as_int() & 31
+        match rs1_val {
+          ConstValue::Constant(v) => {
+            let v32 = sign_extend_32(v)
+            let result = sign_extend_64_32(v32 << shift_amount)
+            new_state = new_state.set_int(rd, ConstValue::Constant(result))
+          }
+          _ => new_state = new_state.set_int(rd, ConstValue::NotConstant)
+        }
+      }
+    @decode.SRLIW(rd, rs1, shamt) =>
+      if rd != 0U {
+        let rs1_val = state.get_int(rs1)
+        let shift_amount = shamt.reinterpret_as_int() & 31
+        match rs1_val {
+          ConstValue::Constant(v) => {
+            let v32 = sign_extend_32(v)
+            let result = sign_extend_64_32(lshr(v32, shift_amount))
+            new_state = new_state.set_int(rd, ConstValue::Constant(result))
+          }
+          _ => new_state = new_state.set_int(rd, ConstValue::NotConstant)
+        }
+      }
+    @decode.SRAIW(rd, rs1, shamt) =>
+      if rd != 0U {
+        let rs1_val = state.get_int(rs1)
+        let shift_amount = shamt.reinterpret_as_int() & 31
+        match rs1_val {
+          ConstValue::Constant(v) => {
+            let v32 = sign_extend_32(v)
+            let result = sign_extend_64_32(v32 >> shift_amount)
+            new_state = new_state.set_int(rd, ConstValue::Constant(result))
+          }
+          _ => new_state = new_state.set_int(rd, ConstValue::NotConstant)
+        }
+      }
+
+    // AND/OR/XOR: Bitwise operations
+    @decode.AND(rd, rs1, rs2) =>
+      if rd != 0U {
+        let rs1_val = state.get_int(rs1)
+        let rs2_val = state.get_int(rs2)
+        new_state = new_state.set_int(
+          rd,
+          binop_const_values(rs1_val, rs2_val, BinOp::And),
+        )
+      }
+    @decode.OR(rd, rs1, rs2) =>
+      if rd != 0U {
+        let rs1_val = state.get_int(rs1)
+        let rs2_val = state.get_int(rs2)
+        new_state = new_state.set_int(
+          rd,
+          binop_const_values(rs1_val, rs2_val, BinOp::Or),
+        )
+      }
+    @decode.XOR(rd, rs1, rs2) =>
+      if rd != 0U {
+        let rs1_val = state.get_int(rs1)
+        let rs2_val = state.get_int(rs2)
+        new_state = new_state.set_int(
+          rd,
+          binop_const_values(rs1_val, rs2_val, BinOp::Xor),
+        )
+      }
+
+    // SLL/SRL/SRA: Shift by register
+    @decode.SLL(rd, rs1, rs2) =>
+      if rd != 0U {
+        let rs1_val = state.get_int(rs1)
+        let rs2_val = state.get_int(rs2)
+        match (rs1_val, rs2_val) {
+          (ConstValue::Constant(v1), ConstValue::Constant(v2)) =>
+            new_state = new_state.set_int(
+              rd,
+              ConstValue::Constant(v1 << (v2 & 63)),
+            )
+          _ => new_state = new_state.set_int(rd, ConstValue::NotConstant)
+        }
+      }
+    @decode.SRL(rd, rs1, rs2) =>
+      if rd != 0U {
+        let rs1_val = state.get_int(rs1)
+        let rs2_val = state.get_int(rs2)
+        match (rs1_val, rs2_val) {
+          (ConstValue::Constant(v1), ConstValue::Constant(v2)) =>
+            new_state = new_state.set_int(
+              rd,
+              ConstValue::Constant(lshr(v1, v2 & 63)),
+            )
+          _ => new_state = new_state.set_int(rd, ConstValue::NotConstant)
+        }
+      }
+    @decode.SRA(rd, rs1, rs2) =>
+      if rd != 0U {
+        let rs1_val = state.get_int(rs1)
+        let rs2_val = state.get_int(rs2)
+        match (rs1_val, rs2_val) {
+          (ConstValue::Constant(v1), ConstValue::Constant(v2)) =>
+            new_state = new_state.set_int(
+              rd,
+              ConstValue::Constant(v1 >> (v2 & 63)),
+            )
+          _ => new_state = new_state.set_int(rd, ConstValue::NotConstant)
+        }
+      }
+
+    // MUL/DIV/REM: Multiply/divide/remainder
+    @decode.MUL(rd, rs1, rs2) =>
+      if rd != 0U {
+        let rs1_val = state.get_int(rs1)
+        let rs2_val = state.get_int(rs2)
+        match (rs1_val, rs2_val) {
+          (ConstValue::Constant(v1), ConstValue::Constant(v2)) =>
+            new_state = new_state.set_int(rd, ConstValue::Constant(v1 * v2))
+          _ => new_state = new_state.set_int(rd, ConstValue::NotConstant)
+        }
+      }
+    @decode.MULH(rd, rs1, rs2)
+    | @decode.MULHSU(rd, rs1, rs2)
+    | @decode.MULHU(rd, rs1, rs2) =>
+      if rd != 0U {
+        // High multiply results are complex, mark as not constant
+        new_state = new_state.set_int(rd, ConstValue::NotConstant)
+      }
+    @decode.DIV(rd, rs1, rs2) =>
+      if rd != 0U {
+        let rs1_val = state.get_int(rs1)
+        let rs2_val = state.get_int(rs2)
+        match (rs1_val, rs2_val) {
+          (ConstValue::Constant(v1), ConstValue::Constant(v2)) =>
+            if v2 != 0 {
+              new_state = new_state.set_int(rd, ConstValue::Constant(v1 / v2))
+            } else {
+              // Division by zero - undefined
+              new_state = new_state.set_int(rd, ConstValue::NotConstant)
+            }
+          _ => new_state = new_state.set_int(rd, ConstValue::NotConstant)
+        }
+      }
+    @decode.DIVU(rd, rs1, rs2) =>
+      if rd != 0U {
+        let rs1_val = state.get_int(rs1)
+        let rs2_val = state.get_int(rs2)
+        match (rs1_val, rs2_val) {
+          (ConstValue::Constant(v1), ConstValue::Constant(v2)) =>
+            if v2 != 0 {
+              // Unsigned division
+              let u1 = v1.reinterpret_as_uint()
+              let u2 = v2.reinterpret_as_uint()
+              new_state = new_state.set_int(
+                rd,
+                ConstValue::Constant((u1 / u2).reinterpret_as_int()),
+              )
+            } else {
+              new_state = new_state.set_int(rd, ConstValue::NotConstant)
+            }
+          _ => new_state = new_state.set_int(rd, ConstValue::NotConstant)
+        }
+      }
+    @decode.REM(rd, rs1, rs2) =>
+      if rd != 0U {
+        let rs1_val = state.get_int(rs1)
+        let rs2_val = state.get_int(rs2)
+        match (rs1_val, rs2_val) {
+          (ConstValue::Constant(v1), ConstValue::Constant(v2)) =>
+            if v2 != 0 {
+              new_state = new_state.set_int(rd, ConstValue::Constant(v1 % v2))
+            } else {
+              new_state = new_state.set_int(rd, ConstValue::NotConstant)
+            }
+          _ => new_state = new_state.set_int(rd, ConstValue::NotConstant)
+        }
+      }
+    @decode.REMU(rd, rs1, rs2) =>
+      if rd != 0U {
+        let rs1_val = state.get_int(rs1)
+        let rs2_val = state.get_int(rs2)
+        match (rs1_val, rs2_val) {
+          (ConstValue::Constant(v1), ConstValue::Constant(v2)) =>
+            if v2 != 0 {
+              // Unsigned remainder
+              let u1 = v1.reinterpret_as_uint()
+              let u2 = v2.reinterpret_as_uint()
+              new_state = new_state.set_int(
+                rd,
+                ConstValue::Constant((u1 % u2).reinterpret_as_int()),
+              )
+            } else {
+              new_state = new_state.set_int(rd, ConstValue::NotConstant)
+            }
+          _ => new_state = new_state.set_int(rd, ConstValue::NotConstant)
+        }
+      }
+
+    // MULW/DIVW/REMW: 32-bit multiply/divide
+    @decode.MULW(rd, rs1, rs2) =>
+      if rd != 0U {
+        let rs1_val = state.get_int(rs1)
+        let rs2_val = state.get_int(rs2)
+        match (rs1_val, rs2_val) {
+          (ConstValue::Constant(v1), ConstValue::Constant(v2)) => {
+            let result = sign_extend_64_32(
+              sign_extend_32(v1) * sign_extend_32(v2),
+            )
+            new_state = new_state.set_int(rd, ConstValue::Constant(result))
+          }
+          _ => new_state = new_state.set_int(rd, ConstValue::NotConstant)
+        }
+      }
+    @decode.DIVW(rd, rs1, rs2)
+    | @decode.DIVUW(rd, rs1, rs2)
+    | @decode.REMW(rd, rs1, rs2)
+    | @decode.REMUW(rd, rs1, rs2) =>
+      if rd != 0U {
+        // 32-bit division is complex, mark as not constant for now
+        new_state = new_state.set_int(rd, ConstValue::NotConstant)
+      }
+
+    // SLTI/SLTIU: Set less than immediate
+    @decode.SLTI(rd, rs1, imm) =>
+      if rd != 0U {
+        let rs1_val = state.get_int(rs1)
+        match rs1_val {
+          ConstValue::Constant(v) =>
+            new_state = new_state.set_int(
+              rd,
+              ConstValue::Constant(if v < imm { 1 } else { 0 }),
+            )
+          _ => new_state = new_state.set_int(rd, ConstValue::NotConstant)
+        }
+      }
+    @decode.SLTIU(rd, rs1, imm) =>
+      if rd != 0U {
+        let rs1_val = state.get_int(rs1)
+        match rs1_val {
+          ConstValue::Constant(v) =>
+            // Compare as unsigned
+            new_state = new_state.set_int(
+              rd,
+              ConstValue::Constant(if ult(v, imm) { 1 } else { 0 }),
+            )
+          _ => new_state = new_state.set_int(rd, ConstValue::NotConstant)
+        }
+      }
+
+    // SLT/SLTU: Set less than
+    @decode.SLT(rd, rs1, rs2) =>
+      if rd != 0U {
+        let rs1_val = state.get_int(rs1)
+        let rs2_val = state.get_int(rs2)
+        match (rs1_val, rs2_val) {
+          (ConstValue::Constant(v1), ConstValue::Constant(v2)) =>
+            new_state = new_state.set_int(
+              rd,
+              ConstValue::Constant(if v1 < v2 { 1 } else { 0 }),
+            )
+          _ => new_state = new_state.set_int(rd, ConstValue::NotConstant)
+        }
+      }
+    @decode.SLTU(rd, rs1, rs2) =>
+      if rd != 0U {
+        let rs1_val = state.get_int(rs1)
+        let rs2_val = state.get_int(rs2)
+        match (rs1_val, rs2_val) {
+          (ConstValue::Constant(v1), ConstValue::Constant(v2)) =>
+            new_state = new_state.set_int(
+              rd,
+              ConstValue::Constant(if ult(v1, v2) { 1 } else { 0 }),
+            )
+          _ => new_state = new_state.set_int(rd, ConstValue::NotConstant)
+        }
+      }
+
+    // Loads: Values from memory are unknown
+    @decode.LB(rd, _, _)
+    | @decode.LH(rd, _, _)
+    | @decode.LW(rd, _, _)
+    | @decode.LD(rd, _, _)
+    | @decode.LBU(rd, _, _)
+    | @decode.LHU(rd, _, _)
+    | @decode.LWU(rd, _, _) =>
+      if rd != 0U {
+        new_state = new_state.set_int(rd, ConstValue::Unknown)
+      }
+
+    // Float loads
+    @decode.FLW(rd, _, _) | @decode.FLD(rd, _, _) =>
+      new_state = new_state.set_float(rd, ConstValue::Unknown)
+
+    // Float operations - mark result as not constant for now
+    @decode.FADD_S(rd, _, _)
+    | @decode.FSUB_S(rd, _, _)
+    | @decode.FMUL_S(rd, _, _)
+    | @decode.FDIV_S(rd, _, _)
+    | @decode.FADD_D(rd, _, _)
+    | @decode.FSUB_D(rd, _, _)
+    | @decode.FMUL_D(rd, _, _)
+    | @decode.FDIV_D(rd, _, _) =>
+      new_state = new_state.set_float(rd, ConstValue::NotConstant)
+
+    // JAL: Write return address
+    @decode.JAL(rd, _) =>
+      if rd != 0U {
+        // Return address is the address after this instruction
+        new_state = new_state.set_int(rd, ConstValue::Address(inst_addr + 4U))
+      }
+
+    // JALR: Write return address
+    @decode.JALR(rd, _, _) =>
+      if rd != 0U {
+        // Return address, but target depends on register
+        new_state = new_state.set_int(rd, ConstValue::Address(inst_addr + 4U))
+      }
+
+    // Compressed instructions
+    @decode.C_LI(rd, imm) =>
+      if rd != 0U {
+        new_state = new_state.set_int(rd, ConstValue::Constant(imm))
+      }
+    @decode.C_LUI(rd, imm) =>
+      if rd != 0U {
+        new_state = new_state.set_int(rd, ConstValue::Constant(imm << 12))
+      }
+    @decode.C_ADDI(rd, imm) =>
+      if rd != 0U {
+        let rd_val = state.get_int(rd)
+        match rd_val {
+          ConstValue::Constant(v) =>
+            new_state = new_state.set_int(rd, ConstValue::Constant(v + imm))
+          _ => new_state = new_state.set_int(rd, ConstValue::NotConstant)
+        }
+      }
+    @decode.C_ADDI16SP(imm) => {
+      let sp_val = state.get_int(2U)
+      match sp_val {
+        ConstValue::Constant(v) =>
+          new_state = new_state.set_int(2U, ConstValue::Constant(v + imm))
+        _ => new_state = new_state.set_int(2U, ConstValue::NotConstant)
+      }
+    }
+    @decode.C_ADDI4SPN(rd, imm) =>
+      if rd != 0U {
+        let sp_val = state.get_int(2U)
+        match sp_val {
+          ConstValue::Constant(v) =>
+            new_state = new_state.set_int(
+              rd,
+              ConstValue::Constant(v + imm.reinterpret_as_int()),
+            )
+          _ => new_state = new_state.set_int(rd, ConstValue::NotConstant)
+        }
+      }
+    @decode.C_MV(rd, rs) =>
+      if rd != 0U {
+        let rs_val = state.get_int(rs)
+        new_state = new_state.set_int(rd, rs_val)
+      }
+    @decode.C_ADD(rd, rs) =>
+      if rd != 0U {
+        let rd_val = state.get_int(rd)
+        let rs_val = state.get_int(rs)
+        new_state = new_state.set_int(rd, add_const_values(rd_val, rs_val))
+      }
+    @decode.C_AND(rd, rs) =>
+      if rd != 0U {
+        let rd_val = state.get_int(rd)
+        let rs_val = state.get_int(rs)
+        new_state = new_state.set_int(
+          rd,
+          binop_const_values(rd_val, rs_val, BinOp::And),
+        )
+      }
+    @decode.C_OR(rd, rs) =>
+      if rd != 0U {
+        let rd_val = state.get_int(rd)
+        let rs_val = state.get_int(rs)
+        new_state = new_state.set_int(
+          rd,
+          binop_const_values(rd_val, rs_val, BinOp::Or),
+        )
+      }
+    @decode.C_XOR(rd, rs) =>
+      if rd != 0U {
+        let rd_val = state.get_int(rd)
+        let rs_val = state.get_int(rs)
+        new_state = new_state.set_int(
+          rd,
+          binop_const_values(rd_val, rs_val, BinOp::Xor),
+        )
+      }
+    @decode.C_SUB(rd, rs) =>
+      if rd != 0U {
+        let rd_val = state.get_int(rd)
+        let rs_val = state.get_int(rs)
+        new_state = new_state.set_int(rd, sub_const_values(rd_val, rs_val))
+      }
+    @decode.C_SLLI(rd, shamt) =>
+      if rd != 0U {
+        let rd_val = state.get_int(rd)
+        match rd_val {
+          ConstValue::Constant(v) =>
+            new_state = new_state.set_int(
+              rd,
+              ConstValue::Constant(v << shamt.reinterpret_as_int()),
+            )
+          _ => new_state = new_state.set_int(rd, ConstValue::NotConstant)
+        }
+      }
+    @decode.C_SRLI(rd, shamt) =>
+      if rd != 0U {
+        let rd_val = state.get_int(rd)
+        match rd_val {
+          ConstValue::Constant(v) =>
+            new_state = new_state.set_int(
+              rd,
+              ConstValue::Constant(lshr(v, shamt.reinterpret_as_int())),
+            )
+          _ => new_state = new_state.set_int(rd, ConstValue::NotConstant)
+        }
+      }
+    @decode.C_SRAI(rd, shamt) =>
+      if rd != 0U {
+        let rd_val = state.get_int(rd)
+        match rd_val {
+          ConstValue::Constant(v) =>
+            new_state = new_state.set_int(
+              rd,
+              ConstValue::Constant(v >> shamt.reinterpret_as_int()),
+            )
+          _ => new_state = new_state.set_int(rd, ConstValue::NotConstant)
+        }
+      }
+    @decode.C_ANDI(rd, imm) =>
+      if rd != 0U {
+        let rd_val = state.get_int(rd)
+        match rd_val {
+          ConstValue::Constant(v) =>
+            new_state = new_state.set_int(rd, ConstValue::Constant(v & imm))
+          _ => new_state = new_state.set_int(rd, ConstValue::NotConstant)
+        }
+      }
+
+    // Loads from memory
+    @decode.C_LW(rd, _, _) =>
+      if rd != 0U {
+        new_state = new_state.set_int(rd, ConstValue::Unknown)
+      }
+    @decode.C_LWSP(rd, _) =>
+      if rd != 0U {
+        new_state = new_state.set_int(rd, ConstValue::Unknown)
+      }
+
+    // For other instructions, don't change state (already handled or no register write)
+    _ => ()
+  }
+
+  new_state
+}
+
+///|
+/// Add two constant values
+fn add_const_values(a : ConstValue, b : ConstValue) -> ConstValue {
+  match (a, b) {
+    (ConstValue::Constant(va), ConstValue::Constant(vb)) =>
+      ConstValue::Constant(va + vb)
+    (ConstValue::Address(addr), ConstValue::Constant(v)) =>
+      ConstValue::Address((addr.reinterpret_as_int() + v).reinterpret_as_uint())
+    (ConstValue::Constant(v), ConstValue::Address(addr)) =>
+      ConstValue::Address((addr.reinterpret_as_int() + v).reinterpret_as_uint())
+    (ConstValue::Unknown, _) => ConstValue::Unknown
+    (_, ConstValue::Unknown) => ConstValue::Unknown
+    _ => ConstValue::NotConstant
+  }
+}
+
+///|
+/// Add two constant values (32-bit)
+fn add_const_values_32(a : ConstValue, b : ConstValue) -> ConstValue {
+  match (a, b) {
+    (ConstValue::Constant(va), ConstValue::Constant(vb)) => {
+      let result = sign_extend_64_32(sign_extend_32(va) + sign_extend_32(vb))
+      ConstValue::Constant(result)
+    }
+    _ => ConstValue::NotConstant
+  }
+}
+
+///|
+/// Subtract two constant values
+fn sub_const_values(a : ConstValue, b : ConstValue) -> ConstValue {
+  match (a, b) {
+    (ConstValue::Constant(va), ConstValue::Constant(vb)) =>
+      ConstValue::Constant(va - vb)
+    (ConstValue::Address(addr), ConstValue::Constant(v)) =>
+      ConstValue::Address((addr.reinterpret_as_int() - v).reinterpret_as_uint())
+    (ConstValue::Unknown, _) => ConstValue::Unknown
+    (_, ConstValue::Unknown) => ConstValue::Unknown
+    _ => ConstValue::NotConstant
+  }
+}
+
+///|
+/// Subtract two constant values (32-bit)
+fn sub_const_values_32(a : ConstValue, b : ConstValue) -> ConstValue {
+  match (a, b) {
+    (ConstValue::Constant(va), ConstValue::Constant(vb)) => {
+      let result = sign_extend_64_32(sign_extend_32(va) - sign_extend_32(vb))
+      ConstValue::Constant(result)
+    }
+    _ => ConstValue::NotConstant
+  }
+}
+
+///|
+/// Binary operation on constant values
+fn binop_const_values(a : ConstValue, b : ConstValue, op : BinOp) -> ConstValue {
+  match (a, b) {
+    (ConstValue::Constant(va), ConstValue::Constant(vb)) =>
+      match op {
+        BinOp::Add => ConstValue::Constant(va + vb)
+        BinOp::Sub => ConstValue::Constant(va - vb)
+        BinOp::And => ConstValue::Constant(va & vb)
+        BinOp::Or => ConstValue::Constant(va | vb)
+        BinOp::Xor => ConstValue::Constant(va ^ vb)
+        BinOp::Shl => ConstValue::Constant(va << vb)
+        BinOp::Shr => ConstValue::Constant(va >> vb)
+        BinOp::Mul => ConstValue::Constant(va * vb)
+        BinOp::Div =>
+          if vb != 0 {
+            ConstValue::Constant(va / vb)
+          } else {
+            ConstValue::NotConstant
+          }
+        BinOp::Mod =>
+          if vb != 0 {
+            ConstValue::Constant(va % vb)
+          } else {
+            ConstValue::NotConstant
+          }
+      }
+    (ConstValue::Unknown, _) => ConstValue::Unknown
+    (_, ConstValue::Unknown) => ConstValue::Unknown
+    _ => ConstValue::NotConstant
+  }
+}
+
+///|
+/// Sign-extend 32-bit value
+fn sign_extend_32(v : Int) -> Int {
+  // Sign-extend from 32 bits to 64 bits
+  v << 32 >> 32
+}
+
+///|
+/// Sign-extend 32-bit result to 64-bit
+fn sign_extend_64_32(v : Int) -> Int {
+  v << 32 >> 32
+}
+
+///|
+/// Logical right shift (unsigned)
+fn lshr(v : Int, amount : Int) -> Int {
+  // Convert to UInt, shift, convert back
+  let vu = v.reinterpret_as_uint()
+  let shift_amount = if amount < 0 { 0 } else { amount }
+  (vu >> shift_amount).reinterpret_as_int()
+}
+
+///|
+/// Compare as unsigned
+fn ult(a : Int, b : Int) -> Bool {
+  a.reinterpret_as_uint() < b.reinterpret_as_uint()
+}
+
+///|
+/// Compare as unsigned (greater or equal)
+fn uge(a : Int, b : Int) -> Bool {
+  a.reinterpret_as_uint() >= b.reinterpret_as_uint()
+}
+
+///|
+/// Compute constant propagation for all basic blocks
+pub fn compute_constant_propagation(
+  cfg : CFG,
+  instructions : FixedArray[DecodedInst],
+) -> FixedArray[BlockConstState] {
+  let num_blocks = cfg.blocks.length()
+  let block_states : Array[BlockConstState] = []
+
+  // Initialize block states
+  for block in cfg.blocks {
+    block_states.push(BlockConstState::{
+      block_addr: block.start_addr,
+      state_in: ConstState::new(),
+      state_out: ConstState::new(),
+    })
+  }
+
+  // Build predecessor map
+  let preds : Map[UInt, Array[UInt]] = {}
+  for block in cfg.blocks {
+    preds[block.start_addr] = []
+  }
+  for edge in cfg.edges {
+    match preds.get(edge.to_block) {
+      Some(arr) => arr.push(edge.from_block)
+      None => preds[edge.to_block] = [edge.from_block]
+    }
+  }
+
+  // Build instruction index by address
+  let inst_by_addr : Map[UInt, DecodedInst] = {}
+  for inst in instructions {
+    inst_by_addr[inst.addr] = inst
+  }
+
+  // Build successor map for CFG
+  let succs : Map[UInt, Array[UInt]] = {}
+  for block in cfg.blocks {
+    succs[block.start_addr] = []
+  }
+  for edge in cfg.edges {
+    match succs.get(edge.from_block) {
+      Some(arr) => arr.push(edge.to_block)
+      None => succs[edge.from_block] = [edge.to_block]
+    }
+  }
+
+  // Fixed-point iteration
+  let mut changed = true
+  let max_iterations = 100
+  let mut iteration = 0
+
+  while changed && iteration < max_iterations {
+    changed = false
+    iteration = iteration + 1
+
+    // Process blocks in order
+    for i = 0; i < num_blocks; i = i + 1 {
+      let block = cfg.blocks[i]
+      let old_state = block_states[i]
+
+      // Compute input state: merge of all predecessors' output states
+      let pred_addrs = preds.get(block.start_addr).unwrap_or([])
+      let mut new_in = ConstState::new()
+
+      if pred_addrs.length() > 0 {
+        // Find first predecessor
+        let mut first = true
+        for pred_addr in pred_addrs {
+          // Find predecessor block index
+          for j = 0; j < num_blocks; j = j + 1 {
+            if block_states[j].block_addr == pred_addr {
+              if first {
+                new_in = block_states[j].state_out
+                first = false
+              } else {
+                new_in = new_in.merge(block_states[j].state_out)
+              }
+              break
+            }
+          }
+        }
+      }
+      // Entry block: use initial state (all unknown)
+
+      // Propagate through instructions in this block
+      let mut current_state = new_in
+      let mut addr = block.start_addr
+      while addr <= block.end_addr {
+        match inst_by_addr.get(addr) {
+          Some(inst) => {
+            current_state = propagate_instruction(
+              current_state,
+              inst.inst,
+              addr,
+            )
+            addr = addr + inst.length.reinterpret_as_uint()
+          }
+          None =>
+            // No instruction at this address, skip 4 bytes (or 2 for compressed)
+            addr = addr + 4U
+        }
+      }
+
+      let new_out = current_state
+
+      // Check for changes
+      if !old_state.state_in.equal(new_in) ||
+        !old_state.state_out.equal(new_out) {
+        changed = true
+        block_states[i] = BlockConstState::{
+          block_addr: block.start_addr,
+          state_in: new_in,
+          state_out: new_out,
+        }
+      }
+    }
+  }
+
+  FixedArray::from_array(block_states)
+}
+
+///|
+/// Get constant value at a specific instruction address
+pub fn get_const_at_point(
+  block_states : FixedArray[BlockConstState],
+  cfg : CFG,
+  instructions : FixedArray[DecodedInst],
+  addr : UInt,
+  reg : UInt,
+) -> ConstValue {
+  // Find the block containing this address
+  let mut target_block_idx = -1
+  for i = 0; i < cfg.blocks.length(); i = i + 1 {
+    let block = cfg.blocks[i]
+    if addr >= block.start_addr && addr <= block.end_addr {
+      target_block_idx = i
+      break
+    }
+  }
+
+  if target_block_idx < 0 {
+    return ConstValue::Unknown
+  }
+
+  let block = cfg.blocks[target_block_idx]
+  let block_state = block_states[target_block_idx]
+
+  // Propagate from block entry to this instruction
+  let mut current_state = block_state.state_in
+  for inst in instructions {
+    if inst.addr >= block.start_addr && inst.addr < addr {
+      current_state = propagate_instruction(current_state, inst.inst, inst.addr)
+    }
+  }
+
+  current_state.get_int(reg)
+}
+
+///|
+/// Format constant value
+pub fn format_const_value(value : ConstValue) -> String {
+  match value {
+    ConstValue::Constant(v) => "Const(\{v})"
+    ConstValue::NotConstant => "NotConst"
+    ConstValue::Unknown => "Unknown"
+    ConstValue::Address(addr) => "Addr(0x\{_uint_to_hex(addr)})"
+  }
+}
+
+///|
+/// Format constant state
+pub fn format_const_state(state : ConstState) -> String {
+  let mut result = "Int:["
+  let mut first = true
+  for i = 0; i < 32; i = i + 1 {
+    let val = state.int_regs[i]
+    match val {
+      ConstValue::Constant(v) => {
+        if !first {
+          result = result + ", "
+        }
+        result = result + @decode.reg_name(i.reinterpret_as_uint()) + "=\{v}"
+        first = false
+      }
+      ConstValue::Address(addr) => {
+        if !first {
+          result = result + ", "
+        }
+        result = result +
+          @decode.reg_name(i.reinterpret_as_uint()) +
+          "=0x\{_uint_to_hex(addr)}"
+        first = false
+      }
+      _ => ()
+    }
+  }
+  result = result + "]"
+  result
+}
+
+///|
+/// Conditional constant propagation result
+pub struct ConditionalConstInfo {
+  /// Block is reachable
+  reachable : Map[UInt, Bool]
+  /// Constant values at block entry
+  block_consts : FixedArray[BlockConstState]
+} derive(Show)
+
+///|
+/// Evaluate branch condition
+fn evaluate_branch_condition(
+  state : ConstState,
+  inst : @decode.Instruction,
+) -> BranchResult {
+  match inst {
+    @decode.BEQ(rs1, rs2, _) => {
+      let v1 = state.get_int(rs1)
+      let v2 = state.get_int(rs2)
+      match (v1, v2) {
+        (ConstValue::Constant(c1), ConstValue::Constant(c2)) =>
+          if c1 == c2 {
+            BranchResult::Taken
+          } else {
+            BranchResult::NotTaken
+          }
+        _ => BranchResult::Unknown
+      }
+    }
+    @decode.BNE(rs1, rs2, _) => {
+      let v1 = state.get_int(rs1)
+      let v2 = state.get_int(rs2)
+      match (v1, v2) {
+        (ConstValue::Constant(c1), ConstValue::Constant(c2)) =>
+          if c1 != c2 {
+            BranchResult::Taken
+          } else {
+            BranchResult::NotTaken
+          }
+        _ => BranchResult::Unknown
+      }
+    }
+    @decode.BLT(rs1, rs2, _) => {
+      let v1 = state.get_int(rs1)
+      let v2 = state.get_int(rs2)
+      match (v1, v2) {
+        (ConstValue::Constant(c1), ConstValue::Constant(c2)) =>
+          if c1 < c2 {
+            BranchResult::Taken
+          } else {
+            BranchResult::NotTaken
+          }
+        _ => BranchResult::Unknown
+      }
+    }
+    @decode.BGE(rs1, rs2, _) => {
+      let v1 = state.get_int(rs1)
+      let v2 = state.get_int(rs2)
+      match (v1, v2) {
+        (ConstValue::Constant(c1), ConstValue::Constant(c2)) =>
+          if c1 >= c2 {
+            BranchResult::Taken
+          } else {
+            BranchResult::NotTaken
+          }
+        _ => BranchResult::Unknown
+      }
+    }
+    @decode.BLTU(rs1, rs2, _) => {
+      let v1 = state.get_int(rs1)
+      let v2 = state.get_int(rs2)
+      match (v1, v2) {
+        (ConstValue::Constant(c1), ConstValue::Constant(c2)) =>
+          if ult(c1, c2) {
+            BranchResult::Taken
+          } else {
+            BranchResult::NotTaken
+          }
+        _ => BranchResult::Unknown
+      }
+    }
+    @decode.BGEU(rs1, rs2, _) => {
+      let v1 = state.get_int(rs1)
+      let v2 = state.get_int(rs2)
+      match (v1, v2) {
+        (ConstValue::Constant(c1), ConstValue::Constant(c2)) =>
+          if uge(c1, c2) {
+            BranchResult::Taken
+          } else {
+            BranchResult::NotTaken
+          }
+        _ => BranchResult::Unknown
+      }
+    }
+    // Compressed branches
+    @decode.C_BEQZ(rs, _) => {
+      let v = state.get_int(rs)
+      match v {
+        ConstValue::Constant(c) =>
+          if c == 0 {
+            BranchResult::Taken
+          } else {
+            BranchResult::NotTaken
+          }
+        _ => BranchResult::Unknown
+      }
+    }
+    @decode.C_BNEZ(rs, _) => {
+      let v = state.get_int(rs)
+      match v {
+        ConstValue::Constant(c) =>
+          if c != 0 {
+            BranchResult::Taken
+          } else {
+            BranchResult::NotTaken
+          }
+        _ => BranchResult::Unknown
+      }
+    }
+    _ => BranchResult::Unknown
+  }
+}
+
+///|
+/// Branch evaluation result
+enum BranchResult {
+  Taken
+  NotTaken
+  Unknown
+} derive(Eq)
+
+///|
+/// Compute conditional constant propagation (more precise)
+pub fn compute_conditional_constant_propagation(
+  cfg : CFG,
+  instructions : FixedArray[DecodedInst],
+) -> ConditionalConstInfo {
+  let num_blocks = cfg.blocks.length()
+  let block_states : Array[BlockConstState] = []
+  let reachable : Map[UInt, Bool] = {}
+
+  // Initialize block states
+  for block in cfg.blocks {
+    block_states.push(BlockConstState::{
+      block_addr: block.start_addr,
+      state_in: ConstState::new(),
+      state_out: ConstState::new(),
+    })
+    reachable[block.start_addr] = false
+  }
+
+  // Mark entry point as reachable
+  if cfg.entry_points.length() > 0 {
+    reachable[cfg.entry_points[0]] = true
+  } else if num_blocks > 0 {
+    reachable[cfg.blocks[0].start_addr] = true
+  }
+
+  // Build predecessor/successor maps
+  let preds : Map[UInt, Array[UInt]] = {}
+  let succs : Map[UInt, Array[Edge]] = {}
+  for block in cfg.blocks {
+    preds[block.start_addr] = []
+    succs[block.start_addr] = []
+  }
+  for edge in cfg.edges {
+    match preds.get(edge.to_block) {
+      Some(arr) => arr.push(edge.from_block)
+      None => preds[edge.to_block] = [edge.from_block]
+    }
+    match succs.get(edge.from_block) {
+      Some(arr) => arr.push(edge)
+      None => succs[edge.from_block] = [edge]
+    }
+  }
+
+  // Build instruction index by address
+  let inst_by_addr : Map[UInt, DecodedInst] = {}
+  for inst in instructions {
+    inst_by_addr[inst.addr] = inst
+  }
+
+  // Work list algorithm
+  let work_list : Array[UInt] = []
+  if cfg.entry_points.length() > 0 {
+    work_list.push(cfg.entry_points[0])
+  } else if num_blocks > 0 {
+    work_list.push(cfg.blocks[0].start_addr)
+  }
+
+  let mut max_iterations = 100
+  while work_list.length() > 0 && max_iterations > 0 {
+    max_iterations = max_iterations - 1
+    let block_addr_opt = work_list.pop()
+
+    let block_addr = match block_addr_opt {
+      Some(addr) => addr
+      None => continue
+    }
+
+    // Find block index
+    let mut block_idx = -1
+    for i = 0; i < num_blocks; i = i + 1 {
+      if block_states[i].block_addr == block_addr {
+        block_idx = i
+        break
+      }
+    }
+
+    if block_idx < 0 {
+      continue
+    }
+
+    let block = cfg.blocks[block_idx]
+    let old_state = block_states[block_idx]
+
+    // Compute input state from reachable predecessors
+    let pred_addrs = preds.get(block_addr).unwrap_or([])
+    let mut new_in = ConstState::new()
+    let mut has_reachable_pred = false
+
+    for pred_addr in pred_addrs {
+      if reachable.get(pred_addr).unwrap_or(false) {
+        for j = 0; j < num_blocks; j = j + 1 {
+          if block_states[j].block_addr == pred_addr {
+            if !has_reachable_pred {
+              new_in = block_states[j].state_out
+              has_reachable_pred = true
+            } else {
+              new_in = new_in.merge(block_states[j].state_out)
+            }
+            break
+          }
+        }
+      }
+    }
+
+    // Propagate through block
+    let mut current_state = new_in
+    let mut last_branch_inst : @decode.Instruction? = None
+    let mut last_branch_addr : UInt = 0U
+
+    let mut addr = block.start_addr
+    while addr <= block.end_addr {
+      match inst_by_addr.get(addr) {
+        Some(inst) => {
+          // Check if this is a branch instruction
+          match inst.inst {
+            @decode.BEQ(_, _, _)
+            | @decode.BNE(_, _, _)
+            | @decode.BLT(_, _, _)
+            | @decode.BGE(_, _, _)
+            | @decode.BLTU(_, _, _)
+            | @decode.BGEU(_, _, _)
+            | @decode.C_BEQZ(_, _)
+            | @decode.C_BNEZ(_, _) => {
+              last_branch_inst = Some(inst.inst)
+              last_branch_addr = addr
+            }
+            _ => ()
+          }
+          current_state = propagate_instruction(current_state, inst.inst, addr)
+          addr = addr + inst.length.reinterpret_as_uint()
+        }
+        None => addr = addr + 4U
+      }
+    }
+
+    let new_out = current_state
+
+    // Update state if changed
+    let state_changed = !old_state.state_in.equal(new_in) ||
+      !old_state.state_out.equal(new_out)
+    if state_changed {
+      block_states[block_idx] = BlockConstState::{
+        block_addr: block.start_addr,
+        state_in: new_in,
+        state_out: new_out,
+      }
+    }
+
+    // Process successors
+    let block_succs = succs.get(block_addr).unwrap_or([])
+    for edge in block_succs {
+      let should_add = match edge.edge_type {
+        EdgeType::BranchTaken =>
+          // Check if we can determine branch outcome
+          match last_branch_inst {
+            Some(inst) => {
+              let result = evaluate_branch_condition(new_out, inst)
+              result == BranchResult::Taken || result == BranchResult::Unknown
+            }
+            None => true
+          }
+        EdgeType::BranchNotTaken =>
+          match last_branch_inst {
+            Some(inst) => {
+              let result = evaluate_branch_condition(new_out, inst)
+              result == BranchResult::NotTaken ||
+              result == BranchResult::Unknown
+            }
+            None => true
+          }
+        _ => true
+      }
+
+      if should_add {
+        let was_reachable = reachable.get(edge.to_block).unwrap_or(false)
+        if !was_reachable {
+          reachable[edge.to_block] = true
+        }
+        if state_changed || !was_reachable {
+          // Check if already in work list
+          let mut in_list = false
+          for addr in work_list {
+            if addr == edge.to_block {
+              in_list = true
+              break
+            }
+          }
+          if !in_list {
+            work_list.push(edge.to_block)
+          }
+        }
+      }
+    }
+  }
+
+  ConditionalConstInfo::{
+    reachable,
+    block_consts: FixedArray::from_array(block_states),
+  }
+}

@@ -32,6 +32,10 @@ pub fn cfg_to_dot(CFG, String) -> String
 
 pub fn cfg_to_json(CFG) -> String
 
+pub fn compute_conditional_constant_propagation(CFG, FixedArray[DecodedInst]) -> ConditionalConstInfo
+
+pub fn compute_constant_propagation(CFG, FixedArray[DecodedInst]) -> FixedArray[BlockConstState]
+
 pub fn compute_def_use_chains(FixedArray[DecodedInst]) -> FixedArray[DefUseChain]
 
 pub fn compute_liveness(CFG, FixedArray[DecodedInst]) -> FixedArray[BlockLiveness]
@@ -74,6 +78,10 @@ pub fn find_entry_points(CFG) -> FixedArray[UInt]
 
 pub fn find_loop_exits(CFG, NaturalLoop) -> FixedArray[Edge]
 
+pub fn format_const_state(ConstState) -> String
+
+pub fn format_const_value(ConstValue) -> String
+
 pub fn format_control_structure(ControlStructure, Int) -> String
 
 pub fn format_enhanced_dom_tree(EnhancedDomTree) -> String
@@ -95,6 +103,8 @@ pub fn format_type(VarType) -> String
 pub fn format_unreachable_blocks(FixedArray[UInt]) -> String
 
 pub fn get_branch_target(@decode.Instruction) -> Int
+
+pub fn get_const_at_point(FixedArray[BlockConstState], CFG, FixedArray[DecodedInst], UInt, UInt) -> ConstValue
 
 pub fn get_operands(@decode.Instruction) -> InstOperands
 
@@ -132,6 +142,8 @@ pub fn print_def_use_chains(FixedArray[DefUseChain]) -> Unit
 
 pub fn print_live_set(LiveSet) -> String
 
+pub fn propagate_instruction(ConstState, @decode.Instruction, UInt) -> ConstState
+
 pub fn reachable_functions(CallGraph) -> FixedArray[UInt]
 
 pub fn resolve_jump_table_targets(JumpTable, FixedArray[Byte], UInt, UInt) -> JumpTable
@@ -167,6 +179,13 @@ pub enum BinOp {
 }
 pub impl Show for BinOp
 
+pub struct BlockConstState {
+  block_addr : UInt
+  state_in : ConstState
+  state_out : ConstState
+}
+pub impl Show for BlockConstState
+
 pub struct BlockLiveness {
   block_addr : UInt
   live_in : LiveSet
@@ -175,6 +194,9 @@ pub struct BlockLiveness {
   uses : LiveSet
 }
 pub impl Show for BlockLiveness
+
+type BranchResult
+pub impl Eq for BranchResult
 
 pub struct CFG {
   blocks : FixedArray[BasicBlock]
@@ -223,6 +245,34 @@ pub enum ConditionExpr {
   Or(ConditionExpr, ConditionExpr)
 }
 pub impl Show for ConditionExpr
+
+pub struct ConditionalConstInfo {
+  reachable : Map[UInt, Bool]
+  block_consts : FixedArray[BlockConstState]
+}
+pub impl Show for ConditionalConstInfo
+
+pub struct ConstState {
+  int_regs : FixedArray[ConstValue]
+  float_regs : FixedArray[ConstValue]
+}
+pub fn ConstState::equal(Self, Self) -> Bool
+pub fn ConstState::get_float(Self, UInt) -> ConstValue
+pub fn ConstState::get_int(Self, UInt) -> ConstValue
+pub fn ConstState::merge(Self, Self) -> Self
+pub fn ConstState::new() -> Self
+pub fn ConstState::set_float(Self, UInt, ConstValue) -> Self
+pub fn ConstState::set_int(Self, UInt, ConstValue) -> Self
+pub impl Show for ConstState
+
+pub enum ConstValue {
+  Constant(Int)
+  NotConstant
+  Unknown
+  Address(UInt)
+}
+pub impl Eq for ConstValue
+pub impl Show for ConstValue
 
 pub enum ControlStructure {
   Sequence(Array[ControlStructure])
