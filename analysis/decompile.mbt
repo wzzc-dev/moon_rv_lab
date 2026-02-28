@@ -2793,3 +2793,654 @@ pub fn decompile_with_types(
   "\n" +
   decompile_structured(cfg, instructions, symbol_map, string_map)
 }
+
+// ============================================================================
+// Advanced Dominator Tree Analysis
+// ============================================================================
+
+///|
+/// Enhanced dominator tree with additional information
+pub struct EnhancedDomTree {
+  /// Original dominator tree
+  dom_tree : DominatorTree
+  /// Depth of each node in dominator tree (root = 0)
+  dom_depth : Map[UInt, Int]
+  /// All dominators for each block (not just immediate)
+  dom_sets : Map[UInt, Array[UInt]]
+  /// Post-dominator info
+  post_dom_tree : DominatorTree
+} derive(Show)
+
+///|
+/// Build enhanced dominator tree with depth information
+pub fn build_enhanced_dom_tree(cfg : CFG) -> EnhancedDomTree {
+  let dom_tree = build_dominator_tree(cfg)
+  let post_dom_tree = build_post_dominator_tree(cfg)
+
+  // Calculate dominator depths
+  let dom_depth : Map[UInt, Int] = {}
+  let dom_sets : Map[UInt, Array[UInt]] = {}
+
+  if cfg.blocks.length() == 0 {
+    return { dom_tree, dom_depth, dom_sets, post_dom_tree }
+  }
+
+  let entry = cfg.entry_points[0]
+  dom_depth[entry] = 0
+  dom_sets[entry] = [entry]
+
+  // BFS traversal of dominator tree to calculate depths
+  let worklist : Array[UInt] = [entry]
+  while worklist.length() > 0 {
+    match worklist.pop() {
+      Some(node) => {
+        let node_depth = dom_depth.get(node).or(0)
+        let node_dom_set = dom_sets.get(node).or([])
+        // Get children from dominator tree
+        let children = dom_tree.dom_children.get(node).or([])
+        for child in children {
+          dom_depth[child] = node_depth + 1
+          // Compute dominator set: doms(child) = {child} ∪ doms(parent)
+          let child_dom_set = [child]
+          for d in node_dom_set {
+            child_dom_set.push(d)
+          }
+          dom_sets[child] = child_dom_set
+          worklist.push(child)
+        }
+      }
+      None => ()
+    }
+  }
+
+  { dom_tree, dom_depth, dom_sets, post_dom_tree }
+}
+
+///|
+/// Build post-dominator tree
+/// A post-dominator is a node that must be executed after a given node
+pub fn build_post_dominator_tree(cfg : CFG) -> DominatorTree {
+  if cfg.blocks.length() == 0 {
+    return {
+      idom: Map::new(),
+      dom_children: Map::new(),
+      dom_frontier: Map::new(),
+      post_idom: Map::new(),
+    }
+  }
+
+  // Find exit blocks (blocks with no successors or return)
+  let exits : Array[UInt] = []
+  let succs_map : Map[UInt, Array[UInt]] = {}
+  for block in cfg.blocks {
+    succs_map[block.start_addr] = []
+  }
+  for edge in cfg.edges {
+    if edge.edge_type != EdgeType::Return {
+      match succs_map.get(edge.from_block) {
+        Some(arr) => arr.push(edge.to_block)
+        None => succs_map[edge.from_block] = [edge.to_block]
+      }
+    }
+  }
+  for block in cfg.blocks {
+    let succs = succs_map.get(block.start_addr).or([])
+    // Exit if no successors or ends with return
+    if succs.length() == 0 {
+      exits.push(block.start_addr)
+    }
+  }
+
+  if exits.length() == 0 {
+    // No exit found, use the last block
+    let last_block = cfg.blocks[cfg.blocks.length() - 1].start_addr
+    exits.push(last_block)
+  }
+
+  // Build reverse CFG (swap successors and predecessors)
+  let preds_map : Map[UInt, Array[UInt]] = {}
+  for block in cfg.blocks {
+    preds_map[block.start_addr] = []
+  }
+  for edge in cfg.edges {
+    if edge.edge_type != EdgeType::Return {
+      match preds_map.get(edge.to_block) {
+        Some(arr) => arr.push(edge.from_block)
+        None => preds_map[edge.to_block] = [edge.from_block]
+      }
+    }
+  }
+
+  // Use single exit for post-dominator computation
+  // Create a virtual exit node if multiple exits exist
+  let exit = if exits.length() == 1 {
+    exits[0]
+  } else {
+    // Use first exit (simplified approach)
+    exits[0]
+  }
+
+  // Compute post-dominators using same algorithm but on reverse CFG
+  let post_idom : Map[UInt, UInt] = {}
+  post_idom[exit] = exit
+
+  let all_blocks : Array[UInt] = []
+  for block in cfg.blocks {
+    all_blocks.push(block.start_addr)
+  }
+
+  let mut changed = true
+  while changed {
+    changed = false
+    for block_addr in all_blocks {
+      if block_addr == exit {
+        continue
+      }
+      // In post-dominator computation, we look at successors
+      let succs = succs_map.get(block_addr).or([])
+      if succs.length() == 0 {
+        // Block with no successors post-dominates itself relative to exit
+        continue
+      }
+      let mut new_pdom : UInt? = None
+      for s in succs {
+        if post_idom.contains(s) {
+          new_pdom = Some(s)
+          break
+        }
+      }
+      match new_pdom {
+        Some(init_pdom) => {
+          let mut pdom = init_pdom
+          for s in succs {
+            if post_idom.contains(s) && s != pdom {
+              pdom = intersect(post_idom, pdom, s)
+            }
+          }
+          match post_idom.get(block_addr) {
+            Some(old) =>
+              if old != pdom {
+                post_idom[block_addr] = pdom
+                changed = true
+              }
+            None => {
+              post_idom[block_addr] = pdom
+              changed = true
+            }
+          }
+        }
+        None => ()
+      }
+    }
+  }
+
+  // Build post-dominator children
+  let post_dom_children : Map[UInt, Array[UInt]] = {}
+  for block in cfg.blocks {
+    post_dom_children[block.start_addr] = []
+  }
+  for block in cfg.blocks {
+    let addr = block.start_addr
+    if addr != exit {
+      match post_idom.get(addr) {
+        Some(parent) =>
+          match post_dom_children.get(parent) {
+            Some(children) => children.push(addr)
+            None => post_dom_children[parent] = [addr]
+          }
+        None => ()
+      }
+    }
+  }
+
+  {
+    idom: post_idom,
+    dom_children: post_dom_children,
+    dom_frontier: Map::new(),
+    post_idom: Map::new(),
+  }
+}
+
+///|
+/// Detect unreachable blocks in CFG
+/// Returns array of block addresses that are not reachable from entry
+pub fn detect_unreachable_blocks(cfg : CFG) -> FixedArray[UInt] {
+  if cfg.blocks.length() == 0 {
+    return []
+  }
+
+  let entry = cfg.entry_points[0]
+
+  // Build successor map
+  let succs : Map[UInt, Array[UInt]] = {}
+  for block in cfg.blocks {
+    succs[block.start_addr] = []
+  }
+  for edge in cfg.edges {
+    if edge.edge_type != EdgeType::Return {
+      match succs.get(edge.from_block) {
+        Some(arr) => arr.push(edge.to_block)
+        None => succs[edge.from_block] = [edge.to_block]
+      }
+    }
+  }
+
+  // BFS from entry point
+  let visited : Array[UInt] = []
+  let worklist : Array[UInt] = [entry]
+
+  while worklist.length() > 0 {
+    match worklist.pop() {
+      Some(block) => {
+        // Check if already visited
+        let mut already_visited = false
+        for v in visited {
+          if v == block {
+            already_visited = true
+            break
+          }
+        }
+        if !already_visited {
+          visited.push(block)
+          // Add successors to worklist
+          let block_succs = succs.get(block).or([])
+          for s in block_succs {
+            worklist.push(s)
+          }
+        }
+      }
+      None => ()
+    }
+  }
+
+  // Find unreachable blocks
+  let dead_blocks : Array[UInt] = []
+  for block in cfg.blocks {
+    let mut is_reachable = false
+    for v in visited {
+      if v == block.start_addr {
+        is_reachable = true
+        break
+      }
+    }
+    if !is_reachable {
+      dead_blocks.push(block.start_addr)
+    }
+  }
+
+  FixedArray::from_array(dead_blocks)
+}
+
+///|
+/// Check if a block dominates another
+pub fn dominates(dom_tree : DominatorTree, a : UInt, b : UInt) -> Bool {
+  if a == b {
+    return true
+  }
+
+  // Walk up dominator tree from b
+  let mut current = b
+  while true {
+    match dom_tree.idom.get(current) {
+      Some(idom) => {
+        if idom == a {
+          return true
+        }
+        if idom == current {
+          // Reached root
+          break
+        }
+        current = idom
+      }
+      None => break
+    }
+  }
+  false
+}
+
+///|
+/// Check if a block post-dominates another
+pub fn post_dominates(dom_tree : DominatorTree, a : UInt, b : UInt) -> Bool {
+  if a == b {
+    return true
+  }
+
+  // Walk up post-dominator tree from b
+  let mut current = b
+  while true {
+    match dom_tree.post_idom.get(current) {
+      Some(pdom) => {
+        if pdom == a {
+          return true
+        }
+        if pdom == current {
+          break
+        }
+        current = pdom
+      }
+      None => break
+    }
+  }
+  false
+}
+
+///|
+/// Compute loop nesting forest
+/// Returns the parent loop for each loop (by index)
+pub fn compute_loop_nesting(loop_info : LoopInfo) -> Map[Int, Int] {
+  let nesting : Map[Int, Int] = {}
+
+  for i = 0; i < loop_info.loops.length(); i = i + 1 {
+    let inner_header = loop_info.loops[i].header
+
+    // Find the smallest loop that contains this loop's header
+    let mut parent_idx : Int? = None
+    let mut parent_size = 0
+
+    for j = 0; j < loop_info.loops.length(); j = j + 1 {
+      if i != j {
+        let outer_loop = loop_info.loops[j]
+        // Check if outer loop contains inner header
+        let mut contains = false
+        for b in outer_loop.body {
+          if b == inner_header {
+            contains = true
+            break
+          }
+        }
+        if contains && outer_loop.body.length() > parent_size {
+          parent_idx = Some(j)
+          parent_size = outer_loop.body.length()
+        }
+      }
+    }
+
+    match parent_idx {
+      Some(p) => nesting[i] = p
+      None => ()
+    }
+  }
+
+  nesting
+}
+
+///|
+/// Enhanced loop detection with proper nesting
+pub fn detect_loops_enhanced(cfg : CFG, dom_tree : DominatorTree) -> LoopInfo {
+  let loops : Array[NaturalLoop] = []
+  let block_to_loops : Map[UInt, Array[Int]] = {}
+  let mut max_depth = 0
+
+  // Find back edges: edges where target dominates source
+  for edge in cfg.edges {
+    if dominates(dom_tree, edge.to_block, edge.from_block) {
+      let header = edge.to_block
+
+      // Collect loop body using worklist algorithm
+      let body : Array[UInt] = [header]
+      let worklist : Array[UInt] = [edge.from_block]
+
+      while worklist.length() > 0 {
+        match worklist.pop() {
+          Some(block) => {
+            let mut found = false
+            for b in body {
+              if b == block {
+                found = true
+                break
+              }
+            }
+            if !found {
+              body.push(block)
+              // Add predecessors to worklist (excluding back edges)
+              for e in cfg.edges {
+                if e.to_block == block && e.edge_type != EdgeType::Return {
+                  // Skip back edges to header
+                  if !(e.from_block == header ||
+                    (e.to_block == header && body.contains(e.from_block))) {
+                    worklist.push(e.from_block)
+                  }
+                }
+              }
+            }
+          }
+          None => ()
+        }
+      }
+
+      // Determine loop type
+      let loop_type = classify_loop(cfg, header, body, edge.from_block)
+
+      loops.push(NaturalLoop::{
+        header,
+        back_edges: [edge.from_block],
+        body,
+        depth: 1,
+        parent: None,
+        loop_type,
+      })
+    }
+  }
+
+  // Compute nesting depth and parent relationships
+  let nesting = compute_loop_nesting_for_loops(loops)
+  let final_loops : Array[NaturalLoop] = []
+
+  for i = 0; i < loops.length(); i = i + 1 {
+    let parent_int = nesting.get(i)
+    let depth = compute_loop_depth(nesting, i)
+    // Convert Int? to UInt? for parent field
+    let parent : UInt? = match parent_int {
+      Some(p) => Some(p.to_uint())
+      None => None
+    }
+
+    final_loops.push(NaturalLoop::{
+      header: loops[i].header,
+      back_edges: loops[i].back_edges,
+      body: loops[i].body,
+      depth,
+      parent,
+      loop_type: loops[i].loop_type,
+    })
+
+    if depth > max_depth {
+      max_depth = depth
+    }
+
+    // Update block_to_loops
+    for b in loops[i].body {
+      match block_to_loops.get(b) {
+        Some(arr) => arr.push(i)
+        None => block_to_loops[b] = [i]
+      }
+    }
+  }
+
+  { loops: final_loops, block_to_loops, max_depth }
+}
+
+///|
+/// Compute nesting map for loops
+fn compute_loop_nesting_for_loops(loops : Array[NaturalLoop]) -> Map[Int, Int] {
+  let nesting : Map[Int, Int] = {}
+
+  for i = 0; i < loops.length(); i = i + 1 {
+    let inner_header = loops[i].header
+    let mut parent_idx : Int? = None
+    let mut parent_size = 0
+
+    for j = 0; j < loops.length(); j = j + 1 {
+      if i != j {
+        let outer_loop = loops[j]
+        let mut contains = false
+        for b in outer_loop.body {
+          if b == inner_header {
+            contains = true
+            break
+          }
+        }
+        if contains && outer_loop.body.length() > parent_size {
+          parent_idx = Some(j)
+          parent_size = outer_loop.body.length()
+        }
+      }
+    }
+
+    match parent_idx {
+      Some(p) => nesting[i] = p
+      None => ()
+    }
+  }
+
+  nesting
+}
+
+///|
+/// Compute depth of a loop from nesting map
+fn compute_loop_depth(nesting : Map[Int, Int], loop_idx : Int) -> Int {
+  let mut depth = 1
+  let mut current = loop_idx
+
+  while true {
+    match nesting.get(current) {
+      Some(parent) => {
+        depth = depth + 1
+        current = parent
+      }
+      None => break
+    }
+  }
+
+  depth
+}
+
+///|
+/// Classify loop type based on control flow pattern
+fn classify_loop(
+  cfg : CFG,
+  header : UInt,
+  body : Array[UInt],
+  back_edge_src : UInt,
+) -> LoopType {
+  // Check if condition is at header (while) or at end (do-while)
+  // Look for branch instruction at header
+  let mut has_header_branch = false
+  let mut has_exit_branch = false
+
+  for edge in cfg.edges {
+    // Check if header has conditional exit
+    if edge.from_block == header {
+      let mut is_exit = true
+      for b in body {
+        if b == edge.to_block {
+          is_exit = false
+          break
+        }
+      }
+      if is_exit &&
+        (
+          edge.edge_type == EdgeType::BranchTaken ||
+          edge.edge_type == EdgeType::BranchNotTaken
+        ) {
+        has_header_branch = true
+      }
+    }
+    // Check if back edge source has conditional branch
+    if edge.from_block == back_edge_src {
+      if edge.edge_type == EdgeType::BranchTaken ||
+        edge.edge_type == EdgeType::BranchNotTaken {
+        let mut to_body = false
+        for b in body {
+          if b == edge.to_block {
+            to_body = true
+            break
+          }
+        }
+        if to_body {
+          has_exit_branch = true
+        }
+      }
+    }
+  }
+
+  if has_header_branch && has_exit_branch {
+    LoopType::For
+  } else if has_header_branch {
+    LoopType::While
+  } else if has_exit_branch {
+    LoopType::DoWhile
+  } else {
+    LoopType::Infinite
+  }
+}
+
+///|
+/// Find control flow edges that are loop exits
+pub fn find_loop_exits(cfg : CFG, loop_ : NaturalLoop) -> FixedArray[Edge] {
+  let exits : Array[Edge] = []
+
+  for edge in cfg.edges {
+    // Check if edge exits the loop
+    let from_in_body = loop_.body.contains(edge.from_block)
+    let mut to_in_body = false
+    for b in loop_.body {
+      if b == edge.to_block {
+        to_in_body = true
+        break
+      }
+    }
+
+    if from_in_body && !to_in_body && edge.edge_type != EdgeType::Return {
+      exits.push(edge)
+    }
+  }
+
+  FixedArray::from_array(exits)
+}
+
+///|
+/// Format enhanced dominator tree info
+pub fn format_enhanced_dom_tree(enhanced : EnhancedDomTree) -> String {
+  let mut result = "=== Enhanced Dominator Tree ===\n"
+
+  result = result + "\nDominator Depths:\n"
+  for addr in enhanced.dom_depth.keys() {
+    let depth = enhanced.dom_depth.get(addr).or(0)
+    result = result +
+      "  0x" +
+      uint_to_hex(addr) +
+      " : depth " +
+      depth.to_string() +
+      "\n"
+  }
+
+  result = result + "\nDominators Sets:\n"
+  for addr in enhanced.dom_sets.keys() {
+    let doms = enhanced.dom_sets.get(addr).or([])
+    result = result + "  0x" + uint_to_hex(addr) + " : "
+    for i = 0; i < doms.length(); i = i + 1 {
+      if i > 0 {
+        result = result + ", "
+      }
+      result = result + "0x" + uint_to_hex(doms[i])
+    }
+    result = result + "\n"
+  }
+
+  result
+}
+
+///|
+/// Format unreachable blocks info
+pub fn format_unreachable_blocks(blocks : FixedArray[UInt]) -> String {
+  if blocks.length() == 0 {
+    return "No unreachable blocks found.\n"
+  }
+
+  let mut result = "Unreachable Blocks (" + blocks.length().to_string() + "):\n"
+  for addr in blocks {
+    result = result + "  0x" + uint_to_hex(addr) + "\n"
+  }
+  result
+}

@@ -659,3 +659,142 @@ test "tail_call_detection_integration" {
   // Should detect 1 tail call
   inspect(info.tail_calls.length(), content="1")
 }
+
+// ==================== Phase 2.2 Tests: Enhanced Dominator and Loop Analysis ====================
+
+///|
+test "build_enhanced_dom_tree_empty" {
+  let bytes : FixedArray[Byte] = FixedArray::make(0, b'\x00')
+  let instructions = decode_instructions(bytes, 0U)
+  let cfg = build_cfg(instructions, 0U)
+
+  let enhanced = @analysis.build_enhanced_dom_tree(cfg)
+
+  // Empty CFG should have empty dominator sets
+  inspect(enhanced.dom_sets.length(), content="0")
+}
+
+///|
+test "build_enhanced_dom_tree_single_block" {
+  // Two non-terminator instructions = one block
+  let addi_bytes = make_u32_bytes(0x06400293U) // ADDI x5, x0, 100
+  let add_bytes = make_u32_bytes(0x006282B3U) // ADD x5, x5, x6
+  let bytes = concat_bytes([addi_bytes, add_bytes])
+
+  let instructions = decode_instructions(bytes, 0U)
+  let cfg = build_cfg(instructions, 0U)
+
+  let enhanced = @analysis.build_enhanced_dom_tree(cfg)
+
+  // Single block should dominate itself
+  inspect(enhanced.dom_sets.length(), content="1")
+}
+
+///|
+test "build_enhanced_dom_tree_with_branch" {
+  // BEQ creates branch
+  let beq_bytes = make_u32_bytes(0x00208463U) // BEQ x1, x2, 8
+  let bytes = beq_bytes
+
+  let instructions = decode_instructions(bytes, 0U)
+  let cfg = build_cfg(instructions, 0U)
+
+  let enhanced = @analysis.build_enhanced_dom_tree(cfg)
+
+  // Should have dominator info for the block
+  inspect(enhanced.dom_sets.length(), content="1")
+}
+
+///|
+test "detect_unreachable_blocks_empty" {
+  let bytes : FixedArray[Byte] = FixedArray::make(0, b'\x00')
+  let instructions = decode_instructions(bytes, 0U)
+  let cfg = build_cfg(instructions, 0U)
+
+  let unreachable = @analysis.detect_unreachable_blocks(cfg)
+
+  inspect(unreachable.length(), content="0")
+}
+
+///|
+test "detect_unreachable_blocks_all_reachable" {
+  // Simple linear code
+  let addi_bytes = make_u32_bytes(0x06400293U) // ADDI x5, x0, 100
+  let add_bytes = make_u32_bytes(0x006282B3U) // ADD x5, x5, x6
+  let bytes = concat_bytes([addi_bytes, add_bytes])
+
+  let instructions = decode_instructions(bytes, 0U)
+  let cfg = build_cfg(instructions, 0U)
+
+  let unreachable = @analysis.detect_unreachable_blocks(cfg)
+
+  // All blocks should be reachable
+  inspect(unreachable.length(), content="0")
+}
+
+///|
+test "dominates_simple" {
+  // Simple linear code
+  let addi_bytes = make_u32_bytes(0x06400293U) // ADDI x5, x0, 100
+  let add_bytes = make_u32_bytes(0x006282B3U) // ADD x5, x5, x6
+  let bytes = concat_bytes([addi_bytes, add_bytes])
+
+  let instructions = decode_instructions(bytes, 0U)
+  let cfg = build_cfg(instructions, 0U)
+  let dom_tree = build_dominator_tree(cfg)
+
+  // Single block should dominate itself
+  if cfg.blocks.length() > 0 {
+    let addr = cfg.blocks[0].start_addr
+    assert_true(@analysis.dominates(dom_tree, addr, addr))
+  }
+}
+
+///|
+test "detect_loops_enhanced_no_loop" {
+  // Simple linear code without loops
+  let addi_bytes = make_u32_bytes(0x06400293U) // ADDI x5, x0, 100
+  let add_bytes = make_u32_bytes(0x006282B3U) // ADD x5, x5, x6
+  let bytes = concat_bytes([addi_bytes, add_bytes])
+
+  let instructions = decode_instructions(bytes, 0U)
+  let cfg = build_cfg(instructions, 0U)
+  let dom_tree = build_dominator_tree(cfg)
+
+  let loop_info = @analysis.detect_loops_enhanced(cfg, dom_tree)
+
+  // No loops
+  inspect(loop_info.loops.length(), content="0")
+  inspect(loop_info.max_depth, content="0")
+}
+
+///|
+test "detect_loops_enhanced_with_branch" {
+  // Code with branch (no loop back edge)
+  let beq_bytes = make_u32_bytes(0x00208463U) // BEQ x1, x2, 8
+  let bytes = beq_bytes
+
+  let instructions = decode_instructions(bytes, 0U)
+  let cfg = build_cfg(instructions, 0U)
+  let dom_tree = build_dominator_tree(cfg)
+
+  let loop_info = @analysis.detect_loops_enhanced(cfg, dom_tree)
+
+  // No loops (branch doesn't create a loop)
+  inspect(loop_info.loops.length(), content="0")
+}
+
+///|
+test "find_loop_exits_empty" {
+  // No loops
+  let addi_bytes = make_u32_bytes(0x06400293U)
+  let bytes = addi_bytes
+
+  let instructions = decode_instructions(bytes, 0U)
+  let cfg = build_cfg(instructions, 0U)
+  let dom_tree = build_dominator_tree(cfg)
+  let loop_info = @analysis.detect_loops_enhanced(cfg, dom_tree)
+
+  // No loops, so no loop exits
+  inspect(loop_info.loops.length(), content="0")
+}

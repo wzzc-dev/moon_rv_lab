@@ -20,6 +20,10 @@ pub fn build_cfg(FixedArray[DecodedInst], UInt) -> CFG
 
 pub fn build_dominator_tree(CFG) -> DominatorTree
 
+pub fn build_enhanced_dom_tree(CFG) -> EnhancedDomTree
+
+pub fn build_post_dominator_tree(CFG) -> DominatorTree
+
 pub fn callgraph_to_dot(CallGraph, String) -> String
 
 pub fn callgraph_to_json(CallGraph) -> String
@@ -31,6 +35,8 @@ pub fn cfg_to_json(CFG) -> String
 pub fn compute_def_use_chains(FixedArray[DecodedInst]) -> FixedArray[DefUseChain]
 
 pub fn compute_liveness(CFG, FixedArray[DecodedInst]) -> FixedArray[BlockLiveness]
+
+pub fn compute_loop_nesting(LoopInfo) -> Map[Int, Int]
 
 pub fn decode_instructions(FixedArray[Byte], UInt) -> FixedArray[DecodedInst]
 
@@ -52,7 +58,13 @@ pub fn detect_jump_table_pattern(FixedArray[DecodedInst], Int) -> JumpTable?
 
 pub fn detect_loops(CFG, DominatorTree) -> LoopInfo
 
+pub fn detect_loops_enhanced(CFG, DominatorTree) -> LoopInfo
+
 pub fn detect_tail_call(DecodedInst, DecodedInst?) -> TailCall?
+
+pub fn detect_unreachable_blocks(CFG) -> FixedArray[UInt]
+
+pub fn dominates(DominatorTree, UInt, UInt) -> Bool
 
 pub fn enhance_cfg_with_indirect_jumps(CFG, IndirectJumpInfo) -> CFG
 
@@ -60,7 +72,11 @@ pub fn extract_condition(@decode.Instruction) -> ConditionExpr
 
 pub fn find_entry_points(CFG) -> FixedArray[UInt]
 
+pub fn find_loop_exits(CFG, NaturalLoop) -> FixedArray[Edge]
+
 pub fn format_control_structure(ControlStructure, Int) -> String
+
+pub fn format_enhanced_dom_tree(EnhancedDomTree) -> String
 
 pub fn format_function_signature(FunctionSignature) -> String
 
@@ -75,6 +91,8 @@ pub fn format_stack_frame(StackFrame) -> String
 pub fn format_tail_call(TailCall) -> String
 
 pub fn format_type(VarType) -> String
+
+pub fn format_unreachable_blocks(FixedArray[UInt]) -> String
 
 pub fn get_branch_target(@decode.Instruction) -> Int
 
@@ -103,6 +121,8 @@ pub fn is_unconditional_jump(@decode.Instruction) -> Bool
 pub fn merge_types(VarType, VarType) -> VarType
 
 pub fn negate_condition(ConditionExpr) -> ConditionExpr
+
+pub fn post_dominates(DominatorTree, UInt, UInt) -> Bool
 
 pub fn print_call_graph(CallGraph) -> Unit
 
@@ -277,6 +297,14 @@ pub enum EdgeType {
 }
 pub impl Eq for EdgeType
 pub impl Show for EdgeType
+
+pub struct EnhancedDomTree {
+  dom_tree : DominatorTree
+  dom_depth : Map[UInt, Int]
+  dom_sets : Map[UInt, Array[UInt]]
+  post_dom_tree : DominatorTree
+}
+pub impl Show for EnhancedDomTree
 
 pub enum ForInit {
   VarDecl(String, String, String)
