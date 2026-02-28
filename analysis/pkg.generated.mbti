@@ -8,6 +8,10 @@ import {
 // Values
 pub fn analyze_code(FixedArray[Byte], UInt) -> CFG
 
+pub fn analyze_indirect_jumps(FixedArray[DecodedInst], FixedArray[Byte], UInt, UInt) -> IndirectJumpInfo
+
+pub fn analyze_pointer_source(FixedArray[DecodedInst], Int, UInt) -> PointerSource
+
 pub fn analyze_stack_frame(FixedArray[DecodedInst], CFG) -> StackFrame
 
 pub fn build_call_graph(FixedArray[DecodedInst], CFG) -> CallGraph
@@ -40,7 +44,17 @@ pub fn decompile_with_frame(FixedArray[DecodedInst], CFG, Map[UInt, String], Map
 
 pub fn decompile_with_types(FixedArray[DecodedInst], CFG, Map[UInt, String], Map[UInt, String]) -> String
 
+pub fn detect_bounds_check(FixedArray[DecodedInst], Int) -> (Int, Int)?
+
+pub fn detect_indirect_call(FixedArray[DecodedInst], Int) -> IndirectCall?
+
+pub fn detect_jump_table_pattern(FixedArray[DecodedInst], Int) -> JumpTable?
+
 pub fn detect_loops(CFG, DominatorTree) -> LoopInfo
+
+pub fn detect_tail_call(DecodedInst, DecodedInst?) -> TailCall?
+
+pub fn enhance_cfg_with_indirect_jumps(CFG, IndirectJumpInfo) -> CFG
 
 pub fn extract_condition(@decode.Instruction) -> ConditionExpr
 
@@ -52,7 +66,13 @@ pub fn format_function_signature(FunctionSignature) -> String
 
 pub fn format_hex_uint(UInt) -> String
 
+pub fn format_indirect_call(IndirectCall) -> String
+
+pub fn format_jump_table(JumpTable) -> String
+
 pub fn format_stack_frame(StackFrame) -> String
+
+pub fn format_tail_call(TailCall) -> String
 
 pub fn format_type(VarType) -> String
 
@@ -61,6 +81,8 @@ pub fn get_branch_target(@decode.Instruction) -> Int
 pub fn get_operands(@decode.Instruction) -> InstOperands
 
 pub fn get_reg_type(UInt, TypeContext) -> VarType
+
+pub fn indirect_jump_info_to_json(IndirectJumpInfo) -> String
 
 pub fn infer_function_signature(FixedArray[DecodedInst], TypeContext, String) -> FunctionSignature
 
@@ -91,6 +113,8 @@ pub fn print_def_use_chains(FixedArray[DefUseChain]) -> Unit
 pub fn print_live_set(LiveSet) -> String
 
 pub fn reachable_functions(CallGraph) -> FixedArray[UInt]
+
+pub fn resolve_jump_table_targets(JumpTable, FixedArray[Byte], UInt, UInt) -> JumpTable
 
 pub fn structure_cfg(CFG, FixedArray[DecodedInst]) -> StructuredCFG
 
@@ -277,10 +301,43 @@ pub struct FunctionSignature {
 }
 pub impl Show for FunctionSignature
 
+pub struct IndirectCall {
+  addr : UInt
+  reg : UInt
+  possible_targets : FixedArray[UInt]
+  pointer_source : PointerSource
+}
+pub impl Show for IndirectCall
+
+pub struct IndirectJumpInfo {
+  jump_tables : FixedArray[JumpTable]
+  indirect_calls : FixedArray[IndirectCall]
+  tail_calls : FixedArray[TailCall]
+}
+pub impl Show for IndirectJumpInfo
+
 pub struct InstOperands {
   operands : FixedArray[RegOperand]
 }
 pub impl Show for InstOperands
+
+pub struct JumpTable {
+  base_addr : UInt
+  entry_count : Int
+  entry_size : Int
+  table_type : JumpTableType
+  targets : FixedArray[UInt]
+  jump_inst_addr : UInt
+}
+pub impl Show for JumpTable
+
+pub enum JumpTableType {
+  Simple
+  Relative
+  PCRelative
+}
+pub impl Eq for JumpTableType
+pub impl Show for JumpTableType
 
 pub struct LiveSet {
   int_regs : UInt
@@ -351,6 +408,17 @@ pub struct Param {
 }
 pub impl Show for Param
 
+pub enum PointerSource {
+  Global(UInt)
+  VTable(UInt, Int)
+  Argument(Int)
+  ReturnValue(UInt)
+  Register(UInt)
+  Unknown
+}
+pub impl Eq for PointerSource
+pub impl Show for PointerSource
+
 pub struct RegOperand {
   reg : UInt
   is_float : Bool
@@ -417,6 +485,14 @@ pub struct SwitchCase {
   fallthrough : Bool
 }
 pub impl Show for SwitchCase
+
+pub struct TailCall {
+  addr : UInt
+  target : UInt?
+  is_indirect : Bool
+  reg : UInt?
+}
+pub impl Show for TailCall
 
 pub struct TypeContext {
   reg_types : Map[UInt, TypeInfo]

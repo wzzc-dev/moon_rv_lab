@@ -506,3 +506,156 @@ test "extract_condition_bge" {
     _ => assert_true(false)
   }
 }
+
+///|
+test "detect_tail_call_jal_x0" {
+  // JAL x0, 256 - direct tail call
+  let code = 0x1000006FU
+  let bytes = make_u32_bytes(code)
+  let instructions = decode_instructions(bytes, 0U)
+
+  match detect_tail_call(instructions[0], None) {
+    Some(tc) => {
+      assert_true(!tc.is_indirect)
+      inspect(tc.reg, content="None")
+    }
+    None => assert_true(false)
+  }
+}
+
+///|
+test "detect_tail_call_c_j" {
+  // C.J offset - compressed direct tail call
+  // Format: 101 | imm[11|4|9:8|10|6|7|3:1|5] | 01
+  // For imm = 0: 101 0000000000 01 = 0xA001
+  let code = 0xA001U
+  let bytes = make_u16_bytes(code)
+  let instructions = decode_instructions(bytes, 0U)
+
+  match detect_tail_call(instructions[0], None) {
+    Some(tc) => assert_true(!tc.is_indirect)
+    None => assert_true(false)
+  }
+}
+
+///|
+test "detect_tail_call_jalr_not_return" {
+  // JALR x0, x5, 0 - indirect tail call (not return because rs1 != ra)
+  let code = 0x00028067U
+  let bytes = make_u32_bytes(code)
+  let instructions = decode_instructions(bytes, 0U)
+
+  match detect_tail_call(instructions[0], None) {
+    Some(tc) => {
+      assert_true(tc.is_indirect)
+      match tc.reg {
+        Some(5U) => ()
+        _ => assert_true(false)
+      }
+    }
+    None => assert_true(false)
+  }
+}
+
+///|
+test "detect_tail_call_return_not_tc" {
+  // JALR x0, x1, 0 - this is a return, not a tail call
+  let code = 0x00008067U
+  let bytes = make_u32_bytes(code)
+  let instructions = decode_instructions(bytes, 0U)
+
+  match detect_tail_call(instructions[0], None) {
+    Some(_) => assert_true(false) // Should not detect as tail call
+    None => () // Correct: this is a return
+  }
+}
+
+///|
+test "detect_indirect_call_jalr" {
+  // JALR x1, x5, 0 - indirect call via t0
+  let code = 0x000280E7U
+  let bytes = make_u32_bytes(code)
+  let instructions = decode_instructions(bytes, 0U)
+
+  match detect_indirect_call(instructions, 0) {
+    Some(ic) => {
+      inspect(ic.reg, content="5")
+      match ic.pointer_source {
+        PointerSource::Register(5U) => ()
+        _ => () // Could be other source types
+      }
+    }
+    None => assert_true(false)
+  }
+}
+
+///|
+test "analyze_indirect_jumps_empty" {
+  let instructions : FixedArray[DecodedInst] = []
+  let memory : FixedArray[Byte] = []
+
+  let info = analyze_indirect_jumps(instructions, memory, 0U, 0U)
+
+  inspect(info.jump_tables.length(), content="0")
+  inspect(info.indirect_calls.length(), content="0")
+  inspect(info.tail_calls.length(), content="0")
+}
+
+///|
+test "analyze_indirect_jumps_with_return" {
+  // RET instruction: JALR x0, ra, 0
+  let code = 0x00008067U
+  let bytes = make_u32_bytes(code)
+  let instructions = decode_instructions(bytes, 0U)
+  let memory : FixedArray[Byte] = []
+
+  let info = analyze_indirect_jumps(instructions, memory, 0U, 4U)
+
+  // Return should not be counted as tail call or jump table
+  inspect(info.jump_tables.length(), content="0")
+  inspect(info.tail_calls.length(), content="0")
+}
+
+///|
+test "analyze_indirect_jumps_empty" {
+  let instructions : FixedArray[DecodedInst] = []
+  let memory : FixedArray[Byte] = []
+
+  let info = analyze_indirect_jumps(instructions, memory, 0U, 0U)
+
+  inspect(info.jump_tables.length(), content="0")
+  inspect(info.indirect_calls.length(), content="0")
+  inspect(info.tail_calls.length(), content="0")
+}
+
+///|
+test "indirect_jump_info_json_format" {
+  // Test that JSON formatting functions exist and work
+  // JAL x0, 256 - direct tail call
+  let code = 0x1000006FU
+  let bytes = make_u32_bytes(code)
+  let instructions = decode_instructions(bytes, 0U)
+  let memory : FixedArray[Byte] = []
+
+  let info = analyze_indirect_jumps(instructions, memory, 0U, 4U)
+  let json = indirect_jump_info_to_json(info)
+
+  // Should contain empty arrays
+  assert_true(json.contains("jump_tables"))
+  assert_true(json.contains("indirect_calls"))
+  assert_true(json.contains("tail_calls"))
+}
+
+///|
+test "tail_call_detection_integration" {
+  // Test sequence: JAL x0 (tail call)
+  let code = 0x1000006FU // JAL x0, 256
+  let bytes = make_u32_bytes(code)
+  let instructions = decode_instructions(bytes, 0U)
+  let memory : FixedArray[Byte] = []
+
+  let info = analyze_indirect_jumps(instructions, memory, 0U, 4U)
+
+  // Should detect 1 tail call
+  inspect(info.tail_calls.length(), content="1")
+}

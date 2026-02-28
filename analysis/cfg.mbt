@@ -995,3 +995,905 @@ pub fn callgraph_to_json(cg : CallGraph) -> String {
   result = result + "}\n"
   result
 }
+
+// ============================================================================
+// Indirect Jump Resolution
+// ============================================================================
+
+///|
+/// Jump table type
+pub enum JumpTableType {
+  /// Simple table: each entry is a direct address
+  Simple
+  /// Relative table: each entry is offset from table base
+  Relative
+  /// PC-relative table: each entry is offset from its own address
+  PCRelative
+} derive(Show, Eq)
+
+///|
+/// Jump table information
+pub struct JumpTable {
+  /// Base address of the jump table in memory
+  base_addr : UInt
+  /// Number of entries in the table
+  entry_count : Int
+  /// Size of each entry in bytes (typically 4 for 32-bit, 8 for 64-bit)
+  entry_size : Int
+  /// Type of jump table
+  table_type : JumpTableType
+  /// Calculated target addresses
+  targets : FixedArray[UInt]
+  /// Address of the instruction that uses this table
+  jump_inst_addr : UInt
+} derive(Show)
+
+///|
+/// Indirect call information
+pub struct IndirectCall {
+  /// Address of the indirect call instruction
+  addr : UInt
+  /// Register used for indirect call
+  reg : UInt
+  /// Possible target addresses (if resolvable)
+  possible_targets : FixedArray[UInt]
+  /// Source of the function pointer
+  pointer_source : PointerSource
+} derive(Show)
+
+///|
+/// Source of function pointer
+pub enum PointerSource {
+  /// Loaded from a global variable
+  Global(UInt)
+  /// Loaded from a virtual table
+  VTable(UInt, Int) // vtable_addr, offset
+  /// Passed as function argument
+  Argument(Int) // argument index
+  /// Return value from another function
+  ReturnValue(UInt) // caller_addr
+  /// Computed from register
+  Register(UInt)
+  /// Unknown source
+  Unknown
+} derive(Show, Eq)
+
+///|
+/// Tail call information
+pub struct TailCall {
+  /// Address of the tail call instruction
+  addr : UInt
+  /// Target function address (if resolvable)
+  target : UInt?
+  /// Whether this is a computed tail call
+  is_indirect : Bool
+  /// Register used for indirect tail call
+  reg : UInt?
+} derive(Show)
+
+///|
+/// Indirect jump resolution result
+pub struct IndirectJumpInfo {
+  /// Detected jump tables
+  jump_tables : FixedArray[JumpTable]
+  /// Detected indirect calls
+  indirect_calls : FixedArray[IndirectCall]
+  /// Detected tail calls
+  tail_calls : FixedArray[TailCall]
+} derive(Show)
+
+///|
+/// Pattern match result for jump table detection
+priv struct PatternMatch {
+  table_base_reg : UInt
+  index_reg : UInt
+  scale : Int
+  table_addr : UInt?
+  found : Bool
+}
+
+///|
+/// Detect jump table pattern in a sequence of instructions
+/// 
+/// Common RISC-V jump table patterns:
+/// 1. Simple table:
+///    la      t0, table_base
+///    slli    t1, a0, 2        # index * 4
+///    add     t0, t0, t1       # table_base + offset
+///    lw      t0, 0(t0)        # load target
+///    jr      t0               # jump to target
+///
+/// 2. AUIPC + ADD pattern:
+///    auipc   t0, %pcrel_hi(table)
+///    addi    t0, t0, %pcrel_lo(table)
+///    ...
+pub fn detect_jump_table_pattern(
+  instructions : FixedArray[DecodedInst],
+  jump_inst_idx : Int,
+) -> JumpTable? {
+  if jump_inst_idx < 2 {
+    return None
+  }
+
+  // Get the jump instruction (JALR with rd=x0 or C.JR)
+  let jump_inst = instructions[jump_inst_idx]
+  let jump_reg = match jump_inst.inst {
+    @decode.JALR(0U, rs1, 0) => rs1 // jr rs1
+    @decode.C_JR(rs1) => rs1
+    _ => return None
+  }
+
+  // Look backwards for table load pattern
+  let mut table_base_addr : UInt? = None
+  let mut scale = 4 // Default scale for 32-bit addresses
+  let mut index_reg : UInt? = None
+  let mut table_base_reg = jump_reg
+
+  // Scan backwards from jump instruction
+  let start_idx = if jump_inst_idx > 10 { jump_inst_idx - 10 } else { 0 }
+  let mut i = start_idx
+  while i < jump_inst_idx {
+    let idx = jump_inst_idx - 1 - i
+    if idx < 0 {
+      break
+    }
+    let inst_info = instructions[idx]
+
+    // Look for load from memory into jump register
+    match inst_info.inst {
+      // lw rd, offset(rs1) - load target from table
+      @decode.LW(rd, rs1, _offset) | @decode.LD(rd, rs1, _offset) =>
+        if rd == jump_reg {
+          // Found load into jump register
+          // rs1 should be the table address
+          table_base_reg = rs1
+        }
+      // add rd, rs1, rs2 - calculate table entry address
+      @decode.ADD(rd, rs1, rs2) => {
+        if rd == jump_reg || rd == table_base_reg {
+          // This might be: table_base + index * scale
+          // Check if rs2 was computed from a shift
+          table_base_reg = rs1
+        }
+        ignore(rs2)
+      }
+      // slli rd, rs1, shamt - scale the index
+      @decode.SLLI(rd, rs1, shamt) =>
+        if rd == jump_reg || rd == table_base_reg {
+          scale = 1 << shamt.reinterpret_as_int()
+          index_reg = Some(rs1)
+        }
+      // LUI + ADDI or AUIPC for address loading
+      @decode.LUI(rd, imm) =>
+        if rd == table_base_reg {
+          let upper = (imm << 12).reinterpret_as_uint()
+          table_base_addr = Some(upper)
+        }
+      @decode.AUIPC(rd, imm) =>
+        if rd == table_base_reg {
+          // PC-relative address
+          let pc = inst_info.addr.reinterpret_as_int()
+          let addr = (pc + (imm << 12)).reinterpret_as_uint()
+          table_base_addr = Some(addr)
+        }
+      @decode.ADDI(rd, rs1, imm) =>
+        // Complete the address calculation
+        match table_base_addr {
+          Some(base) =>
+            if rd == table_base_reg && rs1 == table_base_reg {
+              let final_addr = (base.reinterpret_as_int() + imm).reinterpret_as_uint()
+              table_base_addr = Some(final_addr)
+            }
+          None => ()
+        }
+      _ => ()
+    }
+    i = i + 1
+  }
+
+  // If we found a potential table base address, try to resolve it
+  match table_base_addr {
+    Some(addr) =>
+      Some(JumpTable::{
+        base_addr: addr,
+        entry_count: 0, // Will be determined by analyzing bounds check
+        entry_size: scale,
+        table_type: JumpTableType::Simple,
+        targets: [],
+        jump_inst_addr: jump_inst.addr,
+      })
+    None => None
+  }
+}
+
+///|
+/// Detect bounds check pattern before jump table
+/// Returns (min_value, max_value) if found
+pub fn detect_bounds_check(
+  instructions : FixedArray[DecodedInst],
+  jump_inst_idx : Int,
+) -> (Int, Int)? {
+  if jump_inst_idx < 3 {
+    return None
+  }
+
+  // Look for common bounds check patterns:
+  // 1. sltiu + beqz: sltiu t0, a0, count; beqz t0, default_case
+  // 2. li + bltu: li t0, count; bltu a0, t0, in_range
+
+  let start_idx = if jump_inst_idx > 8 { jump_inst_idx - 8 } else { 0 }
+
+  let mut i = start_idx
+  while i < jump_inst_idx {
+    let inst_info = instructions[i]
+
+    match inst_info.inst {
+      // sltiu rd, rs1, imm - unsigned comparison with immediate
+      @decode.SLTIU(_, _, imm) =>
+        // Check if next instruction is beqz
+        if i + 1 < jump_inst_idx {
+          let next = instructions[i + 1]
+          match next.inst {
+            @decode.BEQ(_, _, _) | @decode.C_BEQZ(_, _) =>
+              // Found bounds check: if index >= imm, go to default
+              return Some((0, imm - 1))
+            _ => ()
+          }
+        }
+      // li rd, imm (actually addi rd, x0, imm or c.li)
+      @decode.ADDI(rd, _, imm) | @decode.C_LI(rd, imm) =>
+        if rd != 0U && i + 1 < jump_inst_idx {
+          let next = instructions[i + 1]
+          match next.inst {
+            @decode.BLTU(_, rs2, _) | @decode.BGEU(_, rs2, _) =>
+              // Found li + bltu pattern
+              if rs2 == rd {
+                return Some((0, imm - 1))
+              }
+            _ => ()
+          }
+        }
+      _ => ()
+    }
+    i = i + 1
+  }
+
+  None
+}
+
+///|
+/// Read a 32-bit value from byte array at given offset
+fn read_u32_from_bytes(bytes : FixedArray[Byte], offset : Int) -> UInt {
+  if offset + 3 >= bytes.length() {
+    return 0U
+  }
+  bytes[offset].to_uint() |
+  (bytes[offset + 1].to_uint() << 8) |
+  (bytes[offset + 2].to_uint() << 16) |
+  (bytes[offset + 3].to_uint() << 24)
+}
+
+///|
+/// Read a 64-bit value from byte array at given offset
+fn read_u64_from_bytes(bytes : FixedArray[Byte], offset : Int) -> UInt {
+  if offset + 7 >= bytes.length() {
+    return 0U
+  }
+  bytes[offset].to_uint() |
+  (bytes[offset + 1].to_uint() << 8) |
+  (bytes[offset + 2].to_uint() << 16) |
+  (bytes[offset + 3].to_uint() << 24) |
+  (bytes[offset + 4].to_uint() << 32) |
+  (bytes[offset + 5].to_uint() << 40) |
+  (bytes[offset + 6].to_uint() << 48) |
+  (bytes[offset + 7].to_uint() << 56)
+}
+
+///|
+/// Resolve jump table targets from memory content
+pub fn resolve_jump_table_targets(
+  table : JumpTable,
+  memory : FixedArray[Byte],
+  code_start : UInt,
+  code_end : UInt,
+) -> JumpTable {
+  if table.entry_count == 0 || memory.length() == 0 {
+    return table
+  }
+
+  let targets : Array[UInt] = []
+  let table_offset = table.base_addr.reinterpret_as_int()
+
+  for i = 0; i < table.entry_count; i = i + 1 {
+    let entry_offset = table_offset + i * table.entry_size
+    if entry_offset < 0 || entry_offset >= memory.length() {
+      break
+    }
+
+    let target = if table.entry_size == 8 {
+      read_u64_from_bytes(memory, entry_offset)
+    } else {
+      read_u32_from_bytes(memory, entry_offset)
+    }
+
+    // Validate target is within code range
+    if target >= code_start && target < code_end {
+      targets.push(target)
+    } else {
+      // Might be relative offset
+      match table.table_type {
+        JumpTableType::Relative => {
+          let abs_target = table.base_addr.reinterpret_as_int() +
+            target.reinterpret_as_int()
+          let abs_addr = abs_target.reinterpret_as_uint()
+          if abs_addr >= code_start && abs_addr < code_end {
+            targets.push(abs_addr)
+          }
+        }
+        _ => () // Skip invalid targets
+      }
+    }
+  }
+
+  JumpTable::{
+    base_addr: table.base_addr,
+    entry_count: targets.length(),
+    entry_size: table.entry_size,
+    table_type: table.table_type,
+    targets: FixedArray::from_array(targets),
+    jump_inst_addr: table.jump_inst_addr,
+  }
+}
+
+///|
+/// Detect tail call pattern
+/// 
+/// Tail call patterns in RISC-V:
+/// 1. Direct: JAL x0, target (or C.J target)
+/// 2. Indirect: JALR x0, rs1, 0 (or C.JR rs1) without saving ra
+pub fn detect_tail_call(
+  inst_info : DecodedInst,
+  _prev_inst : DecodedInst?,
+) -> TailCall? {
+  match inst_info.inst {
+    // Direct tail call: JAL x0, target
+    @decode.JAL(0U, _imm) =>
+      Some(TailCall::{
+        addr: inst_info.addr,
+        target: None, // Will be resolved by caller
+        is_indirect: false,
+        reg: None,
+      })
+    // C.J (compressed unconditional jump)
+    @decode.C_J(_imm) =>
+      Some(TailCall::{
+        addr: inst_info.addr,
+        target: None,
+        is_indirect: false,
+        reg: None,
+      })
+    // Indirect tail call: JALR x0, rs1, 0
+    @decode.JALR(0U, rs1, 0) =>
+      // Check if this looks like a tail call vs return
+      // A return would be: JALR x0, ra, 0
+      if rs1 == 1U {
+        // JALR x0, ra, 0 is a return, not tail call
+        None
+      } else {
+        Some(TailCall::{
+          addr: inst_info.addr,
+          target: None,
+          is_indirect: true,
+          reg: Some(rs1),
+        })
+      }
+    // C.JR rs1 (compressed jump register)
+    @decode.C_JR(rs1) =>
+      if rs1 == 1U {
+        // C.JR ra is a return
+        None
+      } else {
+        Some(TailCall::{
+          addr: inst_info.addr,
+          target: None,
+          is_indirect: true,
+          reg: Some(rs1),
+        })
+      }
+    _ => None
+  }
+}
+
+///|
+/// Analyze function pointer source
+pub fn analyze_pointer_source(
+  instructions : FixedArray[DecodedInst],
+  load_inst_idx : Int,
+  target_reg : UInt,
+) -> PointerSource {
+  if load_inst_idx < 1 {
+    return PointerSource::Unknown
+  }
+
+  let load_inst = instructions[load_inst_idx]
+
+  // Check the load instruction pattern
+  match load_inst.inst {
+    // Load from memory: lw/ld rd, offset(rs1)
+    @decode.LW(rd, rs1, _offset) | @decode.LD(rd, rs1, _offset) => {
+      if rd != target_reg {
+        return PointerSource::Unknown
+      }
+
+      // Determine source based on base register
+      match rs1 {
+        2U =>
+          // Loaded from stack - could be local function pointer
+          // or argument passed on stack
+          PointerSource::Argument(0) // Simplified
+        3U =>
+          // Loaded via gp (global pointer) - global variable
+          PointerSource::Global(0U) // Offset needs to be resolved
+        _ =>
+          // Check if rs1 was loaded from somewhere else
+          // Look backwards to trace the base address
+          trace_register_source(instructions, load_inst_idx, rs1)
+      }
+    }
+    // Move from another register: mv rd, rs1 (addi rd, rs1, 0)
+    @decode.ADDI(rd, rs1, 0) | @decode.C_MV(rd, rs1) => {
+      if rd != target_reg {
+        return PointerSource::Unknown
+      }
+      // Trace the source register
+      trace_register_source(instructions, load_inst_idx, rs1)
+    }
+    _ => PointerSource::Unknown
+  }
+}
+
+///|
+/// Trace the source of a register value
+fn trace_register_source(
+  instructions : FixedArray[DecodedInst],
+  current_idx : Int,
+  reg : UInt,
+) -> PointerSource {
+  if current_idx < 1 {
+    return PointerSource::Register(reg)
+  }
+
+  // Look backwards for where this register was set
+  let start_idx = if current_idx > 15 { current_idx - 15 } else { 0 }
+
+  let mut i = start_idx
+  while i < current_idx {
+    let idx = current_idx - 1 - i
+    let inst_info = instructions[idx]
+
+    match inst_info.inst {
+      @decode.LW(rd, _, _) | @decode.LD(rd, _, _) =>
+        if rd == reg {
+          return PointerSource::Global(0U) // Simplified
+        }
+      @decode.LUI(rd, _) | @decode.AUIPC(rd, _) =>
+        if rd == reg {
+          return PointerSource::Global(0U)
+        }
+      @decode.ADDI(rd, rs1, 0) | @decode.C_MV(rd, rs1) =>
+        if rd == reg {
+          return trace_register_source(instructions, idx, rs1)
+        }
+      @decode.C_LI(rd, _) | @decode.ADDI(rd, _, _) =>
+        if rd == reg {
+          return PointerSource::Register(rd)
+        }
+      _ => ()
+    }
+    i = i + 1
+  }
+
+  PointerSource::Register(reg)
+}
+
+///|
+/// Detect indirect call pattern
+pub fn detect_indirect_call(
+  instructions : FixedArray[DecodedInst],
+  call_inst_idx : Int,
+) -> IndirectCall? {
+  if call_inst_idx < 0 || call_inst_idx >= instructions.length() {
+    return None
+  }
+
+  let call_inst = instructions[call_inst_idx]
+
+  match call_inst.inst {
+    // JALR rd, rs1, imm - check if this is an indirect call
+    @decode.JALR(rd, rs1, imm) =>
+      // A call writes to ra (x1) or t0 (x5)
+      if rd == 1U || rd == 5U {
+        // This is a call
+        if imm == 0 && rs1 != 1U {
+          // Indirect call via register
+          let source = analyze_pointer_source(instructions, call_inst_idx, rs1)
+          Some(IndirectCall::{
+            addr: call_inst.addr,
+            reg: rs1,
+            possible_targets: [],
+            pointer_source: source,
+          })
+        } else {
+          None // Direct call
+        }
+      } else {
+        None // Not a call
+      }
+    // C.JALR rs1 - compressed indirect call (always writes ra)
+    @decode.C_JALR(rs1) =>
+      if rs1 != 0U {
+        let source = analyze_pointer_source(instructions, call_inst_idx, rs1)
+        Some(IndirectCall::{
+          addr: call_inst.addr,
+          reg: rs1,
+          possible_targets: [],
+          pointer_source: source,
+        })
+      } else {
+        None
+      }
+    _ => None
+  }
+}
+
+///|
+/// Analyze indirect jumps and calls in a function
+pub fn analyze_indirect_jumps(
+  instructions : FixedArray[DecodedInst],
+  memory : FixedArray[Byte],
+  code_start : UInt,
+  code_end : UInt,
+) -> IndirectJumpInfo {
+  let jump_tables : Array[JumpTable] = []
+  let indirect_calls : Array[IndirectCall] = []
+  let tail_calls : Array[TailCall] = []
+
+  for i = 0; i < instructions.length(); i = i + 1 {
+    let inst_info = instructions[i]
+    let prev_inst = if i > 0 { Some(instructions[i - 1]) } else { None }
+
+    // Check for indirect jump (potential jump table)
+    match inst_info.inst {
+      @decode.JALR(0U, _, _) | @decode.C_JR(_) => {
+        // Check if this is a return
+        let is_return = match inst_info.inst {
+          @decode.JALR(0U, rs1, _) => rs1 == 1U
+          @decode.C_JR(rs1) => rs1 == 1U
+          _ => false
+        }
+
+        if !is_return {
+          // Try to detect jump table pattern
+          match detect_jump_table_pattern(instructions, i) {
+            Some(table) => {
+              // Try to detect bounds check to determine entry count
+              let final_table = match detect_bounds_check(instructions, i) {
+                Some((_, max)) =>
+                  JumpTable::{
+                    base_addr: table.base_addr,
+                    entry_count: max + 1,
+                    entry_size: table.entry_size,
+                    table_type: table.table_type,
+                    targets: table.targets,
+                    jump_inst_addr: table.jump_inst_addr,
+                  }
+                None => table
+              }
+
+              // Resolve targets if memory is available
+              if memory.length() > 0 && final_table.entry_count > 0 {
+                let resolved = resolve_jump_table_targets(
+                  final_table, memory, code_start, code_end,
+                )
+                jump_tables.push(resolved)
+              } else {
+                jump_tables.push(final_table)
+              }
+            }
+            None => ()
+          }
+
+          // Also check for tail call
+          match detect_tail_call(inst_info, prev_inst) {
+            Some(tc) => tail_calls.push(tc)
+            None => ()
+          }
+        }
+      }
+      _ => ()
+    }
+
+    // Check for indirect call
+    match detect_indirect_call(instructions, i) {
+      Some(ic) => indirect_calls.push(ic)
+      None => ()
+    }
+
+    // Check for direct tail calls (JAL x0 or C.J)
+    match detect_tail_call(inst_info, prev_inst) {
+      Some(tc) => tail_calls.push(tc)
+      None => ()
+    }
+  }
+
+  IndirectJumpInfo::{
+    jump_tables: FixedArray::from_array(jump_tables),
+    indirect_calls: FixedArray::from_array(indirect_calls),
+    tail_calls: FixedArray::from_array(tail_calls),
+  }
+}
+
+///|
+/// Enhance CFG with resolved indirect jump targets
+pub fn enhance_cfg_with_indirect_jumps(
+  cfg : CFG,
+  indirect_info : IndirectJumpInfo,
+) -> CFG {
+  let new_edges : Array[Edge] = []
+
+  // Copy existing edges
+  for edge in cfg.edges {
+    new_edges.push(edge)
+  }
+
+  // Add edges from resolved jump tables
+  for table in indirect_info.jump_tables {
+    for target in table.targets {
+      new_edges.push(Edge::{
+        from_block: table.jump_inst_addr,
+        to_block: target,
+        edge_type: EdgeType::Jump,
+      })
+    }
+  }
+
+  // Add edges for indirect calls with known targets
+  for call in indirect_info.indirect_calls {
+    for target in call.possible_targets {
+      new_edges.push(Edge::{
+        from_block: call.addr,
+        to_block: target,
+        edge_type: EdgeType::Call,
+      })
+    }
+  }
+
+  { ..cfg, edges: FixedArray::from_array(new_edges) }
+}
+
+///|
+/// Get string representation of jump table type
+fn jump_table_type_to_string(ty : JumpTableType) -> String {
+  match ty {
+    JumpTableType::Simple => "Simple"
+    JumpTableType::Relative => "Relative"
+    JumpTableType::PCRelative => "PC-Relative"
+  }
+}
+
+///|
+/// Get string representation of pointer source
+fn pointer_source_to_string(source : PointerSource) -> String {
+  match source {
+    PointerSource::Global(addr) => "Global(" + format_hex_uint(addr) + ")"
+    PointerSource::VTable(addr, off) =>
+      "VTable(" + format_hex_uint(addr) + ", " + off.to_string() + ")"
+    PointerSource::Argument(idx) => "Argument(" + idx.to_string() + ")"
+    PointerSource::ReturnValue(caller) =>
+      "ReturnValue(" + format_hex_uint(caller) + ")"
+    PointerSource::Register(reg) => "Register(" + @decode.reg_name(reg) + ")"
+    PointerSource::Unknown => "Unknown"
+  }
+}
+
+///|
+/// Format jump table info for display
+pub fn format_jump_table(table : JumpTable) -> String {
+  let mut result = "Jump Table at " + format_hex_uint(table.base_addr) + "\n"
+  result = result + "  Entries: " + table.entry_count.to_string() + "\n"
+  result = result + "  Entry size: " + table.entry_size.to_string() + " bytes\n"
+  result = result +
+    "  Type: " +
+    jump_table_type_to_string(table.table_type) +
+    "\n"
+
+  if table.targets.length() > 0 {
+    result = result + "  Targets:\n"
+    for i = 0; i < table.targets.length(); i = i + 1 {
+      result = result +
+        "    [" +
+        i.to_string() +
+        "] " +
+        format_hex_uint(table.targets[i]) +
+        "\n"
+    }
+  }
+
+  result
+}
+
+///|
+/// Format indirect call info for display
+pub fn format_indirect_call(call : IndirectCall) -> String {
+  let mut result = "Indirect Call at " + format_hex_uint(call.addr) + "\n"
+  result = result + "  Register: " + @decode.reg_name(call.reg) + "\n"
+  result = result +
+    "  Source: " +
+    pointer_source_to_string(call.pointer_source) +
+    "\n"
+
+  if call.possible_targets.length() > 0 {
+    result = result + "  Possible targets:\n"
+    for target in call.possible_targets {
+      result = result + "    " + format_hex_uint(target) + "\n"
+    }
+  }
+
+  result
+}
+
+///|
+/// Format tail call info for display
+pub fn format_tail_call(tc : TailCall) -> String {
+  let mut result = "Tail Call at " + format_hex_uint(tc.addr) + "\n"
+  result = result +
+    "  Type: " +
+    (if tc.is_indirect { "Indirect" } else { "Direct" }) +
+    "\n"
+
+  match tc.target {
+    Some(addr) => result = result + "  Target: " + format_hex_uint(addr) + "\n"
+    None => ()
+  }
+
+  match tc.reg {
+    Some(reg) => result = result + "  Register: " + @decode.reg_name(reg) + "\n"
+    None => ()
+  }
+
+  result
+}
+
+///|
+/// Get JSON string for jump table type
+fn jump_table_type_to_json_string(ty : JumpTableType) -> String {
+  match ty {
+    JumpTableType::Simple => "simple"
+    JumpTableType::Relative => "relative"
+    JumpTableType::PCRelative => "pc_relative"
+  }
+}
+
+///|
+/// Get JSON string for pointer source
+fn pointer_source_to_json_string(source : PointerSource) -> String {
+  match source {
+    PointerSource::Global(addr) => "global:" + format_hex_uint(addr)
+    PointerSource::VTable(addr, off) =>
+      "vtable:" + format_hex_uint(addr) + ":" + off.to_string()
+    PointerSource::Argument(idx) => "argument:" + idx.to_string()
+    PointerSource::ReturnValue(caller) => "return:" + format_hex_uint(caller)
+    PointerSource::Register(reg) => "register:" + @decode.reg_name(reg)
+    PointerSource::Unknown => "unknown"
+  }
+}
+
+///|
+/// Generate JSON format for indirect jump info
+pub fn indirect_jump_info_to_json(info : IndirectJumpInfo) -> String {
+  let mut result = "{\n"
+
+  // Jump tables
+  result = result + "  \"jump_tables\": [\n"
+  for i = 0; i < info.jump_tables.length(); i = i + 1 {
+    if i > 0 {
+      result = result + ",\n"
+    }
+    let table = info.jump_tables[i]
+    result = result + "    {\n"
+    result = result +
+      "      \"base_addr\": \"" +
+      format_hex_uint(table.base_addr) +
+      "\",\n"
+    result = result +
+      "      \"entry_count\": " +
+      table.entry_count.to_string() +
+      ",\n"
+    result = result +
+      "      \"entry_size\": " +
+      table.entry_size.to_string() +
+      ",\n"
+    result = result +
+      "      \"type\": \"" +
+      jump_table_type_to_json_string(table.table_type) +
+      "\",\n"
+    result = result + "      \"targets\": ["
+    for j = 0; j < table.targets.length(); j = j + 1 {
+      if j > 0 {
+        result = result + ", "
+      }
+      result = result + "\"" + format_hex_uint(table.targets[j]) + "\""
+    }
+    result = result + "]\n"
+    result = result + "    }"
+  }
+  result = result + "\n  ],\n"
+
+  // Indirect calls
+  result = result + "  \"indirect_calls\": [\n"
+  for i = 0; i < info.indirect_calls.length(); i = i + 1 {
+    if i > 0 {
+      result = result + ",\n"
+    }
+    let call = info.indirect_calls[i]
+    result = result + "    {\n"
+    result = result +
+      "      \"addr\": \"" +
+      format_hex_uint(call.addr) +
+      "\",\n"
+    result = result +
+      "      \"register\": \"" +
+      @decode.reg_name(call.reg) +
+      "\",\n"
+    result = result +
+      "      \"source\": \"" +
+      pointer_source_to_json_string(call.pointer_source) +
+      "\",\n"
+    result = result + "      \"possible_targets\": ["
+    for j = 0; j < call.possible_targets.length(); j = j + 1 {
+      if j > 0 {
+        result = result + ", "
+      }
+      result = result + "\"" + format_hex_uint(call.possible_targets[j]) + "\""
+    }
+    result = result + "]\n"
+    result = result + "    }"
+  }
+  result = result + "\n  ],\n"
+
+  // Tail calls
+  result = result + "  \"tail_calls\": [\n"
+  for i = 0; i < info.tail_calls.length(); i = i + 1 {
+    if i > 0 {
+      result = result + ",\n"
+    }
+    let tc = info.tail_calls[i]
+    result = result + "    {\n"
+    result = result + "      \"addr\": \"" + format_hex_uint(tc.addr) + "\",\n"
+    result = result +
+      "      \"is_indirect\": " +
+      tc.is_indirect.to_string() +
+      ""
+    match tc.target {
+      Some(addr) =>
+        result = result +
+          ",\n      \"target\": \"" +
+          format_hex_uint(addr) +
+          "\""
+      None => ()
+    }
+    match tc.reg {
+      Some(reg) =>
+        result = result +
+          ",\n      \"register\": \"" +
+          @decode.reg_name(reg) +
+          "\""
+      None => ()
+    }
+    result = result + "\n    }"
+  }
+  result = result + "\n  ]\n"
+
+  result = result + "}\n"
+  result
+}
