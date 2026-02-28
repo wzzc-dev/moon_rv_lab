@@ -32,11 +32,15 @@ pub fn cfg_to_dot(CFG, String) -> String
 
 pub fn cfg_to_json(CFG) -> String
 
+pub fn check_array_bounds(Interval, Int) -> Bool
+
 pub fn compute_conditional_constant_propagation(CFG, FixedArray[DecodedInst]) -> ConditionalConstInfo
 
 pub fn compute_constant_propagation(CFG, FixedArray[DecodedInst]) -> FixedArray[BlockConstState]
 
 pub fn compute_def_use_chains(FixedArray[DecodedInst]) -> FixedArray[DefUseChain]
+
+pub fn compute_interval_analysis(CFG, FixedArray[DecodedInst]) -> FixedArray[BlockIntervalState]
 
 pub fn compute_liveness(CFG, FixedArray[DecodedInst]) -> FixedArray[BlockLiveness]
 
@@ -92,6 +96,10 @@ pub fn format_hex_uint(UInt) -> String
 
 pub fn format_indirect_call(IndirectCall) -> String
 
+pub fn format_interval(Interval) -> String
+
+pub fn format_interval_state(IntervalState) -> String
+
 pub fn format_jump_table(JumpTable) -> String
 
 pub fn format_stack_frame(StackFrame) -> String
@@ -144,6 +152,8 @@ pub fn print_live_set(LiveSet) -> String
 
 pub fn propagate_instruction(ConstState, @decode.Instruction, UInt) -> ConstState
 
+pub fn propagate_interval(IntervalState, @decode.Instruction, UInt) -> IntervalState
+
 pub fn reachable_functions(CallGraph) -> FixedArray[UInt]
 
 pub fn resolve_jump_table_targets(JumpTable, FixedArray[Byte], UInt, UInt) -> JumpTable
@@ -185,6 +195,13 @@ pub struct BlockConstState {
   state_out : ConstState
 }
 pub impl Show for BlockConstState
+
+pub struct BlockIntervalState {
+  block_addr : UInt
+  state_in : IntervalState
+  state_out : IntervalState
+}
+pub impl Show for BlockIntervalState
 
 pub struct BlockLiveness {
   block_addr : UInt
@@ -398,6 +415,61 @@ pub struct InstOperands {
   operands : FixedArray[RegOperand]
 }
 pub impl Show for InstOperands
+
+pub struct Interval {
+  lower : IntervalBound
+  upper : IntervalBound
+}
+pub fn Interval::add(Self, Self) -> Self
+pub fn Interval::bitand(Self, Self) -> Self
+pub fn Interval::bitor(Self, Self) -> Self
+pub fn Interval::bitxor(Self, Self) -> Self
+pub fn Interval::constant(Int) -> Self
+pub fn Interval::contains(Self, Int) -> Bool
+pub fn Interval::div(Self, Self) -> Self
+pub fn Interval::empty() -> Self
+pub fn Interval::full() -> Self
+pub fn Interval::get_constant(Self) -> Int?
+pub fn Interval::intersect(Self, Self) -> Self
+pub fn Interval::is_constant(Self) -> Bool
+pub fn Interval::is_empty(Self) -> Bool
+pub fn Interval::is_full(Self) -> Bool
+pub fn Interval::mul(Self, Self) -> Self
+pub fn Interval::narrow(Self, Self) -> Self
+pub fn Interval::non_negative() -> Self
+pub fn Interval::range(Int, Int) -> Self
+pub fn Interval::shl(Self, Self) -> Self
+pub fn Interval::shr(Self, Self) -> Self
+pub fn Interval::sub(Self, Self) -> Self
+pub fn Interval::union(Self, Self) -> Self
+pub fn Interval::widen(Self, Self) -> Self
+pub impl Eq for Interval
+pub impl Show for Interval
+
+pub struct IntervalBound {
+  value : Int
+  is_bounded : Bool
+}
+pub fn IntervalBound::compare(Self, Self) -> Int
+pub fn IntervalBound::finite(Int) -> Self
+pub fn IntervalBound::is_neg_inf(Self) -> Bool
+pub fn IntervalBound::is_pos_inf(Self) -> Bool
+pub fn IntervalBound::neg_inf() -> Self
+pub fn IntervalBound::pos_inf() -> Self
+pub impl Eq for IntervalBound
+pub impl Show for IntervalBound
+
+pub struct IntervalState {
+  int_regs : FixedArray[Interval]
+  float_regs : FixedArray[Interval]
+}
+pub fn IntervalState::equal(Self, Self) -> Bool
+pub fn IntervalState::get_int(Self, UInt) -> Interval
+pub fn IntervalState::merge(Self, Self) -> Self
+pub fn IntervalState::new() -> Self
+pub fn IntervalState::set_int(Self, UInt, Interval) -> Self
+pub fn IntervalState::widen(Self, Self) -> Self
+pub impl Show for IntervalState
 
 pub struct JumpTable {
   base_addr : UInt

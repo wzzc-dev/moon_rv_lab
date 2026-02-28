@@ -4990,3 +4990,1097 @@ pub fn compute_conditional_constant_propagation(
     block_consts: FixedArray::from_array(block_states),
   }
 }
+
+// ==================== Interval Analysis ====================
+
+///|
+/// Interval bound (can be finite or unbounded)
+pub struct IntervalBound {
+  /// The bound value (only meaningful if is_bounded is true)
+  value : Int
+  /// Whether this is a finite bound
+  is_bounded : Bool
+} derive(Show, Eq)
+
+///|
+/// Create a finite bound
+pub fn IntervalBound::finite(value : Int) -> IntervalBound {
+  { value, is_bounded: true }
+}
+
+///|
+/// Create negative infinity
+pub fn IntervalBound::neg_inf() -> IntervalBound {
+  { value: 0, is_bounded: false }
+}
+
+///|
+/// Create positive infinity
+pub fn IntervalBound::pos_inf() -> IntervalBound {
+  { value: 0, is_bounded: false }
+}
+
+///|
+/// Check if this is negative infinity
+pub fn IntervalBound::is_neg_inf(self : IntervalBound) -> Bool {
+  !self.is_bounded && self.value == 0
+}
+
+///|
+/// Check if this is positive infinity
+pub fn IntervalBound::is_pos_inf(self : IntervalBound) -> Bool {
+  !self.is_bounded && self.value != 0
+}
+
+///|
+/// Compare two bounds (for signed comparison)
+pub fn IntervalBound::compare(
+  self : IntervalBound,
+  other : IntervalBound,
+) -> Int {
+  // -∞ < any finite < +∞
+  if self.is_neg_inf() {
+    if other.is_neg_inf() {
+      0
+    } else {
+      -1
+    }
+  } else if self.is_pos_inf() {
+    if other.is_pos_inf() {
+      0
+    } else {
+      1
+    }
+    // self is finite
+  } else if other.is_neg_inf() {
+    1
+  } else if other.is_pos_inf() {
+    -1
+  } else if self.value < other.value {
+    -1
+  } else if self.value > other.value {
+    1
+  } else {
+    0
+  }
+}
+
+///|
+/// Interval representing a range of integer values
+pub struct Interval {
+  /// Lower bound (inclusive)
+  lower : IntervalBound
+  /// Upper bound (inclusive)
+  upper : IntervalBound
+} derive(Show, Eq)
+
+///|
+/// Create an interval [lower, upper]
+pub fn Interval::range(lower : Int, upper : Int) -> Interval {
+  { lower: IntervalBound::finite(lower), upper: IntervalBound::finite(upper) }
+}
+
+///|
+/// Create an interval for a single value
+pub fn Interval::constant(value : Int) -> Interval {
+  Interval::range(value, value)
+}
+
+///|
+/// Create the full interval (-∞, +∞)
+pub fn Interval::full() -> Interval {
+  { lower: IntervalBound::neg_inf(), upper: IntervalBound::pos_inf() }
+}
+
+///|
+/// Create an empty/bottom interval (represents no possible value)
+pub fn Interval::empty() -> Interval {
+  // Use a special representation: upper < lower (finite)
+  { lower: IntervalBound::finite(1), upper: IntervalBound::finite(0) }
+}
+
+///|
+/// Create interval [0, +∞) for unsigned values
+pub fn Interval::non_negative() -> Interval {
+  { lower: IntervalBound::finite(0), upper: IntervalBound::pos_inf() }
+}
+
+///|
+/// Check if interval is empty (bottom)
+pub fn Interval::is_empty(self : Interval) -> Bool {
+  if self.lower.is_bounded && self.upper.is_bounded {
+    self.lower.value > self.upper.value
+  } else {
+    false
+  }
+}
+
+///|
+/// Check if interval is full (top)
+pub fn Interval::is_full(self : Interval) -> Bool {
+  self.lower.is_neg_inf() && self.upper.is_pos_inf()
+}
+
+///|
+/// Check if interval represents a single constant
+pub fn Interval::is_constant(self : Interval) -> Bool {
+  self.lower.is_bounded &&
+  self.upper.is_bounded &&
+  self.lower.value == self.upper.value
+}
+
+///|
+/// Get the constant value if this is a constant interval
+pub fn Interval::get_constant(self : Interval) -> Int? {
+  if self.is_constant() {
+    Some(self.lower.value)
+  } else {
+    None
+  }
+}
+
+///|
+/// Check if interval contains a specific value
+pub fn Interval::contains(self : Interval, value : Int) -> Bool {
+  if self.is_empty() {
+    false
+  } else {
+    let lower_ok = self.lower.compare(IntervalBound::finite(value)) <= 0
+    let upper_ok = IntervalBound::finite(value).compare(self.upper) <= 0
+    lower_ok && upper_ok
+  }
+}
+
+///|
+/// Union of two intervals (widest range)
+pub fn Interval::union(self : Interval, other : Interval) -> Interval {
+  if self.is_empty() {
+    return other
+  }
+  if other.is_empty() {
+    return self
+  }
+
+  let new_lower = if self.lower.compare(other.lower) <= 0 {
+    self.lower
+  } else {
+    other.lower
+  }
+  let new_upper = if self.upper.compare(other.upper) >= 0 {
+    self.upper
+  } else {
+    other.upper
+  }
+  { lower: new_lower, upper: new_upper }
+}
+
+///|
+/// Intersection of two intervals
+pub fn Interval::intersect(self : Interval, other : Interval) -> Interval {
+  if self.is_empty() || other.is_empty() {
+    return Interval::empty()
+  }
+
+  let new_lower = if self.lower.compare(other.lower) >= 0 {
+    self.lower
+  } else {
+    other.lower
+  }
+  let new_upper = if self.upper.compare(other.upper) <= 0 {
+    self.upper
+  } else {
+    other.upper
+  }
+
+  if new_lower.compare(new_upper) > 0 {
+    Interval::empty()
+  } else {
+    { lower: new_lower, upper: new_upper }
+  }
+}
+
+///|
+/// Widen this interval with another (for fixpoint computation)
+pub fn Interval::widen(self : Interval, other : Interval) -> Interval {
+  if self.is_empty() {
+    return other
+  }
+  if other.is_empty() {
+    return self
+  }
+
+  // Lower bound: if other lower < self lower, widen to -∞
+  let new_lower = if other.lower.compare(self.lower) < 0 {
+    IntervalBound::neg_inf()
+  } else {
+    self.lower
+  }
+
+  // Upper bound: if other upper > self upper, widen to +∞
+  let new_upper = if other.upper.compare(self.upper) > 0 {
+    IntervalBound::pos_inf()
+  } else {
+    self.upper
+  }
+
+  { lower: new_lower, upper: new_upper }
+}
+
+///|
+/// Narrow this interval with another (for more precise fixpoint)
+pub fn Interval::narrow(self : Interval, other : Interval) -> Interval {
+  if self.is_empty() {
+    return other
+  }
+  if other.is_empty() {
+    return self
+  }
+
+  // Lower bound: if self lower is -∞, use other lower
+  let new_lower = if self.lower.is_neg_inf() && other.lower.is_bounded {
+    other.lower
+  } else {
+    self.lower
+  }
+
+  // Upper bound: if self upper is +∞, use other upper
+  let new_upper = if self.upper.is_pos_inf() && other.upper.is_bounded {
+    other.upper
+  } else {
+    self.upper
+  }
+
+  { lower: new_lower, upper: new_upper }
+}
+
+///|
+/// Add two intervals
+pub fn Interval::add(self : Interval, other : Interval) -> Interval {
+  if self.is_empty() || other.is_empty() {
+    return Interval::empty()
+  }
+
+  // [-∞, a] + [-∞, b] = [-∞, +∞] (if any is unbounded)
+  // [a, b] + [c, d] = [a+c, b+d]
+  let new_lower = if self.lower.is_neg_inf() || other.lower.is_neg_inf() {
+    IntervalBound::neg_inf()
+  } else {
+    IntervalBound::finite(self.lower.value + other.lower.value)
+  }
+
+  let new_upper = if self.upper.is_pos_inf() || other.upper.is_pos_inf() {
+    IntervalBound::pos_inf()
+  } else {
+    IntervalBound::finite(self.upper.value + other.upper.value)
+  }
+
+  { lower: new_lower, upper: new_upper }
+}
+
+///|
+/// Subtract two intervals
+pub fn Interval::sub(self : Interval, other : Interval) -> Interval {
+  if self.is_empty() || other.is_empty() {
+    return Interval::empty()
+  }
+
+  // [a, b] - [c, d] = [a-d, b-c]
+  let new_lower = if self.lower.is_neg_inf() || other.upper.is_pos_inf() {
+    IntervalBound::neg_inf()
+  } else {
+    IntervalBound::finite(self.lower.value - other.upper.value)
+  }
+
+  let new_upper = if self.upper.is_pos_inf() || other.lower.is_neg_inf() {
+    IntervalBound::pos_inf()
+  } else {
+    IntervalBound::finite(self.upper.value - other.lower.value)
+  }
+
+  { lower: new_lower, upper: new_upper }
+}
+
+///|
+/// Multiply two intervals
+pub fn Interval::mul(self : Interval, other : Interval) -> Interval {
+  if self.is_empty() || other.is_empty() {
+    return Interval::empty()
+  }
+
+  // Handle special cases with zero
+  if (
+      self.lower.is_bounded &&
+      self.lower.value == 0 &&
+      self.upper.is_bounded &&
+      self.upper.value == 0
+    ) ||
+    (
+      other.lower.is_bounded &&
+      other.lower.value == 0 &&
+      other.upper.is_bounded &&
+      other.upper.value == 0
+    ) {
+    return Interval::constant(0)
+  }
+
+  // If either is unbounded in both directions, result is full
+  if (self.lower.is_neg_inf() && self.upper.is_pos_inf()) ||
+    (other.lower.is_neg_inf() && other.upper.is_pos_inf()) {
+    return Interval::full()
+  }
+
+  // Compute all four corner products
+  let products : Array[Int] = []
+
+  // Helper to add product if both bounds are finite
+  fn add_product(
+    a : IntervalBound,
+    b : IntervalBound,
+    products : Array[Int],
+  ) -> Unit {
+    if a.is_bounded && b.is_bounded {
+      products.push(a.value * b.value)
+    }
+  }
+
+  add_product(self.lower, other.lower, products)
+  add_product(self.lower, other.upper, products)
+  add_product(self.upper, other.lower, products)
+  add_product(self.upper, other.upper, products)
+
+  if products.length() == 0 {
+    return Interval::full()
+  }
+
+  // Find min and max
+  let mut min_val = products[0]
+  let mut max_val = products[0]
+  for i = 1; i < products.length(); i = i + 1 {
+    if products[i] < min_val {
+      min_val = products[i]
+    }
+    if products[i] > max_val {
+      max_val = products[i]
+    }
+  }
+
+  // Check if unbounded directions should propagate
+  let new_lower = if self.lower.is_neg_inf() ||
+    other.lower.is_neg_inf() ||
+    self.upper.is_pos_inf() ||
+    other.upper.is_pos_inf() {
+    // Check sign of bounds
+    let has_neg = self.lower.is_neg_inf() ||
+      other.lower.is_neg_inf() ||
+      (self.lower.is_bounded && self.lower.value < 0) ||
+      (other.lower.is_bounded && other.lower.value < 0)
+    let has_pos = self.upper.is_pos_inf() ||
+      other.upper.is_pos_inf() ||
+      (self.upper.is_bounded && self.upper.value > 0) ||
+      (other.upper.is_bounded && other.upper.value > 0)
+    if has_neg && has_pos {
+      IntervalBound::neg_inf()
+    } else {
+      IntervalBound::finite(min_val)
+    }
+  } else {
+    IntervalBound::finite(min_val)
+  }
+
+  let new_upper = if self.upper.is_pos_inf() ||
+    other.upper.is_pos_inf() ||
+    self.lower.is_neg_inf() ||
+    other.lower.is_neg_inf() {
+    let has_neg = self.lower.is_neg_inf() ||
+      other.lower.is_neg_inf() ||
+      (self.lower.is_bounded && self.lower.value < 0) ||
+      (other.lower.is_bounded && other.lower.value < 0)
+    let has_pos = self.upper.is_pos_inf() ||
+      other.upper.is_pos_inf() ||
+      (self.upper.is_bounded && self.upper.value > 0) ||
+      (other.upper.is_bounded && other.upper.value > 0)
+    if has_neg && has_pos {
+      IntervalBound::pos_inf()
+    } else {
+      IntervalBound::finite(max_val)
+    }
+  } else {
+    IntervalBound::finite(max_val)
+  }
+
+  { lower: new_lower, upper: new_upper }
+}
+
+///|
+/// Divide two intervals (conservative approximation)
+pub fn Interval::div(self : Interval, other : Interval) -> Interval {
+  if self.is_empty() || other.is_empty() {
+    return Interval::empty()
+  }
+
+  // If divisor might be zero, result is undefined
+  if other.contains(0) {
+    return Interval::full()
+  }
+
+  // If divisor is unbounded, result is full
+  if other.lower.is_neg_inf() || other.upper.is_pos_inf() {
+    return Interval::full()
+  }
+
+  // Compute all four corner quotients
+  let quotients : Array[Int] = []
+
+  fn safe_div(a : Int, b : Int, quotients : Array[Int]) -> Unit {
+    if b != 0 {
+      quotients.push(a / b)
+    }
+  }
+
+  if self.lower.is_bounded && other.lower.is_bounded {
+    safe_div(self.lower.value, other.lower.value, quotients)
+    safe_div(self.lower.value, other.upper.value, quotients)
+  }
+  if self.upper.is_bounded && other.lower.is_bounded {
+    safe_div(self.upper.value, other.lower.value, quotients)
+    safe_div(self.upper.value, other.upper.value, quotients)
+  }
+
+  if quotients.length() == 0 {
+    return Interval::full()
+  }
+
+  let mut min_val = quotients[0]
+  let mut max_val = quotients[0]
+  for i = 1; i < quotients.length(); i = i + 1 {
+    if quotients[i] < min_val {
+      min_val = quotients[i]
+    }
+    if quotients[i] > max_val {
+      max_val = quotients[i]
+    }
+  }
+
+  Interval::range(min_val, max_val)
+}
+
+///|
+/// Bitwise AND of two intervals (conservative)
+pub fn Interval::bitand(self : Interval, other : Interval) -> Interval {
+  if self.is_empty() || other.is_empty() {
+    return Interval::empty()
+  }
+
+  // Conservative: result is in [0, min(upper1, upper2)] for non-negative
+  // For general case, return full range
+  if self.lower.is_bounded &&
+    self.lower.value >= 0 &&
+    other.lower.is_bounded &&
+    other.lower.value >= 0 {
+    let min_upper = if self.upper.is_bounded && other.upper.is_bounded {
+      if self.upper.value < other.upper.value {
+        self.upper.value
+      } else {
+        other.upper.value
+      }
+    } else if self.upper.is_bounded {
+      self.upper.value
+    } else if other.upper.is_bounded {
+      other.upper.value
+    } else {
+      return Interval::non_negative()
+    }
+    Interval::range(0, min_upper)
+  } else {
+    Interval::full()
+  }
+}
+
+///|
+/// Bitwise OR of two intervals (conservative)
+pub fn Interval::bitor(self : Interval, other : Interval) -> Interval {
+  if self.is_empty() || other.is_empty() {
+    return Interval::empty()
+  }
+
+  // Conservative: result is in [min(lower1, lower2), max(upper1, upper2)]
+  self.union(other)
+}
+
+///|
+/// Bitwise XOR of two intervals (conservative)
+pub fn Interval::bitxor(self : Interval, other : Interval) -> Interval {
+  if self.is_empty() || other.is_empty() {
+    return Interval::empty()
+  }
+
+  // Conservative: return full range
+  Interval::full()
+}
+
+///|
+/// Shift left by an interval
+pub fn Interval::shl(self : Interval, other : Interval) -> Interval {
+  if self.is_empty() || other.is_empty() {
+    return Interval::empty()
+  }
+
+  // If shift amount is a constant
+  match other.get_constant() {
+    Some(shift) =>
+      if shift < 0 || shift > 63 {
+        Interval::empty()
+      } else if self.is_constant() {
+        Interval::constant(self.lower.value << shift)
+      } else if self.lower.is_bounded && self.upper.is_bounded {
+        // Conservative: assume all bits are set
+        Interval::full()
+      } else {
+        Interval::full()
+      }
+    None => Interval::full()
+  }
+}
+
+///|
+/// Shift right logical by an interval
+pub fn Interval::shr(self : Interval, other : Interval) -> Interval {
+  if self.is_empty() || other.is_empty() {
+    return Interval::empty()
+  }
+
+  match other.get_constant() {
+    Some(shift) =>
+      if shift < 0 || shift > 63 {
+        Interval::empty()
+      } else if self.is_constant() {
+        Interval::constant(self.lower.value >> shift)
+      } else if self.lower.is_bounded && self.upper.is_bounded {
+        // Result is smaller than original
+        Interval::range(self.lower.value >> shift, self.upper.value >> shift)
+      } else {
+        Interval::full()
+      }
+    None => Interval::full()
+  }
+}
+
+///|
+/// Format interval to string
+pub fn format_interval(interval : Interval) -> String {
+  if interval.is_empty() {
+    "⊥"
+  } else if interval.is_full() {
+    "[-∞, +∞]"
+  } else if interval.is_constant() {
+    "[" + interval.lower.value.to_string() + "]"
+  } else {
+    let lower_str = if interval.lower.is_neg_inf() {
+      "-∞"
+    } else {
+      interval.lower.value.to_string()
+    }
+    let upper_str = if interval.upper.is_pos_inf() {
+      "+∞"
+    } else {
+      interval.upper.value.to_string()
+    }
+    "[" + lower_str + ", " + upper_str + "]"
+  }
+}
+
+///|
+/// Interval state for all registers
+pub struct IntervalState {
+  /// Integer register intervals
+  int_regs : FixedArray[Interval]
+  /// Float register intervals (not typically used for interval analysis)
+  float_regs : FixedArray[Interval]
+} derive(Show)
+
+///|
+/// Create initial interval state (all full)
+pub fn IntervalState::new() -> IntervalState {
+  let int_vals : Array[Interval] = []
+  let float_vals : Array[Interval] = []
+  for i = 0; i < 32; i = i + 1 {
+    int_vals.push(Interval::full())
+    float_vals.push(Interval::full())
+  }
+  {
+    int_regs: FixedArray::from_array(int_vals),
+    float_regs: FixedArray::from_array(float_vals),
+  }
+}
+
+///|
+/// Get integer register interval
+pub fn IntervalState::get_int(self : IntervalState, reg : UInt) -> Interval {
+  if reg >= 32U {
+    return Interval::full()
+  }
+  self.int_regs[reg.reinterpret_as_int()]
+}
+
+///|
+/// Set integer register interval
+pub fn IntervalState::set_int(
+  self : IntervalState,
+  reg : UInt,
+  interval : Interval,
+) -> IntervalState {
+  if reg >= 32U {
+    return self
+  }
+  let idx = reg.reinterpret_as_int()
+  let new_vals : Array[Interval] = []
+  for i = 0; i < 32; i = i + 1 {
+    if i == idx {
+      new_vals.push(interval)
+    } else {
+      new_vals.push(self.int_regs[i])
+    }
+  }
+  { int_regs: FixedArray::from_array(new_vals), float_regs: self.float_regs }
+}
+
+///|
+/// Merge two interval states (union)
+pub fn IntervalState::merge(
+  self : IntervalState,
+  other : IntervalState,
+) -> IntervalState {
+  let int_vals : Array[Interval] = []
+  for i = 0; i < 32; i = i + 1 {
+    int_vals.push(self.int_regs[i].union(other.int_regs[i]))
+  }
+  { int_regs: FixedArray::from_array(int_vals), float_regs: self.float_regs }
+}
+
+///|
+/// Widen two interval states
+pub fn IntervalState::widen(
+  self : IntervalState,
+  other : IntervalState,
+) -> IntervalState {
+  let int_vals : Array[Interval] = []
+  for i = 0; i < 32; i = i + 1 {
+    int_vals.push(self.int_regs[i].widen(other.int_regs[i]))
+  }
+  { int_regs: FixedArray::from_array(int_vals), float_regs: self.float_regs }
+}
+
+///|
+/// Check if two states are equal
+pub fn IntervalState::equal(
+  self : IntervalState,
+  other : IntervalState,
+) -> Bool {
+  for i = 0; i < 32; i = i + 1 {
+    if self.int_regs[i] != other.int_regs[i] {
+      return false
+    }
+  }
+  true
+}
+
+///|
+/// Propagate interval through an instruction
+pub fn propagate_interval(
+  state : IntervalState,
+  inst : @decode.Instruction,
+  inst_addr : UInt,
+) -> IntervalState {
+  let mut new_state = state
+
+  match inst {
+    // LUI: Load upper immediate
+    @decode.LUI(rd, imm) =>
+      if rd != 0U {
+        let value = (imm & 0xFFFFF) << 12
+        new_state = new_state.set_int(rd, Interval::constant(value))
+      }
+
+    // AUIPC: Add upper immediate to PC
+    @decode.AUIPC(rd, imm) =>
+      if rd != 0U {
+        // Result depends on PC, create a range around the PC
+        let offset = (imm & 0xFFFFF) << 12
+        new_state = new_state.set_int(
+          rd,
+          Interval::range(
+            inst_addr.reinterpret_as_int() + offset,
+            inst_addr.reinterpret_as_int() + offset,
+          ),
+        )
+      }
+
+    // ADDI: Add immediate
+    @decode.ADDI(rd, rs1, imm) =>
+      if rd != 0U {
+        let rs1_interval = state.get_int(rs1)
+        let imm_interval = Interval::constant(imm)
+        new_state = new_state.set_int(rd, rs1_interval.add(imm_interval))
+      }
+
+    // ADDIW: Add immediate word (32-bit)
+    @decode.ADDIW(rd, rs1, imm) =>
+      if rd != 0U {
+        let rs1_interval = state.get_int(rs1)
+        // Sign-extend to 32 bits
+        let imm_interval = Interval::constant(imm)
+        new_state = new_state.set_int(rd, rs1_interval.add(imm_interval))
+      }
+
+    // ADD: Add registers
+    @decode.ADD(rd, rs1, rs2) =>
+      if rd != 0U {
+        let rs1_interval = state.get_int(rs1)
+        let rs2_interval = state.get_int(rs2)
+        new_state = new_state.set_int(rd, rs1_interval.add(rs2_interval))
+      }
+
+    // SUB: Subtract registers
+    @decode.SUB(rd, rs1, rs2) =>
+      if rd != 0U {
+        let rs1_interval = state.get_int(rs1)
+        let rs2_interval = state.get_int(rs2)
+        new_state = new_state.set_int(rd, rs1_interval.sub(rs2_interval))
+      }
+
+    // AND: Bitwise AND
+    @decode.AND(rd, rs1, rs2) =>
+      if rd != 0U {
+        let rs1_interval = state.get_int(rs1)
+        let rs2_interval = state.get_int(rs2)
+        new_state = new_state.set_int(rd, rs1_interval.bitand(rs2_interval))
+      }
+
+    // OR: Bitwise OR
+    @decode.OR(rd, rs1, rs2) =>
+      if rd != 0U {
+        let rs1_interval = state.get_int(rs1)
+        let rs2_interval = state.get_int(rs2)
+        new_state = new_state.set_int(rd, rs1_interval.bitor(rs2_interval))
+      }
+
+    // XOR: Bitwise XOR
+    @decode.XOR(rd, rs1, rs2) =>
+      if rd != 0U {
+        let rs1_interval = state.get_int(rs1)
+        let rs2_interval = state.get_int(rs2)
+        new_state = new_state.set_int(rd, rs1_interval.bitxor(rs2_interval))
+      }
+
+    // SLLI: Shift left logical immediate
+    @decode.SLLI(rd, rs1, shamt) =>
+      if rd != 0U {
+        let rs1_interval = state.get_int(rs1)
+        let shamt_interval = Interval::constant(shamt.reinterpret_as_int())
+        new_state = new_state.set_int(rd, rs1_interval.shl(shamt_interval))
+      }
+
+    // SRLI/SRAI: Shift right
+    @decode.SRLI(rd, rs1, shamt) | @decode.SRAI(rd, rs1, shamt) =>
+      if rd != 0U {
+        let rs1_interval = state.get_int(rs1)
+        let shamt_interval = Interval::constant(shamt.reinterpret_as_int())
+        new_state = new_state.set_int(rd, rs1_interval.shr(shamt_interval))
+      }
+
+    // MUL: Multiply
+    @decode.MUL(rd, rs1, rs2) =>
+      if rd != 0U {
+        let rs1_interval = state.get_int(rs1)
+        let rs2_interval = state.get_int(rs2)
+        new_state = new_state.set_int(rd, rs1_interval.mul(rs2_interval))
+      }
+
+    // LI/Loads: Memory loads -> unknown value
+    @decode.LB(rd, _, _)
+    | @decode.LH(rd, _, _)
+    | @decode.LW(rd, _, _)
+    | @decode.LD(rd, _, _)
+    | @decode.LBU(rd, _, _)
+    | @decode.LHU(rd, _, _)
+    | @decode.LWU(rd, _, _) =>
+      if rd != 0U {
+        new_state = new_state.set_int(rd, Interval::full())
+      }
+
+    // SLTI/SLTIU: Set less than immediate
+    @decode.SLTI(rd, rs1, imm) =>
+      if rd != 0U {
+        let rs1_interval = state.get_int(rs1)
+        let result = if rs1_interval.is_constant() {
+          if rs1_interval.lower.value < imm {
+            Interval::constant(1)
+          } else {
+            Interval::constant(0)
+          }
+        } else {
+          Interval::range(0, 1)
+        }
+        new_state = new_state.set_int(rd, result)
+      }
+    @decode.SLTIU(rd, rs1, imm) =>
+      if rd != 0U {
+        let rs1_interval = state.get_int(rs1)
+        let result = if rs1_interval.is_constant() {
+          let rs1_u = rs1_interval.lower.value.reinterpret_as_uint()
+          let imm_u = imm.reinterpret_as_uint()
+          if rs1_u < imm_u {
+            Interval::constant(1)
+          } else {
+            Interval::constant(0)
+          }
+        } else {
+          Interval::range(0, 1)
+        }
+        new_state = new_state.set_int(rd, result)
+      }
+
+    // SLT/SLTU: Set less than
+    @decode.SLT(rd, rs1, rs2) =>
+      if rd != 0U {
+        new_state = new_state.set_int(rd, Interval::range(0, 1))
+      }
+    @decode.SLTU(rd, rs1, rs2) =>
+      if rd != 0U {
+        new_state = new_state.set_int(rd, Interval::range(0, 1))
+      }
+
+    // Compressed instructions
+    @decode.C_LI(rd, imm) =>
+      if rd != 0U {
+        new_state = new_state.set_int(rd, Interval::constant(imm))
+      }
+    @decode.C_ADDI(rd, imm) =>
+      if rd != 0U {
+        let rd_interval = state.get_int(rd)
+        new_state = new_state.set_int(
+          rd,
+          rd_interval.add(Interval::constant(imm)),
+        )
+      }
+    @decode.C_ADD(rd, rs) =>
+      if rd != 0U {
+        let rd_interval = state.get_int(rd)
+        let rs_interval = state.get_int(rs)
+        new_state = new_state.set_int(rd, rd_interval.add(rs_interval))
+      }
+    @decode.C_MV(rd, rs) =>
+      if rd != 0U {
+        new_state = new_state.set_int(rd, state.get_int(rs))
+      }
+    @decode.C_AND(rd, rs) =>
+      if rd != 0U {
+        let rd_interval = state.get_int(rd)
+        let rs_interval = state.get_int(rs)
+        new_state = new_state.set_int(rd, rd_interval.bitand(rs_interval))
+      }
+    @decode.C_OR(rd, rs) =>
+      if rd != 0U {
+        let rd_interval = state.get_int(rd)
+        let rs_interval = state.get_int(rs)
+        new_state = new_state.set_int(rd, rd_interval.bitor(rs_interval))
+      }
+    @decode.C_XOR(rd, rs) =>
+      if rd != 0U {
+        let rd_interval = state.get_int(rd)
+        let rs_interval = state.get_int(rs)
+        new_state = new_state.set_int(rd, rd_interval.bitxor(rs_interval))
+      }
+
+    // For other instructions, don't change state
+    _ => ()
+  }
+
+  new_state
+}
+
+///|
+/// Interval state for a basic block
+pub struct BlockIntervalState {
+  /// Block start address
+  block_addr : UInt
+  /// Interval state at entry
+  state_in : IntervalState
+  /// Interval state at exit
+  state_out : IntervalState
+} derive(Show)
+
+///|
+/// Compute interval analysis for all basic blocks
+pub fn compute_interval_analysis(
+  cfg : CFG,
+  instructions : FixedArray[DecodedInst],
+) -> FixedArray[BlockIntervalState] {
+  let num_blocks = cfg.blocks.length()
+  let block_states : Array[BlockIntervalState] = []
+
+  // Build instruction index map
+  let inst_by_addr : Map[UInt, DecodedInst] = {}
+  for inst_info in instructions {
+    inst_by_addr[inst_info.addr] = inst_info
+  }
+
+  // Build predecessor map
+  let preds : Map[UInt, Array[UInt]] = {}
+  for edge in cfg.edges {
+    match preds.get(edge.to_block) {
+      Some(arr) => arr.push(edge.from_block)
+      None => preds[edge.to_block] = [edge.from_block]
+    }
+  }
+
+  // Initialize block states
+  for block in cfg.blocks {
+    block_states.push(BlockIntervalState::{
+      block_addr: block.start_addr,
+      state_in: IntervalState::new(),
+      state_out: IntervalState::new(),
+    })
+  }
+
+  // Work list algorithm with widening
+  let work_list : Array[UInt] = []
+  if cfg.entry_points.length() > 0 {
+    work_list.push(cfg.entry_points[0])
+  } else if num_blocks > 0 {
+    work_list.push(cfg.blocks[0].start_addr)
+  }
+
+  let mut iteration_count = 0
+  let max_iterations = 100
+
+  while work_list.length() > 0 && iteration_count < max_iterations {
+    iteration_count = iteration_count + 1
+    let block_addr_opt = work_list.pop()
+
+    let block_addr = match block_addr_opt {
+      Some(addr) => addr
+      None => continue
+    }
+
+    // Find block index
+    let mut block_idx = -1
+    for i = 0; i < num_blocks; i = i + 1 {
+      if block_states[i].block_addr == block_addr {
+        block_idx = i
+        break
+      }
+    }
+
+    if block_idx < 0 {
+      continue
+    }
+
+    let block = cfg.blocks[block_idx]
+    let old_state = block_states[block_idx]
+
+    // Compute input state from predecessors
+    let pred_addrs = preds.get(block_addr).unwrap_or([])
+    let mut new_in = IntervalState::new()
+    let mut first = true
+
+    for pred_addr in pred_addrs {
+      // Find predecessor block state
+      for j = 0; j < num_blocks; j = j + 1 {
+        if block_states[j].block_addr == pred_addr {
+          if first {
+            new_in = block_states[j].state_out
+            first = false
+          } else {
+            new_in = new_in.widen(block_states[j].state_out)
+          }
+          break
+        }
+      }
+    }
+
+    // Propagate through instructions in this block
+    let mut current_state = new_in
+    let mut addr = block.start_addr
+    while addr <= block.end_addr {
+      match inst_by_addr.get(addr) {
+        Some(inst) => {
+          current_state = propagate_interval(current_state, inst.inst, addr)
+          addr = addr + inst.length.reinterpret_as_uint()
+        }
+        None => addr = addr + 4U
+      }
+    }
+
+    let new_out = current_state
+
+    // Check for changes (use widening to ensure termination)
+    if !old_state.state_in.equal(new_in) || !old_state.state_out.equal(new_out) {
+      block_states[block_idx] = BlockIntervalState::{
+        block_addr: block.start_addr,
+        state_in: new_in,
+        state_out: new_out,
+      }
+
+      // Add successors to work list
+      for edge in cfg.edges {
+        if edge.from_block == block.start_addr {
+          let mut in_list = false
+          for a in work_list {
+            if a == edge.to_block {
+              in_list = true
+              break
+            }
+          }
+          if !in_list {
+            work_list.push(edge.to_block)
+          }
+        }
+      }
+    }
+  }
+
+  FixedArray::from_array(block_states)
+}
+
+///|
+/// Check if array access is in bounds
+pub fn check_array_bounds(index_interval : Interval, array_size : Int) -> Bool {
+  // Check if index is always in bounds
+  if index_interval.is_empty() {
+    return true // Dead code
+  }
+
+  // If index is a constant, check directly
+  match index_interval.get_constant() {
+    Some(idx) => idx >= 0 && idx < array_size
+    None =>
+      // Check if interval is definitely in bounds
+      if index_interval.lower.is_bounded &&
+        index_interval.lower.value >= 0 &&
+        index_interval.upper.is_bounded &&
+        index_interval.upper.value < array_size {
+        true
+      } else {
+        false
+      }
+  }
+}
+
+///|
+/// Format interval state
+pub fn format_interval_state(state : IntervalState) -> String {
+  let mut result = "Intervals:\n"
+  for i = 0; i < 32; i = i + 1 {
+    let interval = state.int_regs[i]
+    if !interval.is_full() {
+      result = result +
+        "  " +
+        @decode.reg_name(i.reinterpret_as_uint()) +
+        " = " +
+        format_interval(interval) +
+        "\n"
+    }
+  }
+  result
+}
