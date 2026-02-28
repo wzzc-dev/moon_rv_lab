@@ -1891,3 +1891,905 @@ pub fn decompile_structured(
 
   output
 }
+
+///| ========== Stack Frame Analysis ==========
+
+///|
+/// Variable type inference
+pub enum VarType {
+  /// Unknown type
+  Unknown
+  /// Integer type (size in bits: 8, 16, 32, 64)
+  Int(Int)
+  /// Unsigned integer
+  UInt(Int)
+  /// Pointer type (points to type)
+  Pointer(VarType)
+  /// Array type (element type, count)
+  Array(VarType, Int)
+  /// Float type (size in bits: 32, 64)
+  Float(Int)
+  /// Function pointer (return type, param types)
+  FuncPointer(VarType, Array[VarType])
+} derive(Show, Eq)
+
+///|
+/// Local variable information
+pub struct LocalVar {
+  /// Variable name (e.g., var_0x10, local_1)
+  name : String
+  /// Stack offset relative to frame pointer (positive = above fp, negative = below)
+  stack_offset : Int
+  /// Size in bytes
+  size : Int
+  /// Inferred type
+  inferred_type : VarType
+  /// First instruction address that defines this variable
+  def_addr : UInt?
+  /// Register that holds this variable (if any)
+  reg : UInt?
+} derive(Show)
+
+///|
+/// Function parameter information
+pub struct Param {
+  /// Parameter name (e.g., arg0, arg1)
+  name : String
+  /// Register used (a0-a7)
+  reg : UInt
+  /// Stack offset if passed on stack
+  stack_offset : Int?
+  /// Inferred type
+  inferred_type : VarType
+} derive(Show)
+
+///|
+/// Stack frame information for a function
+pub struct StackFrame {
+  /// Total stack frame size in bytes
+  size : Int
+  /// Saved registers (callee-saved: ra, s0-s11)
+  saved_regs : Array[UInt]
+  /// Local variables
+  local_vars : Array[LocalVar]
+  /// Function parameters
+  params : Array[Param]
+  /// Frame pointer setup detected
+  has_frame_pointer : Bool
+  /// Return address saved location (offset from sp)
+  ra_save_offset : Int?
+} derive(Show)
+
+///|
+/// Create an empty stack frame
+pub fn StackFrame::empty() -> StackFrame {
+  {
+    size: 0,
+    saved_regs: [],
+    local_vars: [],
+    params: [],
+    has_frame_pointer: false,
+    ra_save_offset: None,
+  }
+}
+
+///|
+/// Analyze stack frame for a function
+pub fn analyze_stack_frame(
+  instructions : FixedArray[DecodedInst],
+  cfg : CFG,
+) -> StackFrame {
+  if instructions.length() == 0 {
+    return StackFrame::empty()
+  }
+
+  let mut frame_size = 0
+  let mut stack_adjust : Int? = None
+  let saved_regs : Array[UInt] = []
+  let local_vars : Array[LocalVar] = []
+  let params : Array[Param] = []
+  let mut has_frame_pointer = false
+  let mut ra_save_offset : Int? = None
+
+  // Analyze prologue (first few instructions)
+  // Typical RISC-V prologue:
+  //   addi sp, sp, -N    # allocate stack
+  //   sw ra, N-4(sp)     # save return address
+  //   sw s0, N-8(sp)     # save frame pointer
+  //   addi s0, sp, N     # setup frame pointer (optional)
+  //   sw s1, N-12(sp)    # save callee-saved registers
+
+  let prologue_end = if instructions.length() > 20 {
+    20
+  } else {
+    instructions.length()
+  }
+
+  for i = 0; i < prologue_end; i = i + 1 {
+    let inst_info = instructions[i]
+    let inst = inst_info.inst
+
+    match inst {
+      // Stack allocation: addi sp, sp, -N
+      @decode.ADDI(rd, rs1, imm) =>
+        if rd == 2U && rs1 == 2U && imm < 0 {
+          // Stack allocation
+          stack_adjust = Some(-imm)
+          frame_size = -imm
+        }
+      // Save return address: sw ra, offset(sp) or sd ra, offset(sp)
+      @decode.SW(rs1, rs2, imm) | @decode.SD(rs1, rs2, imm) => {
+        if rs1 == 2U && rs2 == 1U {
+          // Saving ra to stack
+          ra_save_offset = Some(imm)
+        }
+        if rs1 == 2U && rs2 >= 8U && rs2 <= 23U {
+          // Saving callee-saved register (s0-s11 are x8-x23, but s0=x8, s1=x9, s2=x18-s11=x23)
+          // Actually s0=x8, s1=x9, s2-x11 = x18-x27
+          let reg = rs2
+          let mut found = false
+          for r in saved_regs {
+            if r == reg {
+              found = true
+            }
+          }
+          if !found {
+            saved_regs.push(reg)
+          }
+          // Record local variable slot
+          local_vars.push(LocalVar::{
+            name: "slot_" + imm.to_string(),
+            stack_offset: imm,
+            size: if inst is @decode.SD(_, _, _) {
+              8
+            } else {
+              4
+            },
+            inferred_type: VarType::Unknown,
+            def_addr: Some(inst_info.addr),
+            reg: Some(reg),
+          })
+        }
+      }
+      // Frame pointer setup: addi s0/fp, sp, N or addi s0, sp, 0
+      @decode.ADDI(rd, rs1, imm) =>
+        if rd == 8U && rs1 == 2U {
+          // s0/fp = sp + imm
+          has_frame_pointer = true
+        }
+      // Compressed stack operations
+      @decode.C_ADDI16SP(imm) =>
+        if imm < 0 {
+          stack_adjust = Some(-imm)
+          frame_size = -imm
+        }
+      @decode.C_SWSP(rs2, imm) =>
+        if rs2 == 1U {
+          ra_save_offset = Some(imm.reinterpret_as_int())
+        }
+      _ => ()
+    }
+  }
+
+  // Analyze function parameters
+  // In RISC-V calling convention, a0-a7 (x10-x17) are used for arguments
+  // We need to track which registers are used before being defined
+
+  let param_regs_used : Array[UInt] = []
+  let defined_regs : Array[UInt] = []
+
+  for inst_info in instructions {
+    let inst = inst_info.inst
+
+    // Check for register definitions
+    match inst {
+      @decode.ADD(rd, _, _)
+      | @decode.SUB(rd, _, _)
+      | @decode.ADDI(rd, _, _)
+      | @decode.ANDI(rd, _, _)
+      | @decode.ORI(rd, _, _)
+      | @decode.XORI(rd, _, _)
+      | @decode.SLLI(rd, _, _)
+      | @decode.SRLI(rd, _, _)
+      | @decode.SRAI(rd, _, _)
+      | @decode.LUI(rd, _)
+      | @decode.AUIPC(rd, _)
+      | @decode.LW(rd, _, _)
+      | @decode.LH(rd, _, _)
+      | @decode.LHU(rd, _, _)
+      | @decode.LB(rd, _, _)
+      | @decode.LBU(rd, _, _)
+      | @decode.LD(rd, _, _) =>
+        // Check if this is a parameter register being defined
+        if rd >= 10U && rd <= 17U {
+          let mut already_defined = false
+          for r in defined_regs {
+            if r == rd {
+              already_defined = true
+            }
+          }
+          if !already_defined {
+            defined_regs.push(rd)
+          }
+        }
+      _ => ()
+    }
+
+    // Check for parameter register uses (before definition)
+    match inst {
+      @decode.ADD(_, rs1, rs2)
+      | @decode.SUB(_, rs1, rs2)
+      | @decode.AND(_, rs1, rs2)
+      | @decode.OR(_, rs1, rs2)
+      | @decode.XOR(_, rs1, rs2) => {
+        check_param_use(rs1, param_regs_used, defined_regs)
+        check_param_use(rs2, param_regs_used, defined_regs)
+      }
+      @decode.ADDI(_, rs1, _)
+      | @decode.ANDI(_, rs1, _)
+      | @decode.ORI(_, rs1, _)
+      | @decode.XORI(_, rs1, _) =>
+        check_param_use(rs1, param_regs_used, defined_regs)
+      @decode.SW(rs1, rs2, _) | @decode.SD(rs1, rs2, _) => {
+        check_param_use(rs1, param_regs_used, defined_regs)
+        check_param_use(rs2, param_regs_used, defined_regs)
+      }
+      @decode.JALR(_, rs1, _) =>
+        check_param_use(rs1, param_regs_used, defined_regs)
+      _ => ()
+    }
+  }
+
+  // Create parameter entries
+  param_regs_used.sort()
+  let mut param_idx = 0
+  for reg in param_regs_used {
+    params.push(Param::{
+      name: "arg" + param_idx.to_string(),
+      reg,
+      stack_offset: None,
+      inferred_type: VarType::Unknown,
+    })
+    param_idx = param_idx + 1
+  }
+
+  // Analyze local variables based on stack accesses
+  let var_offset_map : Map[Int, LocalVar] = {}
+  for inst_info in instructions {
+    let inst = inst_info.inst
+
+    match inst {
+      // Load from stack: lw rd, offset(sp/fp)
+      @decode.LW(rd, rs1, imm) | @decode.LD(rd, rs1, imm) =>
+        if rs1 == 2U || rs1 == 8U {
+          let offset = imm
+          match var_offset_map.get(offset) {
+            Some(_) => () // Already exists
+            None => {
+              let var_name = if offset < 0 {
+                "local_" + (-offset).to_string()
+              } else {
+                "arg_" + offset.to_string()
+              }
+              let var_ = LocalVar::{
+                name: var_name,
+                stack_offset: offset,
+                size: if inst is @decode.LD(_, _, _) {
+                  8
+                } else {
+                  4
+                },
+                inferred_type: VarType::Unknown,
+                def_addr: Some(inst_info.addr),
+                reg: Some(rd),
+              }
+              var_offset_map[offset] = var_
+            }
+          }
+        }
+      // Store to stack: sw rs2, offset(sp/fp)
+      @decode.SW(rs1, rs2, imm) | @decode.SD(rs1, rs2, imm) =>
+        if rs1 == 2U || rs1 == 8U {
+          let offset = imm
+          match var_offset_map.get(offset) {
+            Some(_) => ()
+            None => {
+              let var_name = if offset < 0 {
+                "local_" + (-offset).to_string()
+              } else {
+                "arg_" + offset.to_string()
+              }
+              let var_ = LocalVar::{
+                name: var_name,
+                stack_offset: offset,
+                size: if inst is @decode.SD(_, _, _) {
+                  8
+                } else {
+                  4
+                },
+                inferred_type: VarType::Unknown,
+                def_addr: Some(inst_info.addr),
+                reg: Some(rs2),
+              }
+              var_offset_map[offset] = var_
+            }
+          }
+        }
+      _ => ()
+    }
+  }
+
+  // Collect local variables
+  for offset in var_offset_map.keys() {
+    match var_offset_map.get(offset) {
+      Some(v) => local_vars.push(v)
+      None => ()
+    }
+  }
+
+  {
+    size: frame_size,
+    saved_regs,
+    local_vars,
+    params,
+    has_frame_pointer,
+    ra_save_offset,
+  }
+}
+
+///|
+/// Check if a register is a parameter being used
+fn check_param_use(
+  reg : UInt,
+  param_regs_used : Array[UInt],
+  defined_regs : Array[UInt],
+) -> Unit {
+  // a0-a7 are x10-x17
+  if reg >= 10U && reg <= 17U {
+    // Check if already defined
+    let mut is_defined = false
+    for r in defined_regs {
+      if r == reg {
+        is_defined = true
+      }
+    }
+    if !is_defined {
+      // Check if already in param list
+      let mut already_param = false
+      for r in param_regs_used {
+        if r == reg {
+          already_param = true
+        }
+      }
+      if !already_param {
+        param_regs_used.push(reg)
+      }
+    }
+  }
+}
+
+///|
+/// Format stack frame info for display
+pub fn format_stack_frame(frame : StackFrame) -> String {
+  let mut output = "=== Stack Frame Analysis ===\n"
+  output = output + "Frame Size: " + frame.size.to_string() + " bytes\n"
+  output = output +
+    "Has Frame Pointer: " +
+    frame.has_frame_pointer.to_string() +
+    "\n"
+
+  match frame.ra_save_offset {
+    Some(off) =>
+      output = output + "RA Save Offset: " + off.to_string() + "(sp)\n"
+    None => ()
+  }
+
+  if frame.saved_regs.length() > 0 {
+    output = output + "Saved Registers: "
+    for i = 0; i < frame.saved_regs.length(); i = i + 1 {
+      if i > 0 {
+        output = output + ", "
+      }
+      output = output + @decode.reg_name(frame.saved_regs[i])
+    }
+    output = output + "\n"
+  }
+
+  if frame.params.length() > 0 {
+    output = output + "Parameters:\n"
+    for p in frame.params {
+      output = output + "  " + p.name + " (" + @decode.reg_name(p.reg) + ")\n"
+    }
+  }
+
+  if frame.local_vars.length() > 0 {
+    output = output + "Local Variables:\n"
+    for v in frame.local_vars {
+      output = output + "  " + v.name + " @ sp+" + v.stack_offset.to_string()
+      output = output + " (" + v.size.to_string() + " bytes)\n"
+    }
+  }
+
+  output
+}
+
+///|
+/// Analyze function and produce enhanced decompilation with stack frame info
+pub fn decompile_with_frame(
+  instructions : FixedArray[DecodedInst],
+  cfg : CFG,
+  symbol_map : Map[UInt, String],
+  string_map : Map[UInt, String],
+) -> String {
+  let frame = analyze_stack_frame(instructions, cfg)
+  let frame_info = format_stack_frame(frame)
+  let decompiled = decompile_structured(
+    cfg, instructions, symbol_map, string_map,
+  )
+
+  frame_info + "\n" + decompiled
+}
+
+// ============================================================================
+// Type Inference Enhancement (Phase 1.3)
+// ============================================================================
+
+///|
+/// Type information for a value or variable
+pub struct TypeInfo {
+  /// The inferred type
+  typ : VarType
+  /// Confidence level (0-100)
+  confidence : Int
+  /// Source of type information
+  source : TypeSource
+} derive(Show)
+
+///|
+/// Source of type information
+pub enum TypeSource {
+  /// Inferred from instruction operation
+  InstructionOp
+  /// Inferred from register width
+  RegisterWidth
+  /// Inferred from memory access size
+  MemoryAccess
+  /// Inferred from function call parameter
+  CallParam
+  /// Inferred from function return value
+  ReturnValue
+  /// Inferred from constant value
+  Constant
+  /// Inferred from type propagation
+  Propagated
+  /// Unknown source
+  Unknown
+} derive(Show, Eq)
+
+///|
+/// Function signature with inferred types
+pub struct FunctionSignature {
+  /// Function name or address
+  name : String
+  /// Return type
+  return_type : VarType
+  /// Parameters with types
+  parameters : Array[Param]
+  /// Confidence score
+  confidence : Int
+} derive(Show)
+
+///|
+/// Type inference context for tracking type information
+pub struct TypeContext {
+  /// Register type mapping
+  reg_types : Map[UInt, TypeInfo]
+  /// Stack variable type mapping
+  stack_types : Map[Int, TypeInfo]
+  /// Global symbol types
+  symbol_types : Map[UInt, TypeInfo]
+  /// Function signatures
+  func_sigs : Map[UInt, FunctionSignature]
+} derive(Show)
+
+///|
+/// Create an empty type context
+pub fn TypeContext::empty() -> TypeContext {
+  { reg_types: {}, stack_types: {}, symbol_types: {}, func_sigs: {} }
+}
+
+///|
+/// Get the bit width for a type
+pub fn type_width(typ : VarType) -> Int {
+  match typ {
+    VarType::Unknown => 0
+    VarType::Int(w) => w
+    VarType::UInt(w) => w
+    VarType::Pointer(_) => 64 // Assume 64-bit pointers for RV64
+    VarType::Array(elem, count) => type_width(elem) * count
+    VarType::Float(w) => w
+    VarType::FuncPointer(_, _) => 64
+  }
+}
+
+///|
+/// Format a type for display
+pub fn format_type(typ : VarType) -> String {
+  match typ {
+    VarType::Unknown => "unknown"
+    VarType::Int(8) => "int8"
+    VarType::Int(16) => "int16"
+    VarType::Int(32) => "int32"
+    VarType::Int(64) => "int64"
+    VarType::Int(w) => "int" + w.to_string()
+    VarType::UInt(8) => "uint8"
+    VarType::UInt(16) => "uint16"
+    VarType::UInt(32) => "uint32"
+    VarType::UInt(64) => "uint64"
+    VarType::UInt(w) => "uint" + w.to_string()
+    VarType::Pointer(inner) => format_type(inner) + "*"
+    VarType::Array(elem, count) =>
+      format_type(elem) + "[" + count.to_string() + "]"
+    VarType::Float(32) => "float"
+    VarType::Float(64) => "double"
+    VarType::Float(w) => "float" + w.to_string()
+    VarType::FuncPointer(ret, params) => {
+      let mut s = format_type(ret) + " (*)(("
+      for i = 0; i < params.length(); i = i + 1 {
+        if i > 0 {
+          s = s + ", "
+        }
+        s = s + format_type(params[i])
+      }
+      s + "))"
+    }
+  }
+}
+
+///|
+/// Infer type from instruction operation
+pub fn infer_type_from_inst(
+  inst : @decode.Instruction,
+  ctx : TypeContext,
+) -> TypeContext {
+  let new_ctx = ctx
+
+  match inst {
+    // Integer operations - infer from register size
+    @decode.ADD(rd, rs1, rs2)
+    | @decode.SUB(rd, rs1, rs2)
+    | @decode.AND(rd, rs1, rs2)
+    | @decode.OR(rd, rs1, rs2)
+    | @decode.XOR(rd, rs1, rs2) => {
+      // Inherit type from operands, default to int64
+      let typ = merge_types(get_reg_type(rs1, ctx), get_reg_type(rs2, ctx))
+      new_ctx.reg_types[rd] = {
+        typ,
+        confidence: 80,
+        source: TypeSource::InstructionOp,
+      }
+    }
+
+    // Shift operations
+    @decode.SLL(rd, rs1, _)
+    | @decode.SRL(rd, rs1, _)
+    | @decode.SRA(rd, rs1, _) => {
+      let typ = get_reg_type(rs1, ctx)
+      new_ctx.reg_types[rd] = {
+        typ,
+        confidence: 75,
+        source: TypeSource::InstructionOp,
+      }
+    }
+
+    // Immediate operations
+    @decode.ADDI(rd, rs1, _) | @decode.ADDIW(rd, rs1, _) => {
+      let typ = get_reg_type(rs1, ctx)
+      new_ctx.reg_types[rd] = {
+        typ,
+        confidence: 70,
+        source: TypeSource::InstructionOp,
+      }
+    }
+    @decode.ANDI(rd, rs1, _)
+    | @decode.ORI(rd, rs1, _)
+    | @decode.XORI(rd, rs1, _) => {
+      let typ = get_reg_type(rs1, ctx)
+      new_ctx.reg_types[rd] = {
+        typ,
+        confidence: 70,
+        source: TypeSource::InstructionOp,
+      }
+    }
+
+    // Load operations - infer type from load size
+    @decode.LB(rd, _, _) =>
+      new_ctx.reg_types[rd] = {
+        typ: VarType::Int(8),
+        confidence: 90,
+        source: TypeSource::MemoryAccess,
+      }
+    @decode.LBU(rd, _, _) =>
+      new_ctx.reg_types[rd] = {
+        typ: VarType::UInt(8),
+        confidence: 90,
+        source: TypeSource::MemoryAccess,
+      }
+    @decode.LH(rd, _, _) =>
+      new_ctx.reg_types[rd] = {
+        typ: VarType::Int(16),
+        confidence: 90,
+        source: TypeSource::MemoryAccess,
+      }
+    @decode.LHU(rd, _, _) =>
+      new_ctx.reg_types[rd] = {
+        typ: VarType::UInt(16),
+        confidence: 90,
+        source: TypeSource::MemoryAccess,
+      }
+    @decode.LW(rd, _, _) =>
+      new_ctx.reg_types[rd] = {
+        typ: VarType::Int(32),
+        confidence: 90,
+        source: TypeSource::MemoryAccess,
+      }
+    @decode.LWU(rd, _, _) =>
+      new_ctx.reg_types[rd] = {
+        typ: VarType::UInt(32),
+        confidence: 90,
+        source: TypeSource::MemoryAccess,
+      }
+    @decode.LD(rd, _, _) =>
+      new_ctx.reg_types[rd] = {
+        typ: VarType::Int(64),
+        confidence: 90,
+        source: TypeSource::MemoryAccess,
+      }
+
+    // Floating-point loads
+    @decode.FLW(rd, _, _) =>
+      new_ctx.reg_types[rd] = {
+        typ: VarType::Float(32),
+        confidence: 95,
+        source: TypeSource::MemoryAccess,
+      }
+    @decode.FLD(rd, _, _) =>
+      new_ctx.reg_types[rd] = {
+        typ: VarType::Float(64),
+        confidence: 95,
+        source: TypeSource::MemoryAccess,
+      }
+
+    // Address calculation - pointer type
+    @decode.LUI(rd, _) | @decode.AUIPC(rd, _) =>
+      new_ctx.reg_types[rd] = {
+        typ: VarType::Pointer(VarType::Unknown),
+        confidence: 60,
+        source: TypeSource::InstructionOp,
+      }
+
+    // Multiplication
+    @decode.MUL(rd, rs1, rs2) => {
+      let typ = merge_types(get_reg_type(rs1, ctx), get_reg_type(rs2, ctx))
+      new_ctx.reg_types[rd] = {
+        typ,
+        confidence: 70,
+        source: TypeSource::InstructionOp,
+      }
+    }
+
+    // Division
+    @decode.DIV(rd, rs1, _) => {
+      let typ = get_reg_type(rs1, ctx)
+      new_ctx.reg_types[rd] = {
+        typ,
+        confidence: 65,
+        source: TypeSource::InstructionOp,
+      }
+    }
+    _ => () // Skip other instructions
+  }
+
+  new_ctx
+}
+
+///|
+/// Get type for a register from context
+pub fn get_reg_type(reg : UInt, ctx : TypeContext) -> VarType {
+  let info_opt = ctx.reg_types.get(reg)
+  match info_opt {
+    Some(info) => info.typ
+    None => VarType::Unknown
+  }
+}
+
+///|
+/// Merge two types, picking the more specific one
+pub fn merge_types(t1 : VarType, t2 : VarType) -> VarType {
+  match (t1, t2) {
+    (VarType::Unknown, t) => t
+    (t, VarType::Unknown) => t
+    (VarType::Int(w1), VarType::Int(w2)) => VarType::Int(max(w1, w2))
+    (VarType::UInt(w1), VarType::UInt(w2)) => VarType::UInt(max(w1, w2))
+    (VarType::Int(w1), VarType::UInt(w2)) => VarType::UInt(max(w1, w2))
+    (VarType::UInt(w1), VarType::Int(w2)) => VarType::UInt(max(w1, w2))
+    (t, _) => t // Default to first type
+  }
+}
+
+///|
+/// Helper function to get maximum of two integers
+fn max(a : Int, b : Int) -> Int {
+  if a > b {
+    a
+  } else {
+    b
+  }
+}
+
+///|
+/// Perform type inference over a function
+pub fn infer_types(
+  instructions : FixedArray[DecodedInst],
+  cfg : CFG,
+) -> TypeContext {
+  let mut ctx = TypeContext::empty()
+
+  // Initialize parameter registers (a0-a7) with unknown types
+  for reg = 10U; reg <= 17U; reg = reg + 1U {
+    ctx.reg_types[reg] = {
+      typ: VarType::Unknown,
+      confidence: 0,
+      source: TypeSource::Unknown,
+    }
+  }
+
+  // Forward pass: infer types from instructions
+  for i = 0; i < instructions.length(); i = i + 1 {
+    let inst_info = instructions[i]
+    ctx = infer_type_from_inst(inst_info.inst, ctx)
+  }
+
+  // Propagate types through CFG edges
+  ctx = propagate_types_cfg(cfg, ctx)
+
+  ctx
+}
+
+///|
+/// Propagate types through CFG edges
+fn propagate_types_cfg(cfg : CFG, ctx : TypeContext) -> TypeContext {
+  // Type propagation through CFG is a complex dataflow problem
+  // For now, we just return the context as-is
+  // A full implementation would use iterative dataflow analysis
+  ignore(cfg)
+  ctx
+}
+
+///|
+/// Infer function signature from instructions and type context
+pub fn infer_function_signature(
+  instructions : FixedArray[DecodedInst],
+  ctx : TypeContext,
+  func_name : String,
+) -> FunctionSignature {
+  let params : Array[Param] = []
+  let mut return_type = VarType::Unknown
+  let mut has_return = false
+
+  // Analyze parameters from register usage
+  for reg = 10U; reg <= 17U; reg = reg + 1 {
+    let typ = get_reg_type(reg, ctx)
+    if typ != VarType::Unknown {
+      params.push({
+        name: "arg" + (reg - 10U).to_string(),
+        reg,
+        stack_offset: None,
+        inferred_type: typ,
+      })
+    }
+  }
+
+  // Analyze return value from JALR to ra
+  for i = 0; i < instructions.length(); i = i + 1 {
+    let inst_info = instructions[i]
+    match inst_info.inst {
+      @decode.JALR(rd, _, _) =>
+        if rd == 0U {
+          // ret instruction - check a0 for return type
+          return_type = get_reg_type(10U, ctx)
+          has_return = true
+        }
+      _ => ()
+    }
+  }
+
+  // Calculate confidence
+  let mut confidence = 50
+  if has_return {
+    confidence = confidence + 20
+  }
+  if params.length() > 0 {
+    confidence = confidence + params.length() * 5
+  }
+
+  {
+    name: func_name,
+    return_type,
+    parameters: params,
+    confidence: min(confidence, 100),
+  }
+}
+
+///|
+/// Helper function to get minimum of two integers
+fn min(a : Int, b : Int) -> Int {
+  if a < b {
+    a
+  } else {
+    b
+  }
+}
+
+///|
+/// Format function signature for display
+pub fn format_function_signature(sig : FunctionSignature) -> String {
+  let mut s = format_type(sig.return_type) + " " + sig.name + "("
+
+  for i = 0; i < sig.parameters.length(); i = i + 1 {
+    if i > 0 {
+      s = s + ", "
+    }
+    let p = sig.parameters[i]
+    s = s + format_type(p.inferred_type) + " " + p.name
+  }
+
+  s + ")"
+}
+
+///|
+/// Analyze function with full type inference
+pub fn decompile_with_types(
+  instructions : FixedArray[DecodedInst],
+  cfg : CFG,
+  symbol_map : Map[UInt, String],
+  string_map : Map[UInt, String],
+) -> String {
+  let ctx = infer_types(instructions, cfg)
+  let frame = analyze_stack_frame(instructions, cfg)
+
+  // Get function name
+  let addr = instructions[0].addr
+  let func_name = match symbol_map.get(addr) {
+    Some(name) => name
+    None => "func_" + addr.to_string()
+  }
+
+  let sig = infer_function_signature(instructions, ctx, func_name)
+
+  // Build output
+  let mut output = "// Function: " + format_function_signature(sig) + "\n"
+  output = output + "// Confidence: " + sig.confidence.to_string() + "%\n\n"
+
+  // Add stack frame info
+  output = output + format_stack_frame(frame) + "\n"
+
+  // Add type annotations for known registers
+  output = output + "// Register Types:\n"
+  // List known parameter types
+  for reg = 10U; reg <= 17U; reg = reg + 1U {
+    let typ = get_reg_type(reg, ctx)
+    if typ != VarType::Unknown {
+      output = output +
+        "//   " +
+        @decode.reg_name(reg) +
+        " : " +
+        format_type(typ) +
+        "\n"
+    }
+  }
+
+  output +
+  "\n" +
+  decompile_structured(cfg, instructions, symbol_map, string_map)
+}

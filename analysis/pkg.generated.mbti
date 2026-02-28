@@ -8,6 +8,8 @@ import {
 // Values
 pub fn analyze_code(FixedArray[Byte], UInt) -> CFG
 
+pub fn analyze_stack_frame(FixedArray[DecodedInst], CFG) -> StackFrame
+
 pub fn build_call_graph(FixedArray[DecodedInst], CFG) -> CallGraph
 
 pub fn build_cfg(FixedArray[DecodedInst], UInt) -> CFG
@@ -34,6 +36,10 @@ pub fn decompile_function(FixedArray[DecodedInst], CFG, Map[UInt, String], Map[U
 
 pub fn decompile_structured(CFG, FixedArray[DecodedInst], Map[UInt, String], Map[UInt, String]) -> String
 
+pub fn decompile_with_frame(FixedArray[DecodedInst], CFG, Map[UInt, String], Map[UInt, String]) -> String
+
+pub fn decompile_with_types(FixedArray[DecodedInst], CFG, Map[UInt, String], Map[UInt, String]) -> String
+
 pub fn detect_loops(CFG, DominatorTree) -> LoopInfo
 
 pub fn extract_condition(@decode.Instruction) -> ConditionExpr
@@ -42,11 +48,25 @@ pub fn find_entry_points(CFG) -> FixedArray[UInt]
 
 pub fn format_control_structure(ControlStructure, Int) -> String
 
+pub fn format_function_signature(FunctionSignature) -> String
+
 pub fn format_hex_uint(UInt) -> String
+
+pub fn format_stack_frame(StackFrame) -> String
+
+pub fn format_type(VarType) -> String
 
 pub fn get_branch_target(@decode.Instruction) -> Int
 
 pub fn get_operands(@decode.Instruction) -> InstOperands
+
+pub fn get_reg_type(UInt, TypeContext) -> VarType
+
+pub fn infer_function_signature(FixedArray[DecodedInst], TypeContext, String) -> FunctionSignature
+
+pub fn infer_type_from_inst(@decode.Instruction, TypeContext) -> TypeContext
+
+pub fn infer_types(FixedArray[DecodedInst], CFG) -> TypeContext
 
 pub fn is_call(@decode.Instruction) -> Bool
 
@@ -57,6 +77,8 @@ pub fn is_return(@decode.Instruction) -> Bool
 pub fn is_terminator(@decode.Instruction) -> Bool
 
 pub fn is_unconditional_jump(@decode.Instruction) -> Bool
+
+pub fn merge_types(VarType, VarType) -> VarType
 
 pub fn negate_condition(ConditionExpr) -> ConditionExpr
 
@@ -71,6 +93,8 @@ pub fn print_live_set(LiveSet) -> String
 pub fn reachable_functions(CallGraph) -> FixedArray[UInt]
 
 pub fn structure_cfg(CFG, FixedArray[DecodedInst]) -> StructuredCFG
+
+pub fn type_width(VarType) -> Int
 
 pub fn uint_to_hex(UInt) -> String
 
@@ -245,6 +269,14 @@ pub enum ForUpdate {
 }
 pub impl Show for ForUpdate
 
+pub struct FunctionSignature {
+  name : String
+  return_type : VarType
+  parameters : Array[Param]
+  confidence : Int
+}
+pub impl Show for FunctionSignature
+
 pub struct InstOperands {
   operands : FixedArray[RegOperand]
 }
@@ -265,6 +297,16 @@ pub fn LiveSet::remove_int(Self, UInt) -> Self
 pub fn LiveSet::union(Self, Self) -> Self
 pub impl Eq for LiveSet
 pub impl Show for LiveSet
+
+pub struct LocalVar {
+  name : String
+  stack_offset : Int
+  size : Int
+  inferred_type : VarType
+  def_addr : UInt?
+  reg : UInt?
+}
+pub impl Show for LocalVar
 
 pub struct LoopInfo {
   loops : Array[NaturalLoop]
@@ -301,6 +343,14 @@ pub enum OperandRole {
 pub impl Eq for OperandRole
 pub impl Show for OperandRole
 
+pub struct Param {
+  name : String
+  reg : UInt
+  stack_offset : Int?
+  inferred_type : VarType
+}
+pub impl Show for Param
+
 pub struct RegOperand {
   reg : UInt
   is_float : Bool
@@ -316,6 +366,17 @@ pub enum RegValue {
   Expression(String)
 }
 pub impl Show for RegValue
+
+pub struct StackFrame {
+  size : Int
+  saved_regs : Array[UInt]
+  local_vars : Array[LocalVar]
+  params : Array[Param]
+  has_frame_pointer : Bool
+  ra_save_offset : Int?
+}
+pub fn StackFrame::empty() -> Self
+pub impl Show for StackFrame
 
 pub enum StackOpType {
   Push
@@ -356,6 +417,47 @@ pub struct SwitchCase {
   fallthrough : Bool
 }
 pub impl Show for SwitchCase
+
+pub struct TypeContext {
+  reg_types : Map[UInt, TypeInfo]
+  stack_types : Map[Int, TypeInfo]
+  symbol_types : Map[UInt, TypeInfo]
+  func_sigs : Map[UInt, FunctionSignature]
+}
+pub fn TypeContext::empty() -> Self
+pub impl Show for TypeContext
+
+pub struct TypeInfo {
+  typ : VarType
+  confidence : Int
+  source : TypeSource
+}
+pub impl Show for TypeInfo
+
+pub enum TypeSource {
+  InstructionOp
+  RegisterWidth
+  MemoryAccess
+  CallParam
+  ReturnValue
+  Constant
+  Propagated
+  Unknown
+}
+pub impl Eq for TypeSource
+pub impl Show for TypeSource
+
+pub enum VarType {
+  Unknown
+  Int(Int)
+  UInt(Int)
+  Pointer(VarType)
+  Array(VarType, Int)
+  Float(Int)
+  FuncPointer(VarType, Array[VarType])
+}
+pub impl Eq for VarType
+pub impl Show for VarType
 
 // Type aliases
 
