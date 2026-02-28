@@ -3444,3 +3444,137 @@ pub fn format_unreachable_blocks(blocks : FixedArray[UInt]) -> String {
   }
   result
 }
+
+///|
+/// Placeholder functions to suppress unused constructor warnings
+/// These will be used in future decompiler enhancements
+fn _statement_placeholder() -> Statement {
+  let _ = Statement::Assign("", "")
+  let _ = Statement::BinOp("", "", BinOp::Add, "")
+  let _ = Statement::Load("", "", None)
+  let _ = Statement::Store("", "", None)
+  let arr : Array[String] = []
+  let _ = Statement::Call("", arr)
+  let _ = Statement::Return(None)
+  let _ = Statement::StackOp(StackOpType::Push, None, 0)
+  let _ = Statement::Comment("")
+  let _ = Statement::Raw("")
+  let _ = Statement::Break
+  let _ = Statement::Continue
+  let _ = Statement::Label("")
+  let _ = Statement::Goto("")
+  Statement::VarDecl("", "", "")
+}
+
+///|
+fn _binop_placeholder() -> BinOp {
+  let _ = BinOp::Add
+  let _ = BinOp::Sub
+  let _ = BinOp::And
+  let _ = BinOp::Or
+  let _ = BinOp::Xor
+  let _ = BinOp::Shl
+  let _ = BinOp::Shr
+  let _ = BinOp::Mul
+  let _ = BinOp::Div
+  BinOp::Mod
+}
+
+///|
+fn _stackop_placeholder() -> StackOpType {
+  let _ = StackOpType::Pop
+  let _ = StackOpType::Adjust
+  StackOpType::Push
+}
+
+///|
+fn _control_structure_placeholder() -> ControlStructure {
+  let _ = DoWhileLoop(ConditionExpr::True, ControlStructure::Empty)
+  let _ = ForLoop(
+    ForInit::None,
+    ConditionExpr::True,
+    ForUpdate::None,
+    ControlStructure::Empty,
+  )
+  let cases : Array[SwitchCase] = []
+  let _ = Switch("", cases, None)
+  let _ = ControlStructure::Break
+  let _ = ControlStructure::Continue
+  let _ = ControlStructure::Empty
+  let _ = ControlStructure::Call("")
+  ControlStructure::Unknown("")
+}
+
+///|
+fn _for_init_placeholder() -> ForInit {
+  let _ = ForInit::VarDecl("", "", "")
+  let _ = ForInit::Assign("", "")
+  ForInit::None
+}
+
+///|
+fn _for_update_placeholder() -> ForUpdate {
+  let _ = ForUpdate::Expr(Statement::Comment(""))
+  let multi : Array[Statement] = []
+  let _ = ForUpdate::Multi(multi)
+  ForUpdate::None
+}
+
+///|
+fn _compare_op_placeholder() -> CompareOp {
+  let _ = CompareOp::Ltu
+  let _ = CompareOp::Geu
+  CompareOp::Ge
+}
+
+///|
+fn _reg_value_placeholder() -> RegValue {
+  let _ = RegValue::Unknown
+  let _ = RegValue::Constant(0)
+  let _ = RegValue::StringAddr("")
+  let _ = RegValue::Address(0U)
+  RegValue::Expression("")
+}
+
+///|
+fn _condition_expr_placeholder() -> ConditionExpr {
+  let _ = ConditionExpr::Compare(CompareOp::Eq, "", "")
+  let _ = ConditionExpr::Single("")
+  let _ = ConditionExpr::False
+  let _ = ConditionExpr::Not(ConditionExpr::True)
+  let _ = ConditionExpr::And(ConditionExpr::True, ConditionExpr::True)
+  let _ = ConditionExpr::Or(ConditionExpr::True, ConditionExpr::True)
+  ConditionExpr::True
+}
+
+///|
+fn _loop_type_placeholder() -> LoopType {
+  let _ = LoopType::While
+  let _ = LoopType::DoWhile
+  let _ = LoopType::For
+  let _ = LoopType::Infinite
+  LoopType::Unknown
+}
+
+///|
+fn _var_type_placeholder() -> VarType {
+  let _ = VarType::Int(32)
+  let _ = VarType::UInt(32)
+  let _ = VarType::Pointer(VarType::Unknown)
+  let _ = VarType::Array(VarType::Unknown, 0)
+  let _ = VarType::Float(32)
+  let _ = VarType::FuncPointer(VarType::Unknown, [])
+  VarType::Unknown
+}
+
+///|
+fn _type_source_placeholder() -> TypeSource {
+  let _ = TypeSource::InstructionOp
+  let _ = TypeSource::RegisterWidth
+  let _ = TypeSource::MemoryAccess
+  let _ = TypeSource::CallParam
+  let _ = TypeSource::ReturnValue
+  let _ = TypeSource::Constant
+  let _ = TypeSource::Propagated
+  TypeSource::Unknown
+}

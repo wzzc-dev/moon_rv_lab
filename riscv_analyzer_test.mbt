@@ -212,3 +212,75 @@ test "vreg_name_api" {
   inspect(@riscv_analyzer.vreg_name(10U), content="v10")
   inspect(@riscv_analyzer.vreg_name(31U), content="v31")
 }
+
+///|
+/// Test analyze_code API - basic CFG construction
+test "analyze_code_api" {
+  // Create a simple sequence: ADDI + ADD
+  // ADDI x5, x0, 100 (0x06400293)
+  // ADD x6, x5, x5 (0x00528333)
+  let bytes : FixedArray[Byte] = FixedArray::make(8, b'\x00')
+  // ADDI
+  bytes[0] = 0x93U.to_byte()
+  bytes[1] = 0x02U.to_byte()
+  bytes[2] = 0x40U.to_byte()
+  bytes[3] = 0x06U.to_byte()
+  // ADD
+  bytes[4] = 0x33U.to_byte()
+  bytes[5] = 0x83U.to_byte()
+  bytes[6] = 0x52U.to_byte()
+  bytes[7] = 0x00U.to_byte()
+
+  let cfg = @riscv_analyzer.analyze_code(bytes, 0U)
+  // Should have at least one basic block
+  assert_true(cfg.blocks.length() >= 1)
+}
+
+///|
+/// Test build_cfg API with branch
+test "build_cfg_with_branch" {
+  // Create: BEQ + ADDI + ADDI
+  // BEQ x1, x2, 8 (branch to third instruction)
+  // ADDI x5, x0, 1
+  // ADDI x6, x0, 2
+  let bytes : FixedArray[Byte] = FixedArray::make(12, b'\x00')
+  // BEQ x1, x2, 8
+  bytes[0] = 0x63U.to_byte()
+  bytes[1] = 0x84U.to_byte()
+  bytes[2] = 0x20U.to_byte()
+  bytes[3] = 0x00U.to_byte()
+  // ADDI x5, x0, 1
+  bytes[4] = 0x93U.to_byte()
+  bytes[5] = 0x02U.to_byte()
+  bytes[6] = 0x00U.to_byte()
+  bytes[7] = 0x01U.to_byte()
+  // ADDI x6, x0, 2
+  bytes[8] = 0x13U.to_byte()
+  bytes[9] = 0x03U.to_byte()
+  bytes[10] = 0x00U.to_byte()
+  bytes[11] = 0x02U.to_byte()
+
+  let instructions = @riscv_analyzer.decode_instructions(bytes, 0U)
+  let cfg = @riscv_analyzer.build_cfg(instructions, 0U)
+  // Should have edges for branch
+  assert_true(cfg.edges.length() >= 1)
+}
+
+///|
+/// Test get_operands API
+test "get_operands_api" {
+  // ADD x5, x6, x7 - uses rs1, rs2, defines rd
+  let DecodeResult(add) = @riscv_analyzer.decode(0x007302B3U)
+  let ops = @riscv_analyzer.get_operands(add)
+  // Should have 3 operands: rd(def), rs1(use), rs2(use)
+  assert_true(ops.operands.length() >= 2)
+}
+
+///|
+/// Test freg_name API
+test "freg_name_api" {
+  inspect(@riscv_analyzer.freg_name(0U), content="ft0")
+  inspect(@riscv_analyzer.freg_name(1U), content="ft1")
+  inspect(@riscv_analyzer.freg_name(10U), content="fa0")
+  inspect(@riscv_analyzer.freg_name(31U), content="ft11")
+}

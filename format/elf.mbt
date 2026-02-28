@@ -941,7 +941,7 @@ pub fn ElfFile::get_rodata_section(self : ElfFile) -> FixedArray[Byte]? {
   }
 
   match self.get_section(idx) {
-    Some((addr, offset, size)) => {
+    Some((_addr, offset, size)) => {
       let off = offset.reinterpret_as_int()
       let sz = size.reinterpret_as_int()
       if off + sz <= self.raw_data.length() && sz > 0 {
@@ -995,7 +995,7 @@ pub fn ElfFile::extract_strings(self : ElfFile) -> Map[UInt, String] {
         }
 
         // Start of potential string
-        let start = i
+        let _start = i
         let str_addr = vaddr + i.reinterpret_as_uint()
 
         // Collect printable characters
@@ -1028,6 +1028,414 @@ pub fn ElfFile::extract_strings(self : ElfFile) -> Map[UInt, String] {
       }
     }
     None => ()
+  }
+
+  result
+}
+
+///|
+/// Relocation entry for 32-bit ELF (REL format - no addend)
+pub struct Elf32Rel {
+  r_offset : UInt // Address where to apply relocation
+  r_info : UInt // Symbol index and relocation type
+} derive(Show)
+
+///|
+/// Relocation entry for 32-bit ELF (RELA format - with addend)
+pub struct Elf32Rela {
+  r_offset : UInt // Address where to apply relocation
+  r_info : UInt // Symbol index and relocation type
+  r_addend : Int // Addend
+} derive(Show)
+
+///|
+/// Relocation entry for 64-bit ELF (REL format - no addend)
+pub struct Elf64Rel {
+  r_offset : UInt // Address where to apply relocation
+  r_info : UInt // Symbol index and relocation type
+} derive(Show)
+
+///|
+/// Relocation entry for 64-bit ELF (RELA format - with addend)
+pub struct Elf64Rela {
+  r_offset : UInt // Address where to apply relocation
+  r_info : UInt // Symbol index and relocation type
+  r_addend : Int // Addend
+} derive(Show)
+
+///|
+/// Parsed relocation information
+pub struct Relocation {
+  offset : UInt // Address where to apply relocation
+  sym_index : UInt // Symbol table index
+  rel_type : UInt // Relocation type (R_RISCV_*)
+  addend : Int // Addend (0 for REL, actual value for RELA)
+  sym_name : String // Symbol name (resolved after parsing)
+  section_name : String // Section name where relocation applies
+} derive(Show)
+
+///|
+/// Extract symbol index from r_info (32-bit)
+pub fn get_symbol_index_32(info : UInt) -> UInt {
+  info >> 8
+}
+
+///|
+/// Extract relocation type from r_info (32-bit)
+pub fn get_reloc_type_32(info : UInt) -> UInt {
+  info & 0xFFU
+}
+
+///|
+/// Extract symbol index from r_info (64-bit)
+pub fn get_symbol_index_64(info : UInt) -> UInt {
+  info >> 32
+}
+
+///|
+/// Extract relocation type from r_info (64-bit)
+pub fn get_reloc_type_64(info : UInt) -> UInt {
+  info & 0xFFFFFFFFU
+}
+
+///|
+/// Parse a 32-bit REL entry
+fn parse_elf32_rel(bytes : FixedArray[Byte], offset : Int) -> Elf32Rel {
+  Elf32Rel::{
+    r_offset: read_u32_le(bytes, offset),
+    r_info: read_u32_le(bytes, offset + 4),
+  }
+}
+
+///|
+/// Parse a 32-bit RELA entry
+fn parse_elf32_rela(bytes : FixedArray[Byte], offset : Int) -> Elf32Rela {
+  Elf32Rela::{
+    r_offset: read_u32_le(bytes, offset),
+    r_info: read_u32_le(bytes, offset + 4),
+    r_addend: read_u32_le(bytes, offset + 8).reinterpret_as_int(),
+  }
+}
+
+///|
+/// Parse a 64-bit REL entry
+fn parse_elf64_rel(bytes : FixedArray[Byte], offset : Int) -> Elf64Rel {
+  Elf64Rel::{
+    r_offset: read_u64_le(bytes, offset),
+    r_info: read_u64_le(bytes, offset + 8),
+  }
+}
+
+///|
+/// Parse a 64-bit RELA entry
+fn parse_elf64_rela(bytes : FixedArray[Byte], offset : Int) -> Elf64Rela {
+  Elf64Rela::{
+    r_offset: read_u64_le(bytes, offset),
+    r_info: read_u64_le(bytes, offset + 8),
+    r_addend: read_u64_le(bytes, offset + 16).reinterpret_as_int(),
+  }
+}
+
+///|
+/// Get relocation type name for RISC-V
+pub fn get_riscv_reloc_name(rel_type : UInt) -> String {
+  match rel_type {
+    0U => "R_RISCV_NONE"
+    1U => "R_RISCV_32"
+    2U => "R_RISCV_64"
+    3U => "R_RISCV_RELATIVE"
+    4U => "R_RISCV_COPY"
+    5U => "R_RISCV_JUMP_SLOT"
+    6U => "R_RISCV_TLS_DTPMOD32"
+    7U => "R_RISCV_TLS_DTPMOD64"
+    8U => "R_RISCV_TLS_DTPREL32"
+    9U => "R_RISCV_TLS_DTPREL64"
+    10U => "R_RISCV_TLS_TPREL32"
+    11U => "R_RISCV_TLS_TPREL64"
+    16U => "R_RISCV_BRANCH"
+    17U => "R_RISCV_JAL"
+    18U => "R_RISCV_CALL"
+    19U => "R_RISCV_CALL_PLT"
+    20U => "R_RISCV_GOT_HI20"
+    21U => "R_RISCV_TLS_GOT_HI20"
+    22U => "R_RISCV_TLS_GD_HI20"
+    23U => "R_RISCV_PCREL_HI20"
+    24U => "R_RISCV_PCREL_LO12_I"
+    25U => "R_RISCV_PCREL_LO12_S"
+    26U => "R_RISCV_HI20"
+    27U => "R_RISCV_LO12_I"
+    28U => "R_RISCV_LO12_S"
+    29U => "R_RISCV_LO12_PCREL_I"
+    30U => "R_RISCV_LO12_PCREL_S"
+    43U => "R_RISCV_ALIGN"
+    44U => "R_RISCV_RVC_BRANCH"
+    45U => "R_RISCV_RVC_JUMP"
+    48U => "R_RISCV_SUB6"
+    49U => "R_RISCV_SUB8"
+    50U => "R_RISCV_SUB16"
+    51U => "R_RISCV_SUB32"
+    52U => "R_RISCV_SUB64"
+    53U => "R_RISCV_ADD16"
+    54U => "R_RISCV_ADD32"
+    55U => "R_RISCV_ADD64"
+    _ => "R_RISCV_UNKNOWN(" + rel_type.to_string() + ")"
+  }
+}
+
+///|
+/// Get relocations from a section by index
+fn ElfFile::get_relocations_from_section(
+  self : ElfFile,
+  section_idx : Int,
+  symbols : Array[Symbol],
+) -> Array[Relocation] {
+  let relocs : Array[Relocation] = []
+
+  if self.is_64bit {
+    match self.sections64[section_idx] {
+      section => {
+        let sh_type = section.sh_type
+        let offset = section.sh_offset.reinterpret_as_int()
+        let size = section.sh_size.reinterpret_as_int()
+        let entsize = section.sh_entsize.reinterpret_as_int()
+        let sec_name = self.get_section_name(section_idx)
+
+        // Check if it's REL or RELA section
+        if sh_type == SHT_REL && entsize == 16 {
+          // 64-bit REL entries
+          let mut pos = 0
+          while pos + 16 <= size {
+            let rel = parse_elf64_rel(self.raw_data, offset + pos)
+            let sym_idx = get_symbol_index_64(rel.r_info)
+            let rel_type = get_reloc_type_64(rel.r_info)
+
+            // Get symbol name
+            let sym_name = if sym_idx.reinterpret_as_int() < symbols.length() {
+              symbols[sym_idx.reinterpret_as_int()].name
+            } else {
+              ""
+            }
+
+            relocs.push(Relocation::{
+              offset: rel.r_offset,
+              sym_index: sym_idx,
+              rel_type,
+              addend: 0,
+              sym_name,
+              section_name: sec_name,
+            })
+            pos = pos + 16
+          }
+        } else if sh_type == SHT_RELA && entsize == 24 {
+          // 64-bit RELA entries
+          let mut pos = 0
+          while pos + 24 <= size {
+            let rela = parse_elf64_rela(self.raw_data, offset + pos)
+            let sym_idx = get_symbol_index_64(rela.r_info)
+            let rel_type = get_reloc_type_64(rela.r_info)
+
+            // Get symbol name
+            let sym_name = if sym_idx.reinterpret_as_int() < symbols.length() {
+              symbols[sym_idx.reinterpret_as_int()].name
+            } else {
+              ""
+            }
+
+            relocs.push(Relocation::{
+              offset: rela.r_offset,
+              sym_index: sym_idx,
+              rel_type,
+              addend: rela.r_addend,
+              sym_name,
+              section_name: sec_name,
+            })
+            pos = pos + 24
+          }
+        }
+      }
+    }
+  } else {
+    match self.sections32[section_idx] {
+      section => {
+        let sh_type = section.sh_type
+        let offset = section.sh_offset.reinterpret_as_int()
+        let size = section.sh_size.reinterpret_as_int()
+        let entsize = section.sh_entsize.reinterpret_as_int()
+        let sec_name = self.get_section_name(section_idx)
+
+        // Check if it's REL or RELA section
+        if sh_type == SHT_REL && entsize == 8 {
+          // 32-bit REL entries
+          let mut pos = 0
+          while pos + 8 <= size {
+            let rel = parse_elf32_rel(self.raw_data, offset + pos)
+            let sym_idx = get_symbol_index_32(rel.r_info)
+            let rel_type = get_reloc_type_32(rel.r_info)
+
+            // Get symbol name
+            let sym_name = if sym_idx.reinterpret_as_int() < symbols.length() {
+              symbols[sym_idx.reinterpret_as_int()].name
+            } else {
+              ""
+            }
+
+            relocs.push(Relocation::{
+              offset: rel.r_offset,
+              sym_index: sym_idx,
+              rel_type,
+              addend: 0,
+              sym_name,
+              section_name: sec_name,
+            })
+            pos = pos + 8
+          }
+        } else if sh_type == SHT_RELA && entsize == 12 {
+          // 32-bit RELA entries
+          let mut pos = 0
+          while pos + 12 <= size {
+            let rela = parse_elf32_rela(self.raw_data, offset + pos)
+            let sym_idx = get_symbol_index_32(rela.r_info)
+            let rel_type = get_reloc_type_32(rela.r_info)
+
+            // Get symbol name
+            let sym_name = if sym_idx.reinterpret_as_int() < symbols.length() {
+              symbols[sym_idx.reinterpret_as_int()].name
+            } else {
+              ""
+            }
+
+            relocs.push(Relocation::{
+              offset: rela.r_offset,
+              sym_index: sym_idx,
+              rel_type,
+              addend: rela.r_addend,
+              sym_name,
+              section_name: sec_name,
+            })
+            pos = pos + 12
+          }
+        }
+      }
+    }
+  }
+
+  relocs
+}
+
+///|
+/// Get all relocations from the ELF file
+pub fn ElfFile::get_relocations(self : ElfFile) -> Array[Relocation] {
+  let all_relocs : Array[Relocation] = []
+  let symbols = self.get_symbols()
+
+  let section_count = self.section_count()
+  for i = 0; i < section_count; i = i + 1 {
+    let relocs = self.get_relocations_from_section(i, symbols)
+    for r in relocs {
+      all_relocs.push(r)
+    }
+  }
+
+  all_relocs
+}
+
+///|
+/// Get relocations for a specific section
+pub fn ElfFile::get_relocations_for_section(
+  self : ElfFile,
+  section_name : String,
+) -> Array[Relocation] {
+  let result : Array[Relocation] = []
+  let all_relocs = self.get_relocations()
+
+  for r in all_relocs {
+    if r.section_name == section_name {
+      result.push(r)
+    }
+  }
+
+  result
+}
+
+///|
+/// Find relocation at a specific address
+pub fn ElfFile::find_relocation_at(self : ElfFile, addr : UInt) -> Relocation? {
+  let all_relocs = self.get_relocations()
+
+  for r in all_relocs {
+    if r.offset == addr {
+      return Some(r)
+    }
+  }
+
+  None
+}
+
+///|
+/// Apply relocations to get resolved addresses
+/// Returns a map from relocation offset to resolved symbol address
+pub fn ElfFile::apply_relocations(self : ElfFile) -> Map[UInt, UInt] {
+  let result : Map[UInt, UInt] = {}
+  let symbols = self.get_symbols()
+
+  for reloc in self.get_relocations() {
+    // For most RISC-V relocations, the resolved address is symbol value + addend
+    let sym_idx = reloc.sym_index.reinterpret_as_int()
+    if sym_idx < symbols.length() {
+      let sym = symbols[sym_idx]
+      let resolved = sym.value + reloc.addend.reinterpret_as_uint()
+      result[reloc.offset] = resolved
+    }
+  }
+
+  result
+}
+
+///|
+/// Format relocation information
+pub fn format_relocation(reloc : Relocation) -> String {
+  let type_name = get_riscv_reloc_name(reloc.rel_type)
+  let offset_hex = format_hex_uint(reloc.offset)
+
+  if reloc.sym_name.length() > 0 {
+    let addend_str = if reloc.addend != 0 {
+      if reloc.addend > 0 {
+        " + " + reloc.addend.to_string()
+      } else {
+        " - " + (-reloc.addend).to_string()
+      }
+    } else {
+      ""
+    }
+    offset_hex + ": " + type_name + " -> " + reloc.sym_name + addend_str
+  } else {
+    offset_hex + ": " + type_name
+  }
+}
+
+///|
+/// Format hex uint with 0x prefix
+fn format_hex_uint(val : UInt) -> String {
+  // Convert UInt to hex string manually
+  let mut result = ""
+  let mut v = val
+  let hex_chars = "0123456789abcdef"
+
+  if v == 0U {
+    return "0x0"
+  }
+
+  let digits : Array[Char] = []
+  while v > 0U {
+    let digit = (v & 0xFU).reinterpret_as_int()
+    digits.push(hex_chars[digit].unsafe_to_char())
+    v = v >> 4
+  }
+
+  // Reverse digits
+  result = "0x"
+  for i = digits.length() - 1; i >= 0; i = i - 1 {
+    result = result + digits[i].to_string()
   }
 
   result

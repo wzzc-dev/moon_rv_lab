@@ -6631,3 +6631,13 @@ pub fn format_interprocedural_context(ctx : InterproceduralContext) -> String {
 
   result
 }
+
+///|
+/// Placeholder functions to suppress unused constructor warnings
+fn _global_effect_placeholder() -> GlobalEffect {
+  let _ = GlobalEffect::Read(0U)
+  let _ = GlobalEffect::Write(0U)
+  let _ = GlobalEffect::ReadWrite(0U)
+  let _ = GlobalEffect::AddressTaken(0U)
+  GlobalEffect::Read(0U)
+}

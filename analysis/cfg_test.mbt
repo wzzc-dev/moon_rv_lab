@@ -279,6 +279,7 @@ test "get_operands_store" {
 test "get_operands_float" {
   // FADD.S f5, f6, f7
   let code = 0x007302B3U | (1U << 25) // f7=1 for FADD.S
+  ignore(code)
   let @decode.DecodeResult(inst) = @decode.decode(0x0000F0D3U) // FADD.S f1, f0, f0
   let ops = get_operands(inst)
 
@@ -375,6 +376,7 @@ test "call_graph_called_by" {
 
   // JAL ra, 0x100 (at address 0)
   let jal_to_b = make_u32_bytes(0x100000EFU)
+  ignore(jal_to_b)
   // JAL ra, 0x100 (at address 4) - to create distance
   // We need offset = 0x100 - 4 = 0xFC = 252, but JAL encoding is complex
   // Let's use simpler: JALR for return
