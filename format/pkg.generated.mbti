@@ -186,7 +186,13 @@ pub fn dw_attr_from_uint(UInt) -> DWAttr
 
 pub fn dw_form_from_uint(UInt) -> DWForm
 
+pub fn dw_lne_from_uint(UInt) -> DWLNE
+
+pub fn dw_lns_from_uint(UInt) -> DWLNS
+
 pub fn dw_tag_from_uint(UInt) -> DWTag
+
+pub fn execute_line_program(LineNumberProgramHeader, FixedArray[Byte]) -> Array[LineEntry]
 
 pub fn format_relocation(Relocation) -> String
 
@@ -226,17 +232,23 @@ pub fn read_debug_string(FixedArray[Byte], UInt) -> String
 
 pub fn read_sleb128(DWARFParser) -> (DWARFParser, Int)?
 
+pub fn read_sleb128_at(FixedArray[Byte], Int) -> (Int, Int)?
+
 pub fn read_string_from_parser(DWARFParser) -> (DWARFParser, String)?
 
 pub fn read_u16(DWARFParser) -> (DWARFParser, UInt)?
 
 pub fn read_u32(DWARFParser) -> (DWARFParser, UInt)?
 
+pub fn read_u32_at(FixedArray[Byte], Int) -> UInt
+
 pub fn read_u64(DWARFParser) -> (DWARFParser, UInt)?
 
 pub fn read_u8(DWARFParser) -> (DWARFParser, Byte)?
 
 pub fn read_uleb128(DWARFParser) -> (DWARFParser, UInt)?
+
+pub fn read_uleb128_at(FixedArray[Byte], Int) -> (Int, UInt)?
 
 // Errors
 
@@ -738,6 +750,22 @@ pub struct LineNumberProgramHeader {
   file_names : Array[FileInfo]
 }
 pub impl Show for LineNumberProgramHeader
+
+pub struct LineNumberState {
+  address : UInt
+  file : Int
+  line : Int
+  column : Int
+  is_stmt : Bool
+  basic_block : Bool
+  end_sequence : Bool
+  prologue_end : Bool
+  epilogue_begin : Bool
+  isa : Int
+  discriminator : Int
+}
+pub fn LineNumberState::init(LineNumberProgramHeader) -> Self
+pub impl Show for LineNumberState
 
 pub struct RawBinary {
   code : FixedArray[Byte]

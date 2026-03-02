@@ -371,3 +371,35 @@ pub fn dw_ate_from_uint(value : UInt) -> DWATE {
     _ => DWATE::Unknown
   }
 }
+
+///|
+/// Convert UInt to DWLNE (line number extended opcode)
+pub fn dw_lne_from_uint(value : UInt) -> DWLNE {
+  match value {
+    0x01U => DWLNE::EndSequence
+    0x02U => DWLNE::SetAddress
+    0x03U => DWLNE::DefineFile
+    0x04U => DWLNE::SetDiscriminator
+    _ => DWLNE::Unknown
+  }
+}
+
+///|
+/// Convert UInt to DWLNS (line number standard opcode)
+pub fn dw_lns_from_uint(value : UInt) -> DWLNS {
+  match value {
+    0x01U => DWLNS::Copy
+    0x02U => DWLNS::AdvancePc
+    0x03U => DWLNS::AdvanceLine
+    0x04U => DWLNS::SetFile
+    0x05U => DWLNS::SetColumn
+    0x06U => DWLNS::NegateStmt
+    0x07U => DWLNS::SetBasicBlock
+    0x08U => DWLNS::ConstAddPc
+    0x09U => DWLNS::FixedAdvancePc
+    0x0AU => DWLNS::SetPrologueEnd
+    0x0BU => DWLNS::SetEpilogueBegin
+    0x0CU => DWLNS::SetIsa
+    _ => DWLNS::Unknown
+  }
+}

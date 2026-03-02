@@ -745,3 +745,541 @@ fn _attr_value_placeholder() -> AttrValue {
   let _ = AttrValue::ExprLoc(FixedArray::make(0, b'\x00'))
   AttrValue::Unknown
 }
+
+///|
+/// Line number state machine state
+pub struct LineNumberState {
+  /// Current address
+  address : UInt
+  /// Current file index
+  file : Int
+  /// Current line number
+  line : Int
+  /// Current column
+  column : Int
+  /// Is statement
+  is_stmt : Bool
+  /// Is basic block start
+  basic_block : Bool
+  /// End of sequence
+  end_sequence : Bool
+  /// Prologue end
+  prologue_end : Bool
+  /// Epilogue begin
+  epilogue_begin : Bool
+  /// ISA
+  isa : Int
+  /// Discriminator
+  discriminator : Int
+} derive(Show)
+
+///|
+/// Create initial line number state
+pub fn LineNumberState::init(
+  header : LineNumberProgramHeader,
+) -> LineNumberState {
+  {
+    address: 0U,
+    file: 1,
+    line: 1,
+    column: 0,
+    is_stmt: header.default_is_stmt,
+    basic_block: false,
+    end_sequence: false,
+    prologue_end: false,
+    epilogue_begin: false,
+    isa: 0,
+    discriminator: 0,
+  }
+}
+
+///|
+/// Execute line number program and generate line entries
+pub fn execute_line_program(
+  header : LineNumberProgramHeader,
+  program_data : FixedArray[Byte],
+) -> Array[LineEntry] {
+  let entries : Array[LineEntry] = []
+  let mut state = LineNumberState::init(header)
+  let mut pos = header.header_length.reinterpret_as_int() +
+    4 +
+    (if header.version >= 4 { 1 } else { 0 }) +
+    2 +
+    4
+
+  let mut running = true
+  while running {
+    if pos >= program_data.length() {
+      running = false
+    } else {
+      let opcode = program_data[pos].to_int()
+      pos = pos + 1
+
+      if opcode == 0 {
+        // Extended opcode
+        if pos >= program_data.length() {
+          running = false
+        } else {
+          match read_uleb128_at(program_data, pos) {
+            Some((new_pos, ext_len)) => {
+              pos = new_pos
+              let ext_length = ext_len.reinterpret_as_int()
+              if pos >= program_data.length() {
+                running = false
+              } else {
+                let ext_opcode = program_data[pos].to_int()
+                pos = pos + 1
+
+                match dw_lne_from_uint(ext_opcode.reinterpret_as_uint()) {
+                  DWLNE::EndSequence => {
+                    state = update_state_end_seq(state, true)
+                    entries.push(state_to_entry(state))
+                    state = LineNumberState::init(header)
+                  }
+                  DWLNE::SetAddress =>
+                    if pos + 3 < program_data.length() {
+                      let addr = read_u32_at(program_data, pos)
+                      state = update_state_address(state, addr)
+                      pos = pos + 4
+                    }
+                  DWLNE::DefineFile => pos = pos + ext_length - 1
+                  DWLNE::SetDiscriminator =>
+                    match read_uleb128_at(program_data, pos) {
+                      Some((new_pos, disc)) => {
+                        state = update_state_discriminator(
+                          state,
+                          disc.reinterpret_as_int(),
+                        )
+                        pos = new_pos
+                      }
+                      None => running = false
+                    }
+                  DWLNE::Unknown => pos = pos + ext_length - 1
+                }
+              }
+            }
+            None => running = false
+          }
+        }
+      } else if opcode < header.opcode_base {
+        // Standard opcode
+        match dw_lns_from_uint(opcode.reinterpret_as_uint()) {
+          DWLNS::Copy => {
+            entries.push(state_to_entry(state))
+            state = reset_state_flags(state)
+          }
+          DWLNS::AdvancePc =>
+            match read_uleb128_at(program_data, pos) {
+              Some((new_pos, advance)) => {
+                state = update_state_address(
+                  state,
+                  state.address +
+                  advance * header.min_inst_length.reinterpret_as_uint(),
+                )
+                pos = new_pos
+              }
+              None => running = false
+            }
+          DWLNS::AdvanceLine =>
+            match read_sleb128_at(program_data, pos) {
+              Some((new_pos, advance)) => {
+                state = update_state_line(state, state.line + advance)
+                pos = new_pos
+              }
+              None => running = false
+            }
+          DWLNS::SetFile =>
+            match read_uleb128_at(program_data, pos) {
+              Some((new_pos, file_idx)) => {
+                state = update_state_file(state, file_idx.reinterpret_as_int())
+                pos = new_pos
+              }
+              None => running = false
+            }
+          DWLNS::SetColumn =>
+            match read_uleb128_at(program_data, pos) {
+              Some((new_pos, col)) => {
+                state = update_state_column(state, col.reinterpret_as_int())
+                pos = new_pos
+              }
+              None => running = false
+            }
+          DWLNS::NegateStmt =>
+            state = update_state_is_stmt(state, !state.is_stmt)
+          DWLNS::SetBasicBlock => state = update_state_basic_block(state, true)
+          DWLNS::ConstAddPc => {
+            let adjusted = (255 - header.opcode_base) / header.line_range
+            let addr_advance = adjusted * header.min_inst_length
+            state = update_state_address(
+              state,
+              state.address + addr_advance.reinterpret_as_uint(),
+            )
+          }
+          DWLNS::FixedAdvancePc =>
+            if pos + 1 < program_data.length() {
+              let advance = (program_data[pos].to_int() |
+              (program_data[pos + 1].to_int() << 8)).reinterpret_as_uint()
+              state = update_state_address(state, state.address + advance)
+              pos = pos + 2
+            }
+          DWLNS::SetPrologueEnd =>
+            state = update_state_prologue_end(state, true)
+          DWLNS::SetEpilogueBegin =>
+            state = update_state_epilogue_begin(state, true)
+          DWLNS::SetIsa =>
+            match read_uleb128_at(program_data, pos) {
+              Some((new_pos, isa_val)) => {
+                state = update_state_isa(state, isa_val.reinterpret_as_int())
+                pos = new_pos
+              }
+              None => running = false
+            }
+          DWLNS::Unknown =>
+            // Skip operands
+            if opcode - 1 < header.std_opcode_lengths.length() {
+              let num_args = header.std_opcode_lengths[opcode - 1]
+              for _ in 0..<num_args {
+                match read_uleb128_at(program_data, pos) {
+                  Some((new_pos, _)) => pos = new_pos
+                  None => running = false
+                }
+              }
+            }
+        }
+      } else {
+        // Special opcode
+        let adjusted = opcode - header.opcode_base
+        let addr_advance = adjusted / header.line_range * header.min_inst_length
+        let line_advance = header.line_base + adjusted % header.line_range
+        state = update_state_address(
+          state,
+          state.address + addr_advance.reinterpret_as_uint(),
+        )
+        state = update_state_line(state, state.line + line_advance)
+        entries.push(state_to_entry(state))
+        state = reset_state_flags(state)
+      }
+    }
+  }
+  entries
+}
+
+///|
+/// Helper functions to update LineNumberState
+fn update_state_address(
+  state : LineNumberState,
+  address : UInt,
+) -> LineNumberState {
+  {
+    address,
+    file: state.file,
+    line: state.line,
+    column: state.column,
+    is_stmt: state.is_stmt,
+    basic_block: state.basic_block,
+    end_sequence: state.end_sequence,
+    prologue_end: state.prologue_end,
+    epilogue_begin: state.epilogue_begin,
+    isa: state.isa,
+    discriminator: state.discriminator,
+  }
+}
+
+///|
+fn update_state_line(state : LineNumberState, line : Int) -> LineNumberState {
+  {
+    address: state.address,
+    file: state.file,
+    line,
+    column: state.column,
+    is_stmt: state.is_stmt,
+    basic_block: state.basic_block,
+    end_sequence: state.end_sequence,
+    prologue_end: state.prologue_end,
+    epilogue_begin: state.epilogue_begin,
+    isa: state.isa,
+    discriminator: state.discriminator,
+  }
+}
+
+///|
+fn update_state_file(state : LineNumberState, file : Int) -> LineNumberState {
+  {
+    address: state.address,
+    file,
+    line: state.line,
+    column: state.column,
+    is_stmt: state.is_stmt,
+    basic_block: state.basic_block,
+    end_sequence: state.end_sequence,
+    prologue_end: state.prologue_end,
+    epilogue_begin: state.epilogue_begin,
+    isa: state.isa,
+    discriminator: state.discriminator,
+  }
+}
+
+///|
+fn update_state_column(
+  state : LineNumberState,
+  column : Int,
+) -> LineNumberState {
+  {
+    address: state.address,
+    file: state.file,
+    line: state.line,
+    column,
+    is_stmt: state.is_stmt,
+    basic_block: state.basic_block,
+    end_sequence: state.end_sequence,
+    prologue_end: state.prologue_end,
+    epilogue_begin: state.epilogue_begin,
+    isa: state.isa,
+    discriminator: state.discriminator,
+  }
+}
+
+///|
+fn update_state_is_stmt(
+  state : LineNumberState,
+  is_stmt : Bool,
+) -> LineNumberState {
+  {
+    address: state.address,
+    file: state.file,
+    line: state.line,
+    column: state.column,
+    is_stmt,
+    basic_block: state.basic_block,
+    end_sequence: state.end_sequence,
+    prologue_end: state.prologue_end,
+    epilogue_begin: state.epilogue_begin,
+    isa: state.isa,
+    discriminator: state.discriminator,
+  }
+}
+
+///|
+fn update_state_basic_block(
+  state : LineNumberState,
+  basic_block : Bool,
+) -> LineNumberState {
+  {
+    address: state.address,
+    file: state.file,
+    line: state.line,
+    column: state.column,
+    is_stmt: state.is_stmt,
+    basic_block,
+    end_sequence: state.end_sequence,
+    prologue_end: state.prologue_end,
+    epilogue_begin: state.epilogue_begin,
+    isa: state.isa,
+    discriminator: state.discriminator,
+  }
+}
+
+///|
+fn update_state_end_seq(
+  state : LineNumberState,
+  end_sequence : Bool,
+) -> LineNumberState {
+  {
+    address: state.address,
+    file: state.file,
+    line: state.line,
+    column: state.column,
+    is_stmt: state.is_stmt,
+    basic_block: state.basic_block,
+    end_sequence,
+    prologue_end: state.prologue_end,
+    epilogue_begin: state.epilogue_begin,
+    isa: state.isa,
+    discriminator: state.discriminator,
+  }
+}
+
+///|
+fn update_state_prologue_end(
+  state : LineNumberState,
+  prologue_end : Bool,
+) -> LineNumberState {
+  {
+    address: state.address,
+    file: state.file,
+    line: state.line,
+    column: state.column,
+    is_stmt: state.is_stmt,
+    basic_block: state.basic_block,
+    end_sequence: state.end_sequence,
+    prologue_end,
+    epilogue_begin: state.epilogue_begin,
+    isa: state.isa,
+    discriminator: state.discriminator,
+  }
+}
+
+///|
+fn update_state_epilogue_begin(
+  state : LineNumberState,
+  epilogue_begin : Bool,
+) -> LineNumberState {
+  {
+    address: state.address,
+    file: state.file,
+    line: state.line,
+    column: state.column,
+    is_stmt: state.is_stmt,
+    basic_block: state.basic_block,
+    end_sequence: state.end_sequence,
+    prologue_end: state.prologue_end,
+    epilogue_begin,
+    isa: state.isa,
+    discriminator: state.discriminator,
+  }
+}
+
+///|
+fn update_state_isa(state : LineNumberState, isa : Int) -> LineNumberState {
+  {
+    address: state.address,
+    file: state.file,
+    line: state.line,
+    column: state.column,
+    is_stmt: state.is_stmt,
+    basic_block: state.basic_block,
+    end_sequence: state.end_sequence,
+    prologue_end: state.prologue_end,
+    epilogue_begin: state.epilogue_begin,
+    isa,
+    discriminator: state.discriminator,
+  }
+}
+
+///|
+fn update_state_discriminator(
+  state : LineNumberState,
+  discriminator : Int,
+) -> LineNumberState {
+  {
+    address: state.address,
+    file: state.file,
+    line: state.line,
+    column: state.column,
+    is_stmt: state.is_stmt,
+    basic_block: state.basic_block,
+    end_sequence: state.end_sequence,
+    prologue_end: state.prologue_end,
+    epilogue_begin: state.epilogue_begin,
+    isa: state.isa,
+    discriminator,
+  }
+}
+
+///|
+fn reset_state_flags(state : LineNumberState) -> LineNumberState {
+  {
+    address: state.address,
+    file: state.file,
+    line: state.line,
+    column: state.column,
+    is_stmt: state.is_stmt,
+    basic_block: false,
+    end_sequence: false,
+    prologue_end: false,
+    epilogue_begin: false,
+    isa: state.isa,
+    discriminator: 0,
+  }
+}
+
+///|
+fn state_to_entry(state : LineNumberState) -> LineEntry {
+  {
+    address: state.address,
+    file: state.file,
+    line: state.line,
+    column: state.column,
+    is_stmt: state.is_stmt,
+    basic_block: state.basic_block,
+    end_sequence: state.end_sequence,
+    prologue_end: state.prologue_end,
+    epilogue_begin: state.epilogue_begin,
+    isa: state.isa,
+    discriminator: state.discriminator,
+  }
+}
+
+///|
+/// Read ULEB128 at a specific position in a byte array
+pub fn read_uleb128_at(data : FixedArray[Byte], pos : Int) -> (Int, UInt)? {
+  let mut result : UInt = 0U
+  let mut shift = 0
+  let mut p = pos
+
+  let mut done = false
+  while !done {
+    if p >= data.length() {
+      return None
+    }
+    let byte = data[p].to_int()
+    p = p + 1
+    result = result | ((byte & 0x7F).reinterpret_as_uint() << shift)
+    if (byte & 0x80) == 0 {
+      done = true
+    } else {
+      shift = shift + 7
+      if shift > 63 {
+        return None
+      }
+    }
+  }
+  Some((p, result))
+}
+
+///|
+/// Read SLEB128 at a specific position in a byte array
+pub fn read_sleb128_at(data : FixedArray[Byte], pos : Int) -> (Int, Int)? {
+  let mut result : Int = 0
+  let mut shift = 0
+  let mut p = pos
+  let mut last_byte = 0
+
+  let mut done = false
+  while !done {
+    if p >= data.length() {
+      return None
+    }
+    let byte = data[p].to_int()
+    p = p + 1
+    last_byte = byte
+    result = result | ((byte & 0x7F) << shift)
+    if (byte & 0x80) == 0 {
+      done = true
+    } else {
+      shift = shift + 7
+      if shift > 63 {
+        return None
+      }
+    }
+  }
+
+  // Sign extend if negative
+  if (last_byte & 0x40) != 0 && shift < 63 {
+    result = result | -(1 << (shift + 7))
+  }
+  Some((p, result))
+}
+
+///|
+/// Read u32 at a specific position in a byte array
+pub fn read_u32_at(data : FixedArray[Byte], pos : Int) -> UInt {
+  if pos + 3 >= data.length() {
+    return 0U
+  }
+  let b0 = data[pos].to_int()
+  let b1 = data[pos + 1].to_int()
+  let b2 = data[pos + 2].to_int()
+  let b3 = data[pos + 3].to_int()
+  ((b3 << 24) | (b2 << 16) | (b1 << 8) | b0).reinterpret_as_uint()
+}

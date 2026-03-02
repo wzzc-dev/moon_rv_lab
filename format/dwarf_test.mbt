@@ -220,7 +220,109 @@ test "format_source_location_basic" {
   // Test with empty files array
   let files : Array[FileInfo] = []
   // The function should handle edge cases
-  // Since we can't construct LineEntry from blackbox test, 
+  // Since we can't construct LineEntry from blackbox test,
   // we just verify the function signature is correct
   ignore(files.length())
+}
+
+///|
+test "line_number_state_init" {
+  // Test that LineNumberState::init creates a valid initial state
+  let data : FixedArray[Byte] = FixedArray::make(32, b'\x00')
+  // Set up a minimal header
+  data[0] = 0x10U.to_byte() // unit_length
+  data[4] = 0x04U.to_byte() // version = 4
+  data[10] = 0x01U.to_byte() // min_inst_length = 1
+  data[12] = 0x01U.to_byte() // default_is_stmt = 1
+  data[15] = 0x0DU.to_byte() // opcode_base = 13 (must be >= 1)
+
+  match parse_line_program_header(data) {
+    Some(header) => {
+      let state = LineNumberState::init(header)
+      inspect(state.address, content="0")
+      inspect(state.file, content="1")
+      inspect(state.line, content="1")
+      inspect(state.is_stmt, content="true")
+    }
+    None => inspect("failed", content="should_not_fail")
+  }
+}
+
+///|
+test "execute_line_program_basic" {
+  // Create a minimal line program header and execute
+  // This test just verifies the function runs without crashing
+  let data : FixedArray[Byte] = FixedArray::make(64, b'\x00')
+  // Header
+  data[0] = 0x20U.to_byte() // unit_length = 32
+  data[4] = 0x04U.to_byte() // version = 4
+  data[6] = 0x0AU.to_byte() // header_length = 10
+  data[10] = 0x01U.to_byte() // min_inst_length = 1
+  data[11] = 0x01U.to_byte() // max_ops_per_inst = 1
+  data[12] = 0x01U.to_byte() // default_is_stmt = 1
+  data[13] = 0xF5U.to_byte() // line_base = -5 (signed)
+  data[14] = 0x0EU.to_byte() // line_range = 14
+  data[15] = 0x0DU.to_byte() // opcode_base = 13
+
+  match parse_line_program_header(data) {
+    Some(header) => {
+      // Just verify header parsed correctly
+      inspect(header.version, content="4")
+      inspect(header.min_inst_length, content="1")
+      // Execute and verify no crash
+      let _entries = execute_line_program(header, data)
+      ignore(_entries.length())
+    }
+    None => inspect("failed", content="should_not_fail")
+  }
+}
+
+///|
+test "read_uleb128_at_basic" {
+  // Test ULEB128 reading at specific positions
+  let data : FixedArray[Byte] = FixedArray::make(16, b'\x00')
+  data[0] = 0x7FU.to_byte() // 127 (single byte)
+  data[1] = 0x80U.to_byte() // 128 (multi-byte start)
+  data[2] = 0x01U.to_byte() // 128 continuation
+
+  match read_uleb128_at(data, 0) {
+    Some((pos, val)) => {
+      inspect(val, content="127")
+      inspect(pos, content="1")
+    }
+    None => inspect("failed", content="should_not_fail")
+  }
+
+  match read_uleb128_at(data, 1) {
+    Some((pos, val)) => {
+      inspect(val, content="128")
+      inspect(pos, content="3")
+    }
+    None => inspect("failed", content="should_not_fail")
+  }
+}
+
+///|
+test "read_sleb128_at_basic" {
+  // Test SLEB128 reading at specific positions
+  let data : FixedArray[Byte] = FixedArray::make(16, b'\x00')
+  data[0] = 0x02U.to_byte() // 2 (positive)
+  data[1] = 0x7EU.to_byte() // -2 (SLEB128 encoding: 0x7E)
+
+  match read_sleb128_at(data, 0) {
+    Some((pos, val)) => {
+      inspect(val, content="2")
+      inspect(pos, content="1")
+    }
+    None => inspect("failed", content="should_not_fail")
+  }
+
+  match read_sleb128_at(data, 1) {
+    Some((pos, val)) => {
+      // 0x7E in SLEB128 is -2 (correctly implemented)
+      inspect(val, content="-2")
+      inspect(pos, content="2")
+    }
+    None => inspect("failed", content="should_not_fail")
+  }
 }
