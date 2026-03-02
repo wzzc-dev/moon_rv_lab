@@ -2,6 +2,30 @@
 package "wzzc-dev/riscv_analyzer/format"
 
 // Values
+pub const DEBUG_ABBREV : String = ".debug_abbrev"
+
+pub const DEBUG_ARANGES : String = ".debug_aranges"
+
+pub const DEBUG_FRAME : String = ".debug_frame"
+
+pub const DEBUG_INFO : String = ".debug_info"
+
+pub const DEBUG_LINE : String = ".debug_line"
+
+pub const DEBUG_LOC : String = ".debug_loc"
+
+pub const DEBUG_RANGES : String = ".debug_ranges"
+
+pub const DEBUG_STR : String = ".debug_str"
+
+pub const DWARF_VERSION_2 : Int = 2
+
+pub const DWARF_VERSION_3 : Int = 3
+
+pub const DWARF_VERSION_4 : Int = 4
+
+pub const DWARF_VERSION_5 : Int = 5
+
 pub const EI_CLASS : Int = 4
 
 pub const EI_DATA : Int = 5
@@ -156,7 +180,17 @@ pub const STT_SECTION : UInt = 3
 
 pub fn detect_format(FixedArray[Byte]) -> BinaryFormat
 
+pub fn dw_ate_from_uint(UInt) -> DWATE
+
+pub fn dw_attr_from_uint(UInt) -> DWAttr
+
+pub fn dw_form_from_uint(UInt) -> DWForm
+
+pub fn dw_tag_from_uint(UInt) -> DWTag
+
 pub fn format_relocation(Relocation) -> String
+
+pub fn format_source_location(LineEntry, Array[FileInfo]) -> String
 
 pub fn get_elf_class(FixedArray[Byte]) -> ElfClass
 
@@ -174,15 +208,69 @@ pub fn is_elf(FixedArray[Byte]) -> Bool
 
 pub fn is_ihex_format(String) -> Bool
 
+pub fn lookup_line(Array[LineEntry], UInt) -> LineEntry?
+
+pub fn parse_compilation_unit(FixedArray[Byte]) -> CompilationUnit?
+
 pub fn parse_elf(FixedArray[Byte]) -> ElfFile?
 
 pub fn parse_ihex_line(String) -> IHexRecord?
 
+pub fn parse_line_program_header(FixedArray[Byte]) -> LineNumberProgramHeader?
+
 pub fn parse_raw_binary(FixedArray[Byte], UInt) -> RawBinary
+
+pub fn read_addr(DWARFParser) -> (DWARFParser, UInt)?
+
+pub fn read_debug_string(FixedArray[Byte], UInt) -> String
+
+pub fn read_sleb128(DWARFParser) -> (DWARFParser, Int)?
+
+pub fn read_string_from_parser(DWARFParser) -> (DWARFParser, String)?
+
+pub fn read_u16(DWARFParser) -> (DWARFParser, UInt)?
+
+pub fn read_u32(DWARFParser) -> (DWARFParser, UInt)?
+
+pub fn read_u64(DWARFParser) -> (DWARFParser, UInt)?
+
+pub fn read_u8(DWARFParser) -> (DWARFParser, Byte)?
+
+pub fn read_uleb128(DWARFParser) -> (DWARFParser, UInt)?
 
 // Errors
 
 // Types and methods
+pub struct AbbrevEntry {
+  code : UInt
+  tag : DWTag
+  has_children : Bool
+  attrs : Array[AttrSpec]
+}
+pub impl Show for AbbrevEntry
+
+pub struct AttrSpec {
+  name : DWAttr
+  form : DWForm
+  implicit_const : Int
+}
+pub impl Show for AttrSpec
+
+pub enum AttrValue {
+  Addr(UInt)
+  Data(FixedArray[Byte])
+  String(String)
+  Ref(UInt)
+  UData(UInt)
+  SData(Int)
+  Flag(Bool)
+  Block(FixedArray[Byte])
+  SecOffset(UInt)
+  ExprLoc(FixedArray[Byte])
+  Unknown
+}
+pub impl Show for AttrValue
+
 pub enum BinaryFormat {
   ELF
   IHex
@@ -191,6 +279,229 @@ pub enum BinaryFormat {
 }
 pub impl Eq for BinaryFormat
 pub impl Show for BinaryFormat
+
+pub struct CompilationUnit {
+  unit_length : UInt
+  version : Int
+  abbrev_offset : UInt
+  addr_size : Int
+  root : DIE?
+}
+pub impl Show for CompilationUnit
+
+pub struct DIE {
+  offset : UInt
+  abbrev_code : UInt
+  tag : DWTag
+  has_children : Bool
+  attrs : Map[DWAttr, AttrValue]
+  children : Array[DIE]
+}
+pub impl Show for DIE
+
+pub struct DWARFInfo {
+  units : Array[CompilationUnit]
+  line_info : Array[LineNumberProgram]
+  addr_to_line : Map[UInt, LineEntry]
+}
+pub impl Show for DWARFInfo
+
+pub struct DWARFParser {
+  data : FixedArray[Byte]
+  pos : Int
+  addr_size : Int
+  version : Int
+}
+pub fn DWARFParser::new(FixedArray[Byte]) -> Self
+pub impl Show for DWARFParser
+
+pub enum DWATE {
+  Address
+  Boolean
+  ComplexFloat
+  Float
+  Signed
+  SignedChar
+  Unsigned
+  UnsignedChar
+  ImaginaryFloat
+  PackedDecimal
+  NumericString
+  Edited
+  SignedFixed
+  UnsignedFixed
+  UTF
+  Unknown
+}
+pub impl Eq for DWATE
+pub impl Show for DWATE
+
+pub enum DWAttr {
+  Name
+  LowPc
+  HighPc
+  StmtList
+  CompDir
+  Language
+  Producer
+  Encoding
+  ByteSize
+  BitSize
+  Type
+  Location
+  FrameBase
+  DataMemberLocation
+  External
+  Declaration
+  Inline
+  Unknown
+}
+pub impl Eq for DWAttr
+pub impl Show for DWAttr
+
+pub enum DWForm {
+  Addr
+  Block2
+  Block4
+  Data2
+  Data4
+  Data8
+  String
+  Block
+  Block1
+  Data1
+  Flag
+  SData
+  StrP
+  UData
+  RefAddr
+  Ref1
+  Ref2
+  Ref4
+  Ref8
+  RefUData
+  Indirect
+  SecOffset
+  ExprLoc
+  FlagPresent
+  RefSig8
+  StrX
+  AddrX
+  RefSup4
+  StrPSup
+  Data16
+  LineStrP
+  ImplicitConst
+  LocListX
+  RngListX
+  RefSup8
+  StrX1
+  StrX2
+  StrX3
+  StrX4
+  AddrX1
+  AddrX2
+  AddrX3
+  AddrX4
+  Unknown
+}
+pub impl Eq for DWForm
+pub impl Show for DWForm
+
+pub enum DWLANG {
+  C89
+  C
+  Ada83
+  CPlusPlus
+  Cobol74
+  Cobol85
+  Fortran77
+  Fortran90
+  Pascal83
+  Modula2
+  Java
+  C99
+  Ada95
+  Fortran95
+  PLI
+  ObjC
+  ObjCPlusPlus
+  UPC
+  D
+  Python
+  OpenCL
+  Go
+  Modula3
+  Haskell
+  CPlusPlus03
+  CPlusPlus11
+  OCaml
+  Rust
+  C11
+  Swift
+  Julia
+  Dylan
+  CPlusPlus14
+  Fortran03
+  Fortran08
+  RenderScript
+  BLISS
+  Unknown
+}
+pub impl Eq for DWLANG
+pub impl Show for DWLANG
+
+pub enum DWLNE {
+  EndSequence
+  SetAddress
+  DefineFile
+  SetDiscriminator
+  Unknown
+}
+pub impl Eq for DWLNE
+pub impl Show for DWLNE
+
+pub enum DWLNS {
+  Copy
+  AdvancePc
+  AdvanceLine
+  SetFile
+  SetColumn
+  NegateStmt
+  SetBasicBlock
+  ConstAddPc
+  FixedAdvancePc
+  SetPrologueEnd
+  SetEpilogueBegin
+  SetIsa
+  Unknown
+}
+pub impl Eq for DWLNS
+pub impl Show for DWLNS
+
+pub enum DWTag {
+  CompileUnit
+  Subprogram
+  FormalParameter
+  Variable
+  BaseType
+  PointerType
+  ConstType
+  Typedef
+  StructureType
+  Member
+  ArrayType
+  SubrangeType
+  EnumerationType
+  Enumerator
+  UnionType
+  Label
+  LexicalBlock
+  InlinedSubroutine
+  Unknown
+}
+pub impl Eq for DWTag
+pub impl Show for DWTag
 
 pub struct Elf32Header {
   e_ident : FixedArray[Byte]
@@ -364,6 +675,14 @@ pub fn ElfFile::program_count(Self) -> Int
 pub fn ElfFile::section_count(Self) -> Int
 pub impl Show for ElfFile
 
+pub struct FileInfo {
+  name : String
+  dir_index : Int
+  mod_time : UInt
+  file_size : UInt
+}
+pub impl Show for FileInfo
+
 pub struct IHexRecord {
   record_type : IHexRecordType
   address : UInt
@@ -382,6 +701,43 @@ pub enum IHexRecordType {
 }
 pub impl Eq for IHexRecordType
 pub impl Show for IHexRecordType
+
+pub struct LineEntry {
+  address : UInt
+  file : Int
+  line : Int
+  column : Int
+  is_stmt : Bool
+  basic_block : Bool
+  end_sequence : Bool
+  prologue_end : Bool
+  epilogue_begin : Bool
+  isa : Int
+  discriminator : Int
+}
+pub impl Show for LineEntry
+
+pub struct LineNumberProgram {
+  header : LineNumberProgramHeader
+  entries : Array[LineEntry]
+}
+pub impl Show for LineNumberProgram
+
+pub struct LineNumberProgramHeader {
+  unit_length : UInt
+  version : Int
+  header_length : UInt
+  min_inst_length : Int
+  max_ops_per_inst : Int
+  default_is_stmt : Bool
+  line_base : Int
+  line_range : Int
+  opcode_base : Int
+  std_opcode_lengths : FixedArray[Int]
+  include_dirs : Array[String]
+  file_names : Array[FileInfo]
+}
+pub impl Show for LineNumberProgramHeader
 
 pub struct RawBinary {
   code : FixedArray[Byte]
