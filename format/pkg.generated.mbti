@@ -200,6 +200,8 @@ pub fn find_dies_by_tag(Array[DIE], DWTag) -> Array[DIE]
 
 pub fn find_line_entry(LineNumberInfo, UInt) -> SourceLocation?
 
+pub fn format_dwarf_type_info(DWARFTypeInfo) -> String
+
 pub fn format_relocation(Relocation) -> String
 
 pub fn format_source_location(LineEntry, Array[FileInfo]) -> String
@@ -207,6 +209,10 @@ pub fn format_source_location(LineEntry, Array[FileInfo]) -> String
 pub fn get_die_address(DIE, DWAttr) -> UInt?
 
 pub fn get_die_attr(DIE, DWAttr) -> AttrValue?
+
+pub fn get_die_int(DIE, DWAttr) -> Int?
+
+pub fn get_die_ref(DIE, DWAttr) -> UInt?
 
 pub fn get_die_string(DIE, DWAttr) -> String?
 
@@ -236,13 +242,19 @@ pub fn parse_die_tree(FixedArray[Byte], FixedArray[Byte]) -> Array[DIE]
 
 pub fn parse_elf(FixedArray[Byte]) -> ElfFile?
 
+pub fn parse_encoding(AttrValue) -> DWARFEncoding
+
 pub fn parse_ihex_line(String) -> IHexRecord?
 
 pub fn parse_line_number_info(FixedArray[Byte]) -> LineNumberInfo
 
 pub fn parse_line_program_header(FixedArray[Byte]) -> LineNumberProgramHeader?
 
+pub fn parse_location(AttrValue) -> DWARFLocation
+
 pub fn parse_raw_binary(FixedArray[Byte], UInt) -> RawBinary
+
+pub fn parse_type_info(Array[DIE]) -> DWARFTypeInfo
 
 pub fn read_addr(DWARFParser) -> (DWARFParser, UInt)?
 
@@ -267,6 +279,8 @@ pub fn read_u8(DWARFParser) -> (DWARFParser, Byte)?
 pub fn read_uleb128(DWARFParser) -> (DWARFParser, UInt)?
 
 pub fn read_uleb128_at(FixedArray[Byte], Int) -> (Int, UInt)?
+
+pub fn resolve_type_name(UInt, Map[UInt, DWARFType]) -> String
 
 // Errors
 
@@ -329,12 +343,66 @@ pub struct DIE {
 }
 pub impl Show for DIE
 
+pub enum DWARFEncoding {
+  Address
+  Boolean
+  ComplexFloat
+  Float
+  Signed
+  SignedChar
+  Unsigned
+  UnsignedChar
+  ImaginaryFloat
+  PackedDecimal
+  NumericString
+  Edited
+  SignedFixed
+  UnsignedFixed
+  DecimalFloat
+  Unknown
+}
+pub impl Eq for DWARFEncoding
+pub impl Show for DWARFEncoding
+
+pub struct DWARFEnumerator {
+  name : String
+  value : Int
+}
+pub impl Show for DWARFEnumerator
+
+pub struct DWARFFunction {
+  name : String
+  low_pc : UInt
+  high_pc : UInt
+  params : Array[DWARFVariable]
+  locals : Array[DWARFVariable]
+  return_type : UInt?
+}
+pub impl Show for DWARFFunction
+
 pub struct DWARFInfo {
   units : Array[CompilationUnit]
   line_info : Array[LineNumberProgram]
   addr_to_line : Map[UInt, LineEntry]
 }
 pub impl Show for DWARFInfo
+
+pub enum DWARFLocation {
+  StackOffset(Int)
+  GlobalAddr(UInt)
+  Register(UInt)
+  Unknown
+}
+pub impl Show for DWARFLocation
+
+pub struct DWARFMember {
+  name : String
+  type_offset : UInt
+  byte_offset : Int
+  bit_offset : Int?
+  bit_size : Int?
+}
+pub impl Show for DWARFMember
 
 pub struct DWARFParser {
   data : FixedArray[Byte]
@@ -344,6 +412,43 @@ pub struct DWARFParser {
 }
 pub fn DWARFParser::new(FixedArray[Byte]) -> Self
 pub impl Show for DWARFParser
+
+pub struct DWARFType {
+  name : String
+  byte_size : Int
+  kind : DWARFTypeKind
+  offset : UInt
+}
+pub impl Show for DWARFType
+
+pub struct DWARFTypeInfo {
+  types : Map[UInt, DWARFType]
+  functions : Array[DWARFFunction]
+  globals : Array[DWARFVariable]
+}
+pub impl Show for DWARFTypeInfo
+
+pub enum DWARFTypeKind {
+  Base(DWARFEncoding)
+  Pointer(UInt)
+  Array(UInt, Int)
+  Struct(Array[DWARFMember])
+  Union(Array[DWARFMember])
+  Enum(UInt, Array[DWARFEnumerator])
+  Typedef(UInt)
+  Const(UInt)
+  Volatile(UInt)
+  Unknown
+}
+pub impl Show for DWARFTypeKind
+
+pub struct DWARFVariable {
+  name : String
+  type_offset : UInt
+  location : DWARFLocation
+  is_global : Bool
+}
+pub impl Show for DWARFVariable
 
 pub enum DWATE {
   Address

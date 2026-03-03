@@ -2040,3 +2040,651 @@ pub fn get_die_address(die : DIE, attr : DWAttr) -> UInt? {
     _ => None
   }
 }
+
+// ============================================================================
+// DWARF Type Information Parsing (Phase 2 Enhancement)
+// ============================================================================
+
+///|
+/// DWARF type encoding (base type encoding)
+pub enum DWARFEncoding {
+  Address = 0x01
+  Boolean = 0x02
+  ComplexFloat = 0x03
+  Float = 0x04
+  Signed = 0x05
+  SignedChar = 0x06
+  Unsigned = 0x07
+  UnsignedChar = 0x08
+  ImaginaryFloat = 0x09
+  PackedDecimal = 0x0A
+  NumericString = 0x0B
+  Edited = 0x0C
+  SignedFixed = 0x0D
+  UnsignedFixed = 0x0E
+  DecimalFloat = 0x0F
+  Unknown = 0x00
+} derive(Show, Eq)
+
+///|
+/// DWARF type information
+pub struct DWARFType {
+  /// Type name
+  name : String
+  /// Byte size
+  byte_size : Int
+  /// Type kind
+  kind : DWARFTypeKind
+  /// Offset in .debug_info
+  offset : UInt
+} derive(Show)
+
+///|
+/// DWARF type kind
+pub enum DWARFTypeKind {
+  /// Base type (int, float, etc.)
+  Base(DWARFEncoding)
+  /// Pointer type (points to type at offset)
+  Pointer(UInt)
+  /// Array type (element type, count)
+  Array(UInt, Int)
+  /// Structure type (members)
+  Struct(Array[DWARFMember])
+  /// Union type (members)
+  Union(Array[DWARFMember])
+  /// Enumeration type (underlying type, enumerators)
+  Enum(UInt, Array[DWARFEnumerator])
+  /// Typedef (alias for type at offset)
+  Typedef(UInt)
+  /// Const qualified type
+  Const(UInt)
+  /// Volatile qualified type
+  Volatile(UInt)
+  /// Unknown type
+  Unknown
+} derive(Show)
+
+///|
+/// DWARF structure/union member
+pub struct DWARFMember {
+  /// Member name
+  name : String
+  /// Type offset
+  type_offset : UInt
+  /// Byte offset in structure
+  byte_offset : Int
+  /// Bit offset (for bit fields)
+  bit_offset : Int?
+  /// Bit size (for bit fields)
+  bit_size : Int?
+} derive(Show)
+
+///|
+/// DWARF enumerator
+pub struct DWARFEnumerator {
+  /// Enumerator name
+  name : String
+  /// Enumerator value
+  value : Int
+} derive(Show)
+
+///|
+/// DWARF variable information
+pub struct DWARFVariable {
+  /// Variable name
+  name : String
+  /// Type offset
+  type_offset : UInt
+  /// Location (stack offset or address)
+  location : DWARFLocation
+  /// Is global
+  is_global : Bool
+} derive(Show)
+
+///|
+/// DWARF location
+pub enum DWARFLocation {
+  /// Stack offset from frame base
+  StackOffset(Int)
+  /// Global address
+  GlobalAddr(UInt)
+  /// Register number
+  Register(UInt)
+  /// Unknown location
+  Unknown
+} derive(Show)
+
+///|
+/// DWARF function information
+pub struct DWARFFunction {
+  /// Function name
+  name : String
+  /// Low PC (start address)
+  low_pc : UInt
+  /// High PC (end address)
+  high_pc : UInt
+  /// Parameters
+  params : Array[DWARFVariable]
+  /// Local variables
+  locals : Array[DWARFVariable]
+  /// Return type offset
+  return_type : UInt?
+} derive(Show)
+
+///|
+/// DWARF type information cache
+pub struct DWARFTypeInfo {
+  /// All types indexed by offset
+  types : Map[UInt, DWARFType]
+  /// All functions
+  functions : Array[DWARFFunction]
+  /// Global variables
+  globals : Array[DWARFVariable]
+} derive(Show)
+
+///|
+/// Parse encoding from attribute value
+pub fn parse_encoding(value : AttrValue) -> DWARFEncoding {
+  match value {
+    AttrValue::UData(v) =>
+      match v {
+        0x01U => DWARFEncoding::Address
+        0x02U => DWARFEncoding::Boolean
+        0x03U => DWARFEncoding::ComplexFloat
+        0x04U => DWARFEncoding::Float
+        0x05U => DWARFEncoding::Signed
+        0x06U => DWARFEncoding::SignedChar
+        0x07U => DWARFEncoding::Unsigned
+        0x08U => DWARFEncoding::UnsignedChar
+        0x09U => DWARFEncoding::ImaginaryFloat
+        0x0AU => DWARFEncoding::PackedDecimal
+        0x0BU => DWARFEncoding::NumericString
+        0x0CU => DWARFEncoding::Edited
+        0x0DU => DWARFEncoding::SignedFixed
+        0x0EU => DWARFEncoding::UnsignedFixed
+        0x0FU => DWARFEncoding::DecimalFloat
+        _ => DWARFEncoding::Unknown
+      }
+    _ => DWARFEncoding::Unknown
+  }
+}
+
+///|
+/// Get integer attribute from DIE
+pub fn get_die_int(die : DIE, attr : DWAttr) -> Int? {
+  match die.attrs.get(attr) {
+    Some(AttrValue::UData(v)) => Some(v.reinterpret_as_int())
+    Some(AttrValue::SData(v)) => Some(v)
+    Some(AttrValue::Data(bytes)) =>
+      if bytes.length() > 0 {
+        let mut result = 0
+        for i = 0; i < bytes.length(); i = i + 1 {
+          result = result | (bytes[i].to_uint().reinterpret_as_int() << (i * 8))
+        }
+        Some(result)
+      } else {
+        None
+      }
+    _ => None
+  }
+}
+
+///|
+/// Get reference attribute from DIE (type reference)
+pub fn get_die_ref(die : DIE, attr : DWAttr) -> UInt? {
+  match die.attrs.get(attr) {
+    Some(AttrValue::Ref(offset)) => Some(offset)
+    Some(AttrValue::UData(offset)) => Some(offset)
+    _ => None
+  }
+}
+
+///|
+/// Parse location expression
+pub fn parse_location(value : AttrValue) -> DWARFLocation {
+  match value {
+    AttrValue::ExprLoc(bytes) => parse_location_expr(bytes)
+    AttrValue::Block(bytes) => parse_location_expr(bytes)
+    AttrValue::Data(bytes) => parse_location_expr(bytes)
+    _ => DWARFLocation::Unknown
+  }
+}
+
+///|
+/// Parse location expression bytes
+fn parse_location_expr(bytes : FixedArray[Byte]) -> DWARFLocation {
+  if bytes.length() == 0 {
+    return DWARFLocation::Unknown
+  }
+
+  let op = bytes[0].to_uint()
+
+  // DW_OP_fbreg: 0x91 - stack offset from frame base
+  if op == 0x91U && bytes.length() > 1 {
+    // Signed LEB128 offset follows
+    let result = read_sleb128_at(bytes, 1)
+    match result {
+      Some((_, offset)) => return DWARFLocation::StackOffset(offset)
+      None => ()
+    }
+  }
+
+  // DW_OP_addr: 0x03 - global address
+  if op == 0x03U && bytes.length() >= 5 {
+    let addr = bytes[1].to_uint() |
+      (bytes[2].to_uint() << 8) |
+      (bytes[3].to_uint() << 16) |
+      (bytes[4].to_uint() << 24)
+    return DWARFLocation::GlobalAddr(addr)
+  }
+
+  // DW_OP_reg0 - DW_OP_reg31: 0x50 - 0x6F - register direct
+  if op >= 0x50U && op <= 0x6FU {
+    return DWARFLocation::Register(op - 0x50U)
+  }
+
+  // DW_OP_regx: 0x90 - register with ULEB128 register number
+  if op == 0x90U && bytes.length() > 1 {
+    let result = read_uleb128_at(bytes, 1)
+    match result {
+      Some((_, reg)) => return DWARFLocation::Register(reg)
+      None => ()
+    }
+  }
+
+  DWARFLocation::Unknown
+}
+
+///|
+/// Parse all type information from DIEs
+pub fn parse_type_info(dies : Array[DIE]) -> DWARFTypeInfo {
+  let types : Map[UInt, DWARFType] = {}
+  let functions : Array[DWARFFunction] = []
+  let globals : Array[DWARFVariable] = []
+
+  // First pass: collect all types
+  collect_types(dies, types)
+
+  // Second pass: collect functions and variables
+  collect_functions_and_globals(dies, functions, globals)
+
+  { types, functions, globals }
+}
+
+///|
+/// Collect type definitions from DIEs
+fn collect_types(dies : Array[DIE], types : Map[UInt, DWARFType]) -> Unit {
+  for die in dies {
+    match die.tag {
+      DWTag::BaseType => {
+        let name = get_die_string(die, DWAttr::Name)
+        let byte_size = get_die_int(die, DWAttr::ByteSize)
+        let encoding = match get_die_attr(die, DWAttr::Encoding) {
+          Some(v) => parse_encoding(v)
+          None => DWARFEncoding::Unknown
+        }
+        types[die.offset] = {
+          name: name.unwrap_or("unknown"),
+          byte_size: byte_size.unwrap_or(0),
+          kind: DWARFTypeKind::Base(encoding),
+          offset: die.offset,
+        }
+      }
+      DWTag::PointerType => {
+        let name = get_die_string(die, DWAttr::Name)
+        let byte_size = get_die_int(die, DWAttr::ByteSize)
+        let base_type = get_die_ref(die, DWAttr::Type)
+        types[die.offset] = {
+          name: name.unwrap_or("pointer"),
+          byte_size: byte_size.unwrap_or(8),
+          kind: DWARFTypeKind::Pointer(base_type.unwrap_or(0U)),
+          offset: die.offset,
+        }
+      }
+      DWTag::ConstType => {
+        let name = get_die_string(die, DWAttr::Name)
+        let byte_size = get_die_int(die, DWAttr::ByteSize)
+        let base_type = get_die_ref(die, DWAttr::Type)
+        types[die.offset] = {
+          name: name.unwrap_or("const"),
+          byte_size: byte_size.unwrap_or(0),
+          kind: DWARFTypeKind::Const(base_type.unwrap_or(0U)),
+          offset: die.offset,
+        }
+      }
+      DWTag::Typedef => {
+        let name = get_die_string(die, DWAttr::Name)
+        let base_type = get_die_ref(die, DWAttr::Type)
+        types[die.offset] = {
+          name: name.unwrap_or("typedef"),
+          byte_size: 0,
+          kind: DWARFTypeKind::Typedef(base_type.unwrap_or(0U)),
+          offset: die.offset,
+        }
+      }
+      DWTag::StructureType => {
+        let name = get_die_string(die, DWAttr::Name)
+        let byte_size = get_die_int(die, DWAttr::ByteSize)
+        let members = collect_members(die.children)
+        types[die.offset] = {
+          name: name.unwrap_or("struct"),
+          byte_size: byte_size.unwrap_or(0),
+          kind: DWARFTypeKind::Struct(members),
+          offset: die.offset,
+        }
+      }
+      DWTag::UnionType => {
+        let name = get_die_string(die, DWAttr::Name)
+        let byte_size = get_die_int(die, DWAttr::ByteSize)
+        let members = collect_members(die.children)
+        types[die.offset] = {
+          name: name.unwrap_or("union"),
+          byte_size: byte_size.unwrap_or(0),
+          kind: DWARFTypeKind::Union(members),
+          offset: die.offset,
+        }
+      }
+      DWTag::ArrayType => {
+        let name = get_die_string(die, DWAttr::Name)
+        let base_type = get_die_ref(die, DWAttr::Type)
+        let count = get_array_count(die.children)
+        types[die.offset] = {
+          name: name.unwrap_or("array"),
+          byte_size: 0,
+          kind: DWARFTypeKind::Array(base_type.unwrap_or(0U), count),
+          offset: die.offset,
+        }
+      }
+      DWTag::EnumerationType => {
+        let name = get_die_string(die, DWAttr::Name)
+        let byte_size = get_die_int(die, DWAttr::ByteSize)
+        let base_type = get_die_ref(die, DWAttr::Type)
+        let enumerators = collect_enumerators(die.children)
+        types[die.offset] = {
+          name: name.unwrap_or("enum"),
+          byte_size: byte_size.unwrap_or(0),
+          kind: DWARFTypeKind::Enum(base_type.unwrap_or(0U), enumerators),
+          offset: die.offset,
+        }
+      }
+      _ => ()
+    }
+
+    // Recurse into children
+    if die.children.length() > 0 {
+      collect_types(die.children, types)
+    }
+  }
+}
+
+///|
+/// Collect structure/union members
+fn collect_members(children : Array[DIE]) -> Array[DWARFMember] {
+  let members : Array[DWARFMember] = []
+  for child in children {
+    if child.tag == DWTag::Member {
+      let name = get_die_string(child, DWAttr::Name)
+      let type_offset = get_die_ref(child, DWAttr::Type)
+      let byte_offset = match get_die_attr(child, DWAttr::DataMemberLocation) {
+        Some(AttrValue::UData(v)) => v.reinterpret_as_int()
+        Some(AttrValue::SData(v)) => v
+        _ => 0
+      }
+      members.push({
+        name: name.unwrap_or(""),
+        type_offset: type_offset.unwrap_or(0U),
+        byte_offset,
+        bit_offset: None,
+        bit_size: get_die_int(child, DWAttr::BitSize),
+      })
+    }
+  }
+  members
+}
+
+///|
+/// Get array count from subrange DIE
+fn get_array_count(children : Array[DIE]) -> Int {
+  for child in children {
+    if child.tag == DWTag::SubrangeType {
+      // Try DW_AT_upper_bound (count = upper + 1)
+      match get_die_attr(child, DWAttr::Unknown) {
+        // Would need DW_AT_upper_bound (0x22) and DW_AT_count (0x37) attrs
+        _ => ()
+      }
+      // Try count from UData
+      match get_die_int(child, DWAttr::Unknown) {
+        Some(count) => return count
+        None => ()
+      }
+    }
+  }
+  0
+}
+
+///|
+/// Collect enumerators
+fn collect_enumerators(children : Array[DIE]) -> Array[DWARFEnumerator] {
+  let enumerators : Array[DWARFEnumerator] = []
+  for child in children {
+    if child.tag == DWTag::Enumerator {
+      let name = get_die_string(child, DWAttr::Name)
+      let value = match get_die_attr(child, DWAttr::Unknown) {
+        // Would need DW_AT_const_value (0x1C)
+        Some(AttrValue::SData(v)) => v
+        Some(AttrValue::UData(v)) => v.reinterpret_as_int()
+        _ => 0
+      }
+      enumerators.push({ name: name.unwrap_or(""), value })
+    }
+  }
+  enumerators
+}
+
+///|
+/// Collect functions and global variables
+fn collect_functions_and_globals(
+  dies : Array[DIE],
+  functions : Array[DWARFFunction],
+  globals : Array[DWARFVariable],
+) -> Unit {
+  for die in dies {
+    match die.tag {
+      DWTag::Subprogram => {
+        let name = get_die_string(die, DWAttr::Name)
+        let low_pc = get_die_address(die, DWAttr::LowPc)
+        let high_pc = get_die_address(die, DWAttr::HighPc)
+        let params = collect_variables(die.children, true)
+        let locals = collect_variables(die.children, false)
+        functions.push({
+          name: name.unwrap_or(""),
+          low_pc: low_pc.unwrap_or(0U),
+          high_pc: high_pc.unwrap_or(0U),
+          params,
+          locals,
+          return_type: get_die_ref(die, DWAttr::Type),
+        })
+      }
+      DWTag::Variable => {
+        let name = get_die_string(die, DWAttr::Name)
+        let type_offset = get_die_ref(die, DWAttr::Type)
+        let location = match get_die_attr(die, DWAttr::Location) {
+          Some(v) => parse_location(v)
+          None => DWARFLocation::Unknown
+        }
+        let is_global = match location {
+          DWARFLocation::GlobalAddr(_) => true
+          _ => false
+        }
+        globals.push({
+          name: name.unwrap_or(""),
+          type_offset: type_offset.unwrap_or(0U),
+          location,
+          is_global,
+        })
+      }
+      _ => ()
+    }
+
+    // Recurse into children
+    if die.children.length() > 0 {
+      collect_functions_and_globals(die.children, functions, globals)
+    }
+  }
+}
+
+///|
+/// Collect variables from DIE children
+fn collect_variables(
+  children : Array[DIE],
+  is_param : Bool,
+) -> Array[DWARFVariable] {
+  let vars : Array[DWARFVariable] = []
+  for child in children {
+    let is_formal_param = child.tag == DWTag::FormalParameter
+    let is_var = child.tag == DWTag::Variable
+
+    if (is_param && is_formal_param) || (!is_param && is_var) {
+      let name = get_die_string(child, DWAttr::Name)
+      let type_offset = get_die_ref(child, DWAttr::Type)
+      let location = match get_die_attr(child, DWAttr::Location) {
+        Some(v) => parse_location(v)
+        None => DWARFLocation::Unknown
+      }
+      vars.push({
+        name: name.unwrap_or(""),
+        type_offset: type_offset.unwrap_or(0U),
+        location,
+        is_global: false,
+      })
+    }
+  }
+  vars
+}
+
+///|
+/// Resolve type name by following references
+pub fn resolve_type_name(offset : UInt, types : Map[UInt, DWARFType]) -> String {
+  match types.get(offset) {
+    Some(t) =>
+      match t.kind {
+        DWARFTypeKind::Base(_) => t.name
+        DWARFTypeKind::Pointer(base) => resolve_type_name(base, types) + "*"
+        DWARFTypeKind::Array(elem, count) =>
+          resolve_type_name(elem, types) + "[" + count.to_string() + "]"
+        DWARFTypeKind::Struct(_) => "struct " + t.name
+        DWARFTypeKind::Union(_) => "union " + t.name
+        DWARFTypeKind::Enum(_, _) => "enum " + t.name
+        DWARFTypeKind::Typedef(base) => resolve_type_name(base, types)
+        DWARFTypeKind::Const(base) => "const " + resolve_type_name(base, types)
+        DWARFTypeKind::Volatile(base) =>
+          "volatile " + resolve_type_name(base, types)
+        DWARFTypeKind::Unknown => t.name
+      }
+    None => "unknown"
+  }
+}
+
+///|
+/// Format DWARF type info for display
+pub fn format_dwarf_type_info(info : DWARFTypeInfo) -> String {
+  let mut result = "=== DWARF Type Information ===\n\n"
+
+  result = result + "Types:\n"
+  for offset in info.types.keys() {
+    match info.types.get(offset) {
+      Some(t) =>
+        result = result +
+          "  0x\{format_hex(offset)}: \{t.name} (\{format_type_kind(t.kind)}, size=\{t.byte_size})\n"
+      None => ()
+    }
+  }
+
+  result = result + "\nFunctions:\n"
+  for func in info.functions {
+    result = result +
+      "  \{func.name} @ 0x\{format_hex(func.low_pc)}-0x\{format_hex(func.high_pc)}\n"
+    if func.params.length() > 0 {
+      result = result + "    params: "
+      for i = 0; i < func.params.length(); i = i + 1 {
+        if i > 0 {
+          result = result + ", "
+        }
+        let p = func.params[i]
+        result = result +
+          "\{resolve_type_name(p.type_offset, info.types)} \{p.name}"
+      }
+      result = result + "\n"
+    }
+  }
+
+  result = result + "\nGlobal Variables:\n"
+  for g in info.globals {
+    result = result +
+      "  \{resolve_type_name(g.type_offset, info.types)} \{g.name}\n"
+  }
+
+  result
+}
+
+///|
+/// Format type kind
+fn format_type_kind(kind : DWARFTypeKind) -> String {
+  match kind {
+    DWARFTypeKind::Base(enc) => "base(\{format_encoding(enc)})"
+    DWARFTypeKind::Pointer(_) => "pointer"
+    DWARFTypeKind::Array(_, count) => "array[\{count}]"
+    DWARFTypeKind::Struct(members) => "struct(\{members.length()} members)"
+    DWARFTypeKind::Union(members) => "union(\{members.length()} members)"
+    DWARFTypeKind::Enum(_, enums) => "enum(\{enums.length()} values)"
+    DWARFTypeKind::Typedef(_) => "typedef"
+    DWARFTypeKind::Const(_) => "const"
+    DWARFTypeKind::Volatile(_) => "volatile"
+    DWARFTypeKind::Unknown => "unknown"
+  }
+}
+
+///|
+/// Format encoding
+fn format_encoding(enc : DWARFEncoding) -> String {
+  match enc {
+    DWARFEncoding::Address => "address"
+    DWARFEncoding::Boolean => "boolean"
+    DWARFEncoding::ComplexFloat => "complex_float"
+    DWARFEncoding::Float => "float"
+    DWARFEncoding::Signed => "signed"
+    DWARFEncoding::SignedChar => "signed_char"
+    DWARFEncoding::Unsigned => "unsigned"
+    DWARFEncoding::UnsignedChar => "unsigned_char"
+    DWARFEncoding::ImaginaryFloat => "imaginary_float"
+    DWARFEncoding::PackedDecimal => "packed_decimal"
+    DWARFEncoding::NumericString => "numeric_string"
+    DWARFEncoding::Edited => "edited"
+    DWARFEncoding::SignedFixed => "signed_fixed"
+    DWARFEncoding::UnsignedFixed => "unsigned_fixed"
+    DWARFEncoding::DecimalFloat => "decimal_float"
+    DWARFEncoding::Unknown => "unknown"
+  }
+}
+
+///|
+/// Format hex value
+fn format_hex(v : UInt) -> String {
+  if v == 0U {
+    "0"
+  } else {
+    let mut result = ""
+    let mut n = v
+    while n > 0U {
+      let digit = (n % 16U).reinterpret_as_int()
+      let c = if digit < 10 {
+        (digit + 48).unsafe_to_char()
+      } else {
+        (digit + 87).unsafe_to_char()
+      }
+      result = c.to_string() + result
+      n = n / 16U
+    }
+    result
+  }
+}
