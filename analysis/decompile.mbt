@@ -2587,6 +2587,311 @@ pub fn infer_type_from_inst(
         source: TypeSource::InstructionOp,
       }
     }
+
+    // Shift operations - preserve operand type
+    @decode.SLL(rd, rs1, _)
+    | @decode.SRL(rd, rs1, _)
+    | @decode.SRA(rd, rs1, _) => {
+      let typ = get_reg_type(rs1, ctx)
+      new_ctx.reg_types[rd] = {
+        typ,
+        confidence: 75,
+        source: TypeSource::InstructionOp,
+      }
+    }
+    @decode.SLLI(rd, rs1, _)
+    | @decode.SRLI(rd, rs1, _)
+    | @decode.SRAI(rd, rs1, _) => {
+      let typ = get_reg_type(rs1, ctx)
+      new_ctx.reg_types[rd] = {
+        typ,
+        confidence: 75,
+        source: TypeSource::InstructionOp,
+      }
+    }
+    @decode.SLLIW(rd, rs1, _)
+    | @decode.SRLIW(rd, rs1, _)
+    | @decode.SRAIW(rd, rs1, _) =>
+      // 32-bit shift operations on RV64
+      new_ctx.reg_types[rd] = {
+        typ: VarType::Int(32),
+        confidence: 85,
+        source: TypeSource::InstructionOp,
+      }
+
+    // Comparison operations - result is boolean (int1 or int32)
+    @decode.SLT(rd, _, _) | @decode.SLTU(rd, _, _) =>
+      new_ctx.reg_types[rd] = {
+        typ: VarType::Int(32), // Boolean represented as int
+        confidence: 80,
+        source: TypeSource::InstructionOp,
+      }
+    @decode.SLTI(rd, _, _) | @decode.SLTIU(rd, _, _) =>
+      new_ctx.reg_types[rd] = {
+        typ: VarType::Int(32),
+        confidence: 80,
+        source: TypeSource::InstructionOp,
+      }
+
+    // Additional multiplication operations
+    @decode.MULH(rd, _, _)
+    | @decode.MULHU(rd, _, _)
+    | @decode.MULHSU(rd, _, _) =>
+      // High part of multiplication - full width result
+      new_ctx.reg_types[rd] = {
+        typ: VarType::Int(64),
+        confidence: 75,
+        source: TypeSource::InstructionOp,
+      }
+    @decode.MULW(rd, rs1, rs2) => {
+      let typ = merge_types(get_reg_type(rs1, ctx), get_reg_type(rs2, ctx))
+      new_ctx.reg_types[rd] = {
+        typ: VarType::Int(32),
+        confidence: 85,
+        source: TypeSource::InstructionOp,
+      }
+    }
+
+    // Additional division/remainder operations
+    @decode.DIVU(rd, rs1, _) =>
+      new_ctx.reg_types[rd] = {
+        typ: VarType::UInt(64),
+        confidence: 65,
+        source: TypeSource::InstructionOp,
+      }
+    @decode.REM(rd, rs1, _) => {
+      let typ = get_reg_type(rs1, ctx)
+      new_ctx.reg_types[rd] = {
+        typ,
+        confidence: 65,
+        source: TypeSource::InstructionOp,
+      }
+    }
+    @decode.REMU(rd, _, _) =>
+      new_ctx.reg_types[rd] = {
+        typ: VarType::UInt(64),
+        confidence: 65,
+        source: TypeSource::InstructionOp,
+      }
+    @decode.DIVW(rd, _, _) | @decode.REMW(rd, _, _) =>
+      new_ctx.reg_types[rd] = {
+        typ: VarType::Int(32),
+        confidence: 85,
+        source: TypeSource::InstructionOp,
+      }
+    @decode.DIVUW(rd, _, _) | @decode.REMUW(rd, _, _) =>
+      new_ctx.reg_types[rd] = {
+        typ: VarType::UInt(32),
+        confidence: 85,
+        source: TypeSource::InstructionOp,
+      }
+
+    // Floating-point operations
+    @decode.FADD_S(rd, _, _)
+    | @decode.FSUB_S(rd, _, _)
+    | @decode.FMUL_S(rd, _, _)
+    | @decode.FDIV_S(rd, _, _) =>
+      new_ctx.reg_types[rd] = {
+        typ: VarType::Float(32),
+        confidence: 95,
+        source: TypeSource::InstructionOp,
+      }
+    @decode.FADD_D(rd, _, _)
+    | @decode.FSUB_D(rd, _, _)
+    | @decode.FMUL_D(rd, _, _)
+    | @decode.FDIV_D(rd, _, _) =>
+      new_ctx.reg_types[rd] = {
+        typ: VarType::Float(64),
+        confidence: 95,
+        source: TypeSource::InstructionOp,
+      }
+    @decode.FSQRT_S(rd, _) =>
+      new_ctx.reg_types[rd] = {
+        typ: VarType::Float(32),
+        confidence: 95,
+        source: TypeSource::InstructionOp,
+      }
+    @decode.FSQRT_D(rd, _) =>
+      new_ctx.reg_types[rd] = {
+        typ: VarType::Float(64),
+        confidence: 95,
+        source: TypeSource::InstructionOp,
+      }
+
+    // Float to int conversions
+    @decode.FCVT_L_S(rd, _, _) | @decode.FCVT_L_D(rd, _, _) =>
+      new_ctx.reg_types[rd] = {
+        typ: VarType::Int(64),
+        confidence: 90,
+        source: TypeSource::InstructionOp,
+      }
+    @decode.FCVT_LU_S(rd, _, _) | @decode.FCVT_LU_D(rd, _, _) =>
+      new_ctx.reg_types[rd] = {
+        typ: VarType::UInt(64),
+        confidence: 90,
+        source: TypeSource::InstructionOp,
+      }
+    @decode.FCVT_W_S(rd, _, _) | @decode.FCVT_W_D(rd, _, _) =>
+      new_ctx.reg_types[rd] = {
+        typ: VarType::Int(32),
+        confidence: 90,
+        source: TypeSource::InstructionOp,
+      }
+    @decode.FCVT_WU_S(rd, _, _) | @decode.FCVT_WU_D(rd, _, _) =>
+      new_ctx.reg_types[rd] = {
+        typ: VarType::UInt(32),
+        confidence: 90,
+        source: TypeSource::InstructionOp,
+      }
+
+    // Int to float conversions
+    @decode.FCVT_S_L(rd, _, _) | @decode.FCVT_S_LU(rd, _, _) =>
+      new_ctx.reg_types[rd] = {
+        typ: VarType::Float(32),
+        confidence: 90,
+        source: TypeSource::InstructionOp,
+      }
+    @decode.FCVT_D_L(rd, _, _) | @decode.FCVT_D_LU(rd, _, _) =>
+      new_ctx.reg_types[rd] = {
+        typ: VarType::Float(64),
+        confidence: 90,
+        source: TypeSource::InstructionOp,
+      }
+    @decode.FCVT_S_W(rd, _, _) | @decode.FCVT_S_WU(rd, _, _) =>
+      new_ctx.reg_types[rd] = {
+        typ: VarType::Float(32),
+        confidence: 90,
+        source: TypeSource::InstructionOp,
+      }
+    @decode.FCVT_D_W(rd, _, _) | @decode.FCVT_D_WU(rd, _, _) =>
+      new_ctx.reg_types[rd] = {
+        typ: VarType::Float(64),
+        confidence: 90,
+        source: TypeSource::InstructionOp,
+      }
+
+    // Float comparisons - result is boolean
+    @decode.FEQ_S(rd, _, _)
+    | @decode.FLT_S(rd, _, _)
+    | @decode.FLE_S(rd, _, _) =>
+      new_ctx.reg_types[rd] = {
+        typ: VarType::Int(32),
+        confidence: 85,
+        source: TypeSource::InstructionOp,
+      }
+    @decode.FEQ_D(rd, _, _)
+    | @decode.FLT_D(rd, _, _)
+    | @decode.FLE_D(rd, _, _) =>
+      new_ctx.reg_types[rd] = {
+        typ: VarType::Int(32),
+        confidence: 85,
+        source: TypeSource::InstructionOp,
+      }
+
+    // Float move instructions
+    @decode.FMV_X_W(rd, _) =>
+      new_ctx.reg_types[rd] = {
+        typ: VarType::Int(32),
+        confidence: 85,
+        source: TypeSource::InstructionOp,
+      }
+    @decode.FMV_X_D(rd, _) =>
+      new_ctx.reg_types[rd] = {
+        typ: VarType::Int(64),
+        confidence: 85,
+        source: TypeSource::InstructionOp,
+      }
+    @decode.FMV_W_X(rd, _) =>
+      new_ctx.reg_types[rd] = {
+        typ: VarType::Float(32),
+        confidence: 85,
+        source: TypeSource::InstructionOp,
+      }
+    @decode.FMV_D_X(rd, _) =>
+      new_ctx.reg_types[rd] = {
+        typ: VarType::Float(64),
+        confidence: 85,
+        source: TypeSource::InstructionOp,
+      }
+
+    // Sign/zero extend operations
+    @decode.SEXT_B(rd, _) =>
+      new_ctx.reg_types[rd] = {
+        typ: VarType::Int(8),
+        confidence: 90,
+        source: TypeSource::InstructionOp,
+      }
+    @decode.SEXT_H(rd, _) =>
+      new_ctx.reg_types[rd] = {
+        typ: VarType::Int(16),
+        confidence: 90,
+        source: TypeSource::InstructionOp,
+      }
+    @decode.ZEXT_H(rd, _) =>
+      new_ctx.reg_types[rd] = {
+        typ: VarType::UInt(16),
+        confidence: 90,
+        source: TypeSource::InstructionOp,
+      }
+
+    // Bit manipulation (Zba/Zbb extensions)
+    @decode.ANDN(rd, rs1, _) | @decode.ORN(rd, rs1, _) => {
+      let typ = get_reg_type(rs1, ctx)
+      new_ctx.reg_types[rd] = {
+        typ,
+        confidence: 70,
+        source: TypeSource::InstructionOp,
+      }
+    }
+    @decode.CLZ(rd, _) | @decode.CPOP(rd, _) =>
+      new_ctx.reg_types[rd] = {
+        typ: VarType::Int(32),
+        confidence: 85,
+        source: TypeSource::InstructionOp,
+      }
+    @decode.CLZW(rd, _) | @decode.CPOPW(rd, _) =>
+      new_ctx.reg_types[rd] = {
+        typ: VarType::Int(32),
+        confidence: 85,
+        source: TypeSource::InstructionOp,
+      }
+
+    // Address generation (Zba extension)
+    @decode.SH1ADD(rd, rs1, rs2)
+    | @decode.SH2ADD(rd, rs1, rs2)
+    | @decode.SH3ADD(rd, rs1, rs2) =>
+      // Address calculation - likely pointer
+      new_ctx.reg_types[rd] = {
+        typ: VarType::Pointer(VarType::Unknown),
+        confidence: 70,
+        source: TypeSource::InstructionOp,
+      }
+
+    // Atomic operations
+    @decode.LR_W(rd, _, _, _) | @decode.SC_W(rd, _, _, _, _) =>
+      new_ctx.reg_types[rd] = {
+        typ: VarType::Int(32),
+        confidence: 85,
+        source: TypeSource::MemoryAccess,
+      }
+    @decode.LR_D(rd, _, _, _) | @decode.SC_D(rd, _, _, _, _) =>
+      new_ctx.reg_types[rd] = {
+        typ: VarType::Int(64),
+        confidence: 85,
+        source: TypeSource::MemoryAccess,
+      }
+    @decode.AMOADD_W(rd, _, _, _, _) | @decode.AMOSWAP_W(rd, _, _, _, _) =>
+      new_ctx.reg_types[rd] = {
+        typ: VarType::Int(32),
+        confidence: 85,
+        source: TypeSource::MemoryAccess,
+      }
+    @decode.AMOADD_D(rd, _, _, _, _) | @decode.AMOSWAP_D(rd, _, _, _, _) =>
+      new_ctx.reg_types[rd] = {
+        typ: VarType::Int(64),
+        confidence: 85,
+        source: TypeSource::MemoryAccess,
+      }
     _ => () // Skip other instructions
   }
 
@@ -2657,13 +2962,141 @@ pub fn infer_types(
 }
 
 ///|
-/// Propagate types through CFG edges
+/// Propagate types through CFG edges using forward dataflow analysis
 fn propagate_types_cfg(cfg : CFG, ctx : TypeContext) -> TypeContext {
-  // Type propagation through CFG is a complex dataflow problem
-  // For now, we just return the context as-is
-  // A full implementation would use iterative dataflow analysis
-  ignore(cfg)
-  ctx
+  // Build a map from block address to index
+  let block_map : Map[UInt, Int] = {}
+  for i = 0; i < cfg.blocks.length(); i = i + 1 {
+    block_map[cfg.blocks[i].start_addr] = i
+  }
+
+  // Build predecessor map
+  let preds : Map[UInt, Array[UInt]] = {}
+  for edge in cfg.edges {
+    match preds.get(edge.to_block) {
+      Some(arr) => arr.push(edge.from_block)
+      None => preds[edge.to_block] = [edge.from_block]
+    }
+  }
+
+  // Initialize type sets for each block (entry = ctx, others = empty)
+  let block_types : Array[Map[UInt, TypeInfo]] = []
+  for i = 0; i < cfg.blocks.length(); i = i + 1 {
+    if i == 0 {
+      block_types.push(ctx.reg_types)
+    } else {
+      block_types.push({})
+    }
+  }
+
+  // Iterative dataflow: propagate types until fixpoint
+  let mut changed = true
+  let mut iterations = 0
+  let max_iterations = 100
+
+  while changed && iterations < max_iterations {
+    changed = false
+    iterations = iterations + 1
+
+    for i = 0; i < cfg.blocks.length(); i = i + 1 {
+      let block = cfg.blocks[i]
+      let addr = block.start_addr
+
+      // Get predecessor types and merge
+      let pred_types : Array[Map[UInt, TypeInfo]] = []
+      match preds.get(addr) {
+        Some(pred_addrs) =>
+          for pred_addr in pred_addrs {
+            match block_map.get(pred_addr) {
+              Some(pred_idx) => pred_types.push(block_types[pred_idx])
+              None => ()
+            }
+          }
+        None => ()
+      }
+
+      // Merge predecessor types
+      let merged : Map[UInt, TypeInfo] = {}
+      for pt in pred_types {
+        for reg in pt.keys() {
+          match pt.get(reg) {
+            Some(info) =>
+              match merged.get(reg) {
+                Some(existing) => {
+                  // Merge types - keep more specific
+                  let merged_type = merge_types(existing.typ, info.typ)
+                  merged[reg] = {
+                    typ: merged_type,
+                    confidence: max(existing.confidence, info.confidence),
+                    source: TypeSource::Propagated,
+                  }
+                }
+                None => merged[reg] = info
+              }
+            None => ()
+          }
+        }
+      }
+
+      // Update if changed
+      let old_types = block_types[i]
+      if !maps_equal(old_types, merged) {
+        block_types[i] = merged
+        changed = true
+      }
+    }
+  }
+
+  // Return the final context with propagated types
+  { ..ctx, reg_types: block_types[block_types.length() - 1] }
+}
+
+///|
+/// Check if two type maps are equal
+fn maps_equal(m1 : Map[UInt, TypeInfo], m2 : Map[UInt, TypeInfo]) -> Bool {
+  if m1.length() != m2.length() {
+    return false
+  }
+  for reg in m1.keys() {
+    match m1.get(reg) {
+      Some(info1) =>
+        match m2.get(reg) {
+          Some(info2) => if !types_equal(info1.typ, info2.typ) { return false }
+          None => return false
+        }
+      None => ()
+    }
+  }
+  true
+}
+
+///|
+/// Check if two types are equal
+fn types_equal(t1 : VarType, t2 : VarType) -> Bool {
+  match (t1, t2) {
+    (VarType::Unknown, VarType::Unknown) => true
+    (VarType::Int(w1), VarType::Int(w2)) => w1 == w2
+    (VarType::UInt(w1), VarType::UInt(w2)) => w1 == w2
+    (VarType::Float(w1), VarType::Float(w2)) => w1 == w2
+    (VarType::Pointer(p1), VarType::Pointer(p2)) => types_equal(p1, p2)
+    (VarType::Array(e1, c1), VarType::Array(e2, c2)) =>
+      c1 == c2 && types_equal(e1, e2)
+    (VarType::FuncPointer(r1, p1), VarType::FuncPointer(r2, p2)) => {
+      if !types_equal(r1, r2) {
+        return false
+      }
+      if p1.length() != p2.length() {
+        return false
+      }
+      for i = 0; i < p1.length(); i = i + 1 {
+        if !types_equal(p1[i], p2[i]) {
+          return false
+        }
+      }
+      true
+    }
+    _ => false
+  }
 }
 
 ///|

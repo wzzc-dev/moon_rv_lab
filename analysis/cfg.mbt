@@ -314,6 +314,7 @@ pub fn build_cfg(
           is_terminated = true
           let inst_len = inst_info.length.reinterpret_as_uint()
           // Add edges based on terminator type
+          // Note: check is_return before is_unconditional_jump since return is a special case
           if is_conditional_branch(inst_info.inst) {
             let target_offset = get_branch_target(inst_info.inst)
             let target_addr = compute_target_addr(inst_info.addr, target_offset)
@@ -328,6 +329,13 @@ pub fn build_cfg(
               from_block: start_addr,
               to_block: fallthrough_addr,
               edge_type: EdgeType::BranchNotTaken,
+            })
+          } else if is_return(inst_info.inst) {
+            // Check return before unconditional jump (return is a special case of JALR)
+            edges.push(Edge::{
+              from_block: start_addr,
+              to_block: 0U,
+              edge_type: EdgeType::Return,
             })
           } else if is_unconditional_jump(inst_info.inst) {
             let target_offset = get_branch_target(inst_info.inst)
@@ -345,12 +353,6 @@ pub fn build_cfg(
                 edge_type: EdgeType::Jump,
               })
             }
-          } else if is_return(inst_info.inst) {
-            edges.push(Edge::{
-              from_block: start_addr,
-              to_block: 0U,
-              edge_type: EdgeType::Return,
-            })
           }
           break
         }
