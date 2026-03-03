@@ -3394,25 +3394,38 @@ pub fn compute_liveness(
     })
   }
 
+  // Performance optimization: precompute block address to index mapping
+  let block_addr_to_idx : Map[UInt, Int] = {}
+  for i = 0; i < num_blocks; i = i + 1 {
+    block_addr_to_idx[cfg.blocks[i].start_addr] = i
+  }
+
+  // Performance optimization: precompute successor block indices
+  let succ_indices : FixedArray[Array[Int]] = FixedArray::make(num_blocks, [])
+  for i = 0; i < num_blocks; i = i + 1 {
+    let succs : Array[Int] = []
+    for edge in cfg.edges {
+      if edge.from_block == cfg.blocks[i].start_addr {
+        match block_addr_to_idx.get(edge.to_block) {
+          Some(idx) => succs.push(idx)
+          None => ()
+        }
+      }
+    }
+    succ_indices[i] = succs
+  }
+
   // Fixed-point iteration
   let mut changed = true
   while changed {
     changed = false
     for i = 0; i < num_blocks; i = i + 1 {
-      let block = cfg.blocks[i]
       let info = block_liveness[i]
 
       // Compute live_out = union of live_in of all successors
       let mut new_out = LiveSet::empty()
-      for edge in cfg.edges {
-        if edge.from_block == block.start_addr {
-          // Find successor block's live_in
-          for j = 0; j < num_blocks; j = j + 1 {
-            if cfg.blocks[j].start_addr == edge.to_block {
-              new_out = new_out.union(block_liveness[j].live_in)
-            }
-          }
-        }
+      for succ_idx in succ_indices[i] {
+        new_out = new_out.union(block_liveness[succ_idx].live_in)
       }
 
       // Compute live_in = use ∪ (live_out - def)
@@ -4473,34 +4486,31 @@ pub fn compute_constant_propagation(
     })
   }
 
-  // Build predecessor map
-  let preds : Map[UInt, Array[UInt]] = {}
-  for block in cfg.blocks {
-    preds[block.start_addr] = []
+  // Performance optimization: precompute block address to index mapping
+  let block_addr_to_idx : Map[UInt, Int] = {}
+  for i = 0; i < num_blocks; i = i + 1 {
+    block_addr_to_idx[cfg.blocks[i].start_addr] = i
   }
-  for edge in cfg.edges {
-    match preds.get(edge.to_block) {
-      Some(arr) => arr.push(edge.from_block)
-      None => preds[edge.to_block] = [edge.from_block]
+
+  // Build predecessor indices map (using block indices instead of addresses)
+  let pred_indices : FixedArray[Array[Int]] = FixedArray::make(num_blocks, [])
+  for i = 0; i < num_blocks; i = i + 1 {
+    let preds : Array[Int] = []
+    for edge in cfg.edges {
+      if edge.to_block == cfg.blocks[i].start_addr {
+        match block_addr_to_idx.get(edge.from_block) {
+          Some(idx) => preds.push(idx)
+          None => ()
+        }
+      }
     }
+    pred_indices[i] = preds
   }
 
   // Build instruction index by address
   let inst_by_addr : Map[UInt, DecodedInst] = {}
   for inst in instructions {
     inst_by_addr[inst.addr] = inst
-  }
-
-  // Build successor map for CFG
-  let succs : Map[UInt, Array[UInt]] = {}
-  for block in cfg.blocks {
-    succs[block.start_addr] = []
-  }
-  for edge in cfg.edges {
-    match succs.get(edge.from_block) {
-      Some(arr) => arr.push(edge.to_block)
-      None => succs[edge.from_block] = [edge.to_block]
-    }
   }
 
   // Fixed-point iteration
@@ -4518,24 +4528,18 @@ pub fn compute_constant_propagation(
       let old_state = block_states[i]
 
       // Compute input state: merge of all predecessors' output states
-      let pred_addrs = preds.get(block.start_addr).unwrap_or([])
+      let pred_idx_list = pred_indices[i]
       let mut new_in = ConstState::new()
 
-      if pred_addrs.length() > 0 {
+      if pred_idx_list.length() > 0 {
         // Find first predecessor
         let mut first = true
-        for pred_addr in pred_addrs {
-          // Find predecessor block index
-          for j = 0; j < num_blocks; j = j + 1 {
-            if block_states[j].block_addr == pred_addr {
-              if first {
-                new_in = block_states[j].state_out
-                first = false
-              } else {
-                new_in = new_in.merge(block_states[j].state_out)
-              }
-              break
-            }
+        for pred_idx in pred_idx_list {
+          if first {
+            new_in = block_states[pred_idx].state_out
+            first = false
+          } else {
+            new_in = new_in.merge(block_states[pred_idx].state_out)
           }
         }
       }
@@ -4808,6 +4812,12 @@ pub fn compute_conditional_constant_propagation(
     reachable[block.start_addr] = false
   }
 
+  // Performance optimization: precompute block address to index mapping
+  let block_addr_to_idx : Map[UInt, Int] = {}
+  for i = 0; i < num_blocks; i = i + 1 {
+    block_addr_to_idx[cfg.blocks[i].start_addr] = i
+  }
+
   // Mark entry point as reachable
   if cfg.entry_points.length() > 0 {
     reachable[cfg.entry_points[0]] = true
@@ -4815,18 +4825,27 @@ pub fn compute_conditional_constant_propagation(
     reachable[cfg.blocks[0].start_addr] = true
   }
 
-  // Build predecessor/successor maps
-  let preds : Map[UInt, Array[UInt]] = {}
+  // Build predecessor indices map
+  let pred_indices : FixedArray[Array[Int]] = FixedArray::make(num_blocks, [])
+  for i = 0; i < num_blocks; i = i + 1 {
+    let preds : Array[Int] = []
+    for edge in cfg.edges {
+      if edge.to_block == cfg.blocks[i].start_addr {
+        match block_addr_to_idx.get(edge.from_block) {
+          Some(idx) => preds.push(idx)
+          None => ()
+        }
+      }
+    }
+    pred_indices[i] = preds
+  }
+
+  // Build successor map (with edges)
   let succs : Map[UInt, Array[Edge]] = {}
   for block in cfg.blocks {
-    preds[block.start_addr] = []
     succs[block.start_addr] = []
   }
   for edge in cfg.edges {
-    match preds.get(edge.to_block) {
-      Some(arr) => arr.push(edge.from_block)
-      None => preds[edge.to_block] = [edge.from_block]
-    }
     match succs.get(edge.from_block) {
       Some(arr) => arr.push(edge)
       None => succs[edge.from_block] = [edge]
@@ -4857,39 +4876,28 @@ pub fn compute_conditional_constant_propagation(
       None => continue
     }
 
-    // Find block index
-    let mut block_idx = -1
-    for i = 0; i < num_blocks; i = i + 1 {
-      if block_states[i].block_addr == block_addr {
-        block_idx = i
-        break
-      }
-    }
-
-    if block_idx < 0 {
-      continue
+    // Find block index using precomputed map
+    let block_idx = match block_addr_to_idx.get(block_addr) {
+      Some(idx) => idx
+      None => continue
     }
 
     let block = cfg.blocks[block_idx]
     let old_state = block_states[block_idx]
 
     // Compute input state from reachable predecessors
-    let pred_addrs = preds.get(block_addr).unwrap_or([])
+    let pred_idx_list = pred_indices[block_idx]
     let mut new_in = ConstState::new()
     let mut has_reachable_pred = false
 
-    for pred_addr in pred_addrs {
+    for pred_idx in pred_idx_list {
+      let pred_addr = cfg.blocks[pred_idx].start_addr
       if reachable.get(pred_addr).unwrap_or(false) {
-        for j = 0; j < num_blocks; j = j + 1 {
-          if block_states[j].block_addr == pred_addr {
-            if !has_reachable_pred {
-              new_in = block_states[j].state_out
-              has_reachable_pred = true
-            } else {
-              new_in = new_in.merge(block_states[j].state_out)
-            }
-            break
-          }
+        if !has_reachable_pred {
+          new_in = block_states[pred_idx].state_out
+          has_reachable_pred = true
+        } else {
+          new_in = new_in.merge(block_states[pred_idx].state_out)
         }
       }
     }
@@ -5925,13 +5933,25 @@ pub fn compute_interval_analysis(
     inst_by_addr[inst_info.addr] = inst_info
   }
 
-  // Build predecessor map
-  let preds : Map[UInt, Array[UInt]] = {}
-  for edge in cfg.edges {
-    match preds.get(edge.to_block) {
-      Some(arr) => arr.push(edge.from_block)
-      None => preds[edge.to_block] = [edge.from_block]
+  // Performance optimization: precompute block address to index mapping
+  let block_addr_to_idx : Map[UInt, Int] = {}
+  for i = 0; i < num_blocks; i = i + 1 {
+    block_addr_to_idx[cfg.blocks[i].start_addr] = i
+  }
+
+  // Build predecessor indices map
+  let pred_indices : FixedArray[Array[Int]] = FixedArray::make(num_blocks, [])
+  for i = 0; i < num_blocks; i = i + 1 {
+    let preds : Array[Int] = []
+    for edge in cfg.edges {
+      if edge.to_block == cfg.blocks[i].start_addr {
+        match block_addr_to_idx.get(edge.from_block) {
+          Some(idx) => preds.push(idx)
+          None => ()
+        }
+      }
     }
+    pred_indices[i] = preds
   }
 
   // Initialize block states
@@ -5963,39 +5983,26 @@ pub fn compute_interval_analysis(
       None => continue
     }
 
-    // Find block index
-    let mut block_idx = -1
-    for i = 0; i < num_blocks; i = i + 1 {
-      if block_states[i].block_addr == block_addr {
-        block_idx = i
-        break
-      }
-    }
-
-    if block_idx < 0 {
-      continue
+    // Find block index using precomputed map
+    let block_idx = match block_addr_to_idx.get(block_addr) {
+      Some(idx) => idx
+      None => continue
     }
 
     let block = cfg.blocks[block_idx]
     let old_state = block_states[block_idx]
 
     // Compute input state from predecessors
-    let pred_addrs = preds.get(block_addr).unwrap_or([])
+    let pred_idx_list = pred_indices[block_idx]
     let mut new_in = IntervalState::new()
     let mut first = true
 
-    for pred_addr in pred_addrs {
-      // Find predecessor block state
-      for j = 0; j < num_blocks; j = j + 1 {
-        if block_states[j].block_addr == pred_addr {
-          if first {
-            new_in = block_states[j].state_out
-            first = false
-          } else {
-            new_in = new_in.widen(block_states[j].state_out)
-          }
-          break
-        }
+    for pred_idx in pred_idx_list {
+      if first {
+        new_in = block_states[pred_idx].state_out
+        first = false
+      } else {
+        new_in = new_in.widen(block_states[pred_idx].state_out)
       }
     }
 
