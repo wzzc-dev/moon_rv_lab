@@ -33,9 +33,16 @@ pub enum Command {
   Hex(HexOptions)
   Analyze(AnalyzeOptions)
   Decompile(DecompileOptions)
+  Interactive(InteractiveOptions)
   Help
   Version
   Demo
+} derive(Show)
+
+///|
+/// Options for interactive command
+pub struct InteractiveOptions {
+  file_path : String // Optional: pre-load a file
 } derive(Show)
 
 ///|
@@ -258,8 +265,19 @@ pub fn parse_args(args : Array[String]) -> Command? {
     "hex" => parse_hex_args(args)
     "analyze" => parse_analyze_args(args)
     "decompile" | "dec" => parse_decompile_args(args)
+    "interactive" | "i" | "repl" => parse_interactive_args(args)
     _ => None
   }
+}
+
+///|
+/// Parse interactive command arguments
+fn parse_interactive_args(args : Array[String]) -> Command? {
+  let mut file_path = ""
+  if args.length() > 1 && args[1][0] != '-' {
+    file_path = args[1]
+  }
+  Some(Command::Interactive({ file_path, }))
 }
 
 ///|
@@ -1742,6 +1760,7 @@ pub fn execute(cmd : Command) -> Unit {
     Command::Hex(opts) => execute_hex(opts)
     Command::Analyze(opts) => execute_analyze(opts)
     Command::Decompile(opts) => execute_decompile(opts)
+    Command::Interactive(opts) => execute_interactive(opts)
   }
 }
 
@@ -1766,5 +1785,277 @@ fn main {
       println("")
       print_usage()
     }
+  }
+}
+
+///|
+/// Interactive analysis context
+struct InteractiveContext {
+  elf : @format.ElfFile?
+  file_path : String
+  instructions : (FixedArray[@analysis.DecodedInst], @analysis.CFG, UInt)?
+}
+
+///|
+/// Execute interactive analysis mode
+fn execute_interactive(opts : InteractiveOptions) -> Unit {
+  println("RISC-V Binary Analyzer - Interactive Mode")
+  println("Type 'help' for available commands, 'quit' to exit")
+  println("")
+
+  let mut ctx = InteractiveContext::{
+    elf: None,
+    file_path: "",
+    instructions: None,
+  }
+
+  // Pre-load file if specified
+  if opts.file_path != "" {
+    match load_file(opts.file_path) {
+      Some((elf, data)) => {
+        ctx = {
+          elf: Some(elf),
+          file_path: opts.file_path,
+          instructions: Some(data),
+        }
+        println("Loaded: \{opts.file_path}")
+      }
+      None => println("Error: Failed to load \{opts.file_path}")
+    }
+  }
+
+  // If no file loaded, show help and exit
+  match ctx.elf {
+    Some(elf) => {
+      // Show file info and basic analysis
+      println(get_elf_info(elf))
+
+      match ctx.instructions {
+        Some((instrs, cfg, base)) => {
+          println("")
+          println("=== Code Analysis ===")
+          println("Instructions: \{instrs.length()}")
+          println("Basic Blocks: \{cfg.blocks.length()}")
+          println("CFG Edges: \{cfg.edges.length()}")
+          println("")
+          println("First 10 instructions:")
+          println(disasm_range(instrs, base, 10))
+        }
+        None => ()
+      }
+    }
+    None => {
+      println("No file loaded.")
+      println("Usage: riscv_analyzer interactive <file>")
+      println("       riscv_analyzer i <file>")
+    }
+  }
+}
+
+///|
+/// Load file and return analysis context
+fn load_file(
+  file_path : String,
+) -> (@format.ElfFile, (FixedArray[@analysis.DecodedInst], @analysis.CFG, UInt))? {
+  match read_file_bytes(file_path) {
+    Some(bytes) => {
+      if !@format.is_elf(bytes) {
+        return None
+      }
+      match @format.parse_elf(bytes) {
+        Some(elf) => {
+          if !elf.is_riscv() {
+            return None
+          }
+          let code_sections = elf.get_code_sections()
+          if code_sections.length() == 0 {
+            return None
+          }
+          let (vaddr, code) = code_sections[0]
+          let instructions = @analysis.decode_instructions(code, vaddr)
+          let cfg = @analysis.build_cfg(instructions, vaddr)
+          Some((elf, (instructions, cfg, vaddr)))
+        }
+        None => None
+      }
+    }
+    None => None
+  }
+}
+
+///|
+/// Split command line into parts
+fn split_command(line : String) -> Array[String] {
+  let result : Array[String] = []
+  let mut current = ""
+  for c in line {
+    if c == ' ' || c == '\t' {
+      if current != "" {
+        result.push(current)
+        current = ""
+      }
+    } else {
+      current = current + c.to_string()
+    }
+  }
+  if current != "" {
+    result.push(current)
+  }
+  result
+}
+
+///|
+/// Print interactive help
+fn print_interactive_help() -> Unit {
+  println("Available commands:")
+  println("  load <file>     Load an ELF file for analysis")
+  println("  info            Show file information")
+  println(
+    "  disasm [addr] [count]  Disassemble instructions (default: 10 from start)",
+  )
+  println("  symbols         Show symbol table")
+  println("  cfg [func]      Show control flow graph for function")
+  println("  analyze         Perform comprehensive analysis")
+  println("  x <addr> [count] Examine instructions at address")
+  println("  help            Show this help message")
+  println("  quit            Exit interactive mode")
+}
+
+///|
+/// Get ELF file info as string
+fn get_elf_info(elf : @format.ElfFile) -> String {
+  let mut result = ""
+  result = result + "=== File Information ===\n"
+  result = result + "Class: \{elf_class_str(elf)}\n"
+  result = result + "Architecture: \{arch_str(elf)}\n"
+  result = result + "Entry Point: \{format_hex(elf.entry_point())}\n"
+  result = result + "Sections: \{elf.section_count()}\n"
+  result = result + "Program Headers: \{elf.program_count()}\n"
+  let symbols = elf.get_symbols()
+  let funcs = elf.get_function_symbols()
+  result = result +
+    "Symbols: \{symbols.length()} total, \{funcs.length()} functions\n"
+  result
+}
+
+///|
+/// Format symbols for display
+fn format_symbols(elf : @format.ElfFile) -> String {
+  let mut result = "=== Symbol Table ===\n"
+  let symbols = elf.get_symbols()
+  for sym in symbols {
+    let type_str = match sym.sym_type {
+      @format.SymbolType::Func => "FUNC"
+      @format.SymbolType::Object => "OBJ"
+      @format.SymbolType::Section => "SEC"
+      @format.SymbolType::File => "FILE"
+      @format.SymbolType::NoType => "NOTYPE"
+      @format.SymbolType::Unknown => "UNKN"
+    }
+    result = result + "\{format_hex(sym.value)} \{type_str} \{sym.name}\n"
+  }
+  result
+}
+
+///|
+/// Disassemble a range of instructions
+fn disasm_range(
+  instructions : FixedArray[@analysis.DecodedInst],
+  start_addr : UInt,
+  count : Int,
+) -> String {
+  let mut result = ""
+  let mut printed = 0
+  for inst in instructions {
+    if printed >= count {
+      break
+    }
+    if inst.addr >= start_addr {
+      result = result +
+        "\{format_hex(inst.addr)}: \{@disasm.disassemble(inst.inst)}\n"
+      printed = printed + 1
+    }
+  }
+  if result == "" {
+    result = "No instructions found at address \{format_hex(start_addr)}\n"
+  }
+  result
+}
+
+///|
+/// Examine instructions at a specific address
+fn examine_at(
+  instructions : FixedArray[@analysis.DecodedInst],
+  addr : UInt,
+  count : Int,
+) -> String {
+  let mut result = ""
+  let mut found = 0
+  for inst in instructions {
+    if found >= count {
+      break
+    }
+    if inst.addr == addr || (inst.addr >= addr && found == 0) {
+      result = result +
+        "\{format_hex(inst.addr)}: \{@disasm.disassemble(inst.inst)}\n"
+      found = found + 1
+    }
+  }
+  if result == "" {
+    result = "No instruction at address \{format_hex(addr)}\n"
+  }
+  result
+}
+
+///|
+/// Format CFG for a function
+fn format_cfg_for_func(
+  cfg : @analysis.CFG,
+  instructions : FixedArray[@analysis.DecodedInst],
+  func_name : String,
+) -> String {
+  let mut result = "=== Control Flow Graph ===\n"
+  result = result + "Basic Blocks: \{cfg.blocks.length()}\n"
+  result = result + "Edges: \{cfg.edges.length()}\n\n"
+
+  // Show first few blocks
+  let max_blocks = if cfg.blocks.length() > 10 {
+    10
+  } else {
+    cfg.blocks.length()
+  }
+  for i = 0; i < max_blocks; i = i + 1 {
+    let block = cfg.blocks[i]
+    result = result +
+      "Block \{i}: [\{format_hex(block.start_addr)} - \{format_hex(block.end_addr)}]\n"
+  }
+  if cfg.blocks.length() > 10 {
+    result = result + "... (\{cfg.blocks.length() - 10} more blocks)\n"
+  }
+  result
+}
+
+///|
+/// Parse integer from string
+fn parse_int(s : String) -> Int? {
+  let mut result = 0
+  let mut negative = false
+  let mut start = 0
+  if s.length() > 0 && s[0] == '-' {
+    negative = true
+    start = 1
+  }
+  for i = start; i < s.length(); i = i + 1 {
+    let c = s[i]
+    if c >= '0' && c <= '9' {
+      result = result * 10 + (c.to_int() - '0'.to_int())
+    } else {
+      return None
+    }
+  }
+  if negative {
+    Some(-result)
+  } else {
+    Some(result)
   }
 }

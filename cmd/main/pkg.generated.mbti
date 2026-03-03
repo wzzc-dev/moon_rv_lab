@@ -54,6 +54,7 @@ pub enum Command {
   Hex(HexOptions)
   Analyze(AnalyzeOptions)
   Decompile(DecompileOptions)
+  Interactive(InteractiveOptions)
   Help
   Version
   Demo
@@ -89,6 +90,13 @@ pub struct InfoOptions {
   output : String
 }
 pub impl Show for InfoOptions
+
+type InteractiveContext
+
+pub struct InteractiveOptions {
+  file_path : String
+}
+pub impl Show for InteractiveOptions
 
 pub enum OutputFormat {
   Text
