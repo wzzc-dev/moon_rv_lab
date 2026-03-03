@@ -1440,3 +1440,99 @@ fn format_hex_uint(val : UInt) -> String {
 
   result
 }
+
+///|
+/// Get a section's raw data by name
+pub fn ElfFile::get_section_data_by_name(
+  self : ElfFile,
+  name : String,
+) -> FixedArray[Byte]? {
+  let idx = self.find_section_by_name(name)
+  if idx < 0 {
+    return None
+  }
+
+  match self.get_section(idx) {
+    Some((_addr, offset, size)) => {
+      let off = offset.reinterpret_as_int()
+      let sz = size.reinterpret_as_int()
+      if off + sz <= self.raw_data.length() && sz > 0 {
+        let data : FixedArray[Byte] = FixedArray::make(sz, b'\x00')
+        for i = 0; i < sz; i = i + 1 {
+          data[i] = self.raw_data[off + i]
+        }
+        Some(data)
+      } else {
+        None
+      }
+    }
+    None => None
+  }
+}
+
+///|
+/// DWARF debug information extracted from ELF file
+pub struct DwarfDebugInfo {
+  line_info : LineNumberInfo
+  compilation_units : Array[DIE]
+  has_debug_info : Bool
+} derive(Show)
+
+///|
+/// Parse DWARF debug information from ELF file
+pub fn ElfFile::parse_dwarf_info(self : ElfFile) -> DwarfDebugInfo {
+  // Get .debug_info section
+  let info_data = match self.get_section_data_by_name(DEBUG_INFO) {
+    Some(d) => d
+    None =>
+      return {
+        line_info: { entries: [], file_names: {}, include_directories: {} },
+        compilation_units: [],
+        has_debug_info: false,
+      }
+  }
+
+  // Get .debug_abbrev section
+  let abbrev_data = match self.get_section_data_by_name(DEBUG_ABBREV) {
+    Some(d) => d
+    None =>
+      return {
+        line_info: { entries: [], file_names: {}, include_directories: {} },
+        compilation_units: [],
+        has_debug_info: false,
+      }
+  }
+
+  // Get .debug_line section
+  let line_data = match self.get_section_data_by_name(DEBUG_LINE) {
+    Some(d) => d
+    None =>
+      return {
+        line_info: { entries: [], file_names: {}, include_directories: {} },
+        compilation_units: [],
+        has_debug_info: false,
+      }
+  }
+
+  // Parse line number information
+  let line_info = parse_line_number_info(line_data)
+
+  // Parse DIE tree
+  let compilation_units = parse_die_tree(info_data, abbrev_data)
+
+  { line_info, compilation_units, has_debug_info: true }
+}
+
+///|
+/// Get source location for an address
+pub fn ElfFile::get_source_location(
+  self : ElfFile,
+  addr : UInt,
+) -> SourceLocation? {
+  let dwarf_info = self.parse_dwarf_info()
+  if !dwarf_info.has_debug_info {
+    return None
+  }
+
+  find_line_entry(dwarf_info.line_info, addr)
+}

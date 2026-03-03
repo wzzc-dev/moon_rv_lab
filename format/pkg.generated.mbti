@@ -194,9 +194,21 @@ pub fn dw_tag_from_uint(UInt) -> DWTag
 
 pub fn execute_line_program(LineNumberProgramHeader, FixedArray[Byte]) -> Array[LineEntry]
 
+pub fn find_die_by_offset(Array[DIE], UInt) -> DIE?
+
+pub fn find_dies_by_tag(Array[DIE], DWTag) -> Array[DIE]
+
+pub fn find_line_entry(LineNumberInfo, UInt) -> SourceLocation?
+
 pub fn format_relocation(Relocation) -> String
 
 pub fn format_source_location(LineEntry, Array[FileInfo]) -> String
+
+pub fn get_die_address(DIE, DWAttr) -> UInt?
+
+pub fn get_die_attr(DIE, DWAttr) -> AttrValue?
+
+pub fn get_die_string(DIE, DWAttr) -> String?
 
 pub fn get_elf_class(FixedArray[Byte]) -> ElfClass
 
@@ -216,11 +228,17 @@ pub fn is_ihex_format(String) -> Bool
 
 pub fn lookup_line(Array[LineEntry], UInt) -> LineEntry?
 
+pub fn parse_abbrev_table(FixedArray[Byte]) -> Map[UInt, AbbrevEntry]
+
 pub fn parse_compilation_unit(FixedArray[Byte]) -> CompilationUnit?
+
+pub fn parse_die_tree(FixedArray[Byte], FixedArray[Byte]) -> Array[DIE]
 
 pub fn parse_elf(FixedArray[Byte]) -> ElfFile?
 
 pub fn parse_ihex_line(String) -> IHexRecord?
+
+pub fn parse_line_number_info(FixedArray[Byte]) -> LineNumberInfo
 
 pub fn parse_line_program_header(FixedArray[Byte]) -> LineNumberProgramHeader?
 
@@ -369,6 +387,7 @@ pub enum DWAttr {
   Unknown
 }
 pub impl Eq for DWAttr
+pub impl Hash for DWAttr
 pub impl Show for DWAttr
 
 pub enum DWForm {
@@ -513,7 +532,15 @@ pub enum DWTag {
   Unknown
 }
 pub impl Eq for DWTag
+pub impl Hash for DWTag
 pub impl Show for DWTag
+
+pub struct DwarfDebugInfo {
+  line_info : LineNumberInfo
+  compilation_units : Array[DIE]
+  has_debug_info : Bool
+}
+pub impl Show for DwarfDebugInfo
 
 pub struct Elf32Header {
   e_ident : FixedArray[Byte]
@@ -680,9 +707,12 @@ pub fn ElfFile::get_relocations(Self) -> Array[Relocation]
 pub fn ElfFile::get_relocations_for_section(Self, String) -> Array[Relocation]
 pub fn ElfFile::get_rodata_section(Self) -> FixedArray[Byte]?
 pub fn ElfFile::get_section(Self, Int) -> (UInt, UInt, UInt)?
+pub fn ElfFile::get_section_data_by_name(Self, String) -> FixedArray[Byte]?
 pub fn ElfFile::get_section_name(Self, Int) -> String
+pub fn ElfFile::get_source_location(Self, UInt) -> SourceLocation?
 pub fn ElfFile::get_symbols(Self) -> Array[Symbol]
 pub fn ElfFile::is_riscv(Self) -> Bool
+pub fn ElfFile::parse_dwarf_info(Self) -> DwarfDebugInfo
 pub fn ElfFile::program_count(Self) -> Int
 pub fn ElfFile::section_count(Self) -> Int
 pub impl Show for ElfFile
@@ -728,6 +758,13 @@ pub struct LineEntry {
   discriminator : Int
 }
 pub impl Show for LineEntry
+
+pub struct LineNumberInfo {
+  entries : Array[LineEntry]
+  file_names : Map[Int, String]
+  include_directories : Map[Int, String]
+}
+pub impl Show for LineNumberInfo
 
 pub struct LineNumberProgram {
   header : LineNumberProgramHeader
@@ -782,6 +819,14 @@ pub struct Relocation {
   section_name : String
 }
 pub impl Show for Relocation
+
+pub struct SourceLocation {
+  address : UInt
+  file : String
+  line : Int
+  column : Int
+}
+pub impl Show for SourceLocation
 
 pub struct Symbol {
   name : String

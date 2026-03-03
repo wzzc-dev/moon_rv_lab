@@ -65,7 +65,7 @@ pub enum DWTag {
   InlinedSubroutine = 0x1D
   // Unknown
   Unknown = 0x00
-} derive(Show, Eq)
+} derive(Show, Eq, Hash)
 
 ///|
 /// DWARF Attribute names
@@ -93,7 +93,7 @@ pub enum DWAttr {
   Inline = 0x20
   // Unknown
   Unknown = 0x00
-} derive(Show, Eq)
+} derive(Show, Eq, Hash)
 
 ///|
 /// DWARF Form (attribute value formats)

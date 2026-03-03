@@ -577,6 +577,86 @@ pub fn parse_line_program_header(
 }
 
 ///|
+/// Line number information container
+pub struct LineNumberInfo {
+  /// Line entries sorted by address
+  entries : Array[LineEntry]
+  /// File names indexed by file index
+  file_names : Map[Int, String]
+  /// Include directories indexed by directory index
+  include_directories : Map[Int, String]
+} derive(Show)
+
+///|
+/// Parse line number information from .debug_line section
+pub fn parse_line_number_info(data : FixedArray[Byte]) -> LineNumberInfo {
+  let entries : Array[LineEntry] = []
+  let file_names : Map[Int, String] = {}
+  let include_dirs : Map[Int, String] = {}
+
+  // Parse line program header
+  match parse_line_program_header(data) {
+    Some(header) => {
+      // Store file names and include directories
+      for i = 0; i < header.file_names.length(); i = i + 1 {
+        file_names[i + 1] = header.file_names[i].name
+      }
+      for i = 0; i < header.include_dirs.length(); i = i + 1 {
+        include_dirs[i + 1] = header.include_dirs[i]
+      }
+
+      // Execute line number program
+      let line_entries = execute_line_program(header, data)
+      for entry in line_entries {
+        entries.push(entry)
+      }
+    }
+    None => ()
+  }
+
+  { entries, file_names, include_directories: include_dirs }
+}
+
+///|
+/// Find line entry for address
+pub fn find_line_entry(
+  info : LineNumberInfo,
+  address : UInt,
+) -> SourceLocation? {
+  let mut best : LineEntry? = None
+  for entry in info.entries {
+    if entry.address <= address && !entry.end_sequence {
+      best = Some(entry)
+    }
+  }
+
+  match best {
+    Some(entry) => {
+      let file_name = match info.file_names.get(entry.file) {
+        Some(f) => f
+        None => "unknown"
+      }
+      Some({
+        address: entry.address,
+        file: file_name,
+        line: entry.line,
+        column: entry.column,
+      })
+    }
+    None => None
+  }
+}
+
+///|
+/// Source location information
+pub struct SourceLocation {
+  address : UInt
+  file : String
+  line : Int
+  column : Int
+} derive(Show)
+
+///|
 /// Lookup source line for address
 pub fn lookup_line(entries : Array[LineEntry], address : UInt) -> LineEntry? {
   let mut best : LineEntry? = None
@@ -1282,4 +1362,681 @@ pub fn read_u32_at(data : FixedArray[Byte], pos : Int) -> UInt {
   let b2 = data[pos + 2].to_int()
   let b3 = data[pos + 3].to_int()
   ((b3 << 24) | (b2 << 16) | (b1 << 8) | b0).reinterpret_as_uint()
+}
+
+///|
+/// Parse abbreviation table from .debug_abbrev section
+pub fn parse_abbrev_table(data : FixedArray[Byte]) -> Map[UInt, AbbrevEntry] {
+  let table : Map[UInt, AbbrevEntry] = Map::new()
+  let mut pos = 0
+
+  let mut running = true
+  while running {
+    if pos >= data.length() {
+      running = false
+    } else {
+      // Read abbreviation code
+      match read_uleb128_at(data, pos) {
+        Some((new_pos, code)) => {
+          pos = new_pos
+          if code == 0U {
+            running = false
+          } else {
+            // Read tag
+            match read_uleb128_at(data, pos) {
+              Some((p2, tag_val)) => {
+                pos = p2
+                let tag = dw_tag_from_uint(tag_val)
+
+                // Read has_children
+                if pos >= data.length() {
+                  running = false
+                } else {
+                  let has_children = data[pos] != b'\x00'
+                  pos = pos + 1
+
+                  // Read attribute specifications
+                  let attrs : Array[AttrSpec] = []
+                  let mut done_attrs = false
+                  while !done_attrs {
+                    match read_uleb128_at(data, pos) {
+                      Some((p3, attr_name)) => {
+                        pos = p3
+                        match read_uleb128_at(data, pos) {
+                          Some((p4, attr_form)) => {
+                            pos = p4
+                            if attr_name == 0U && attr_form == 0U {
+                              done_attrs = true
+                            } else {
+                              attrs.push({
+                                name: dw_attr_from_uint(attr_name),
+                                form: dw_form_from_uint(attr_form),
+                                implicit_const: 0,
+                              })
+                            }
+                          }
+                          None => done_attrs = true
+                        }
+                      }
+                      None => done_attrs = true
+                    }
+                  }
+
+                  table[code] = { code, tag, has_children, attrs }
+                }
+              }
+              None => running = false
+            }
+          }
+        }
+        None => running = false
+      }
+    }
+  }
+  table
+}
+
+///|
+/// Parse a single DIE from .debug_info
+fn parse_die(
+  data : FixedArray[Byte],
+  pos : Int,
+  abbrev_table : Map[UInt, AbbrevEntry],
+  addr_size : Int,
+) -> (Int, DIE)? {
+  let offset = pos.reinterpret_as_uint()
+
+  // Read abbreviation code
+  match read_uleb128_at(data, pos) {
+    Some((new_pos, abbrev_code)) => {
+      let mut p = new_pos
+
+      if abbrev_code == 0U {
+        // Null DIE (end of children)
+        return Some(
+          (
+            p,
+            {
+              offset,
+              abbrev_code: 0U,
+              tag: DWTag::Unknown,
+              has_children: false,
+              attrs: Map::new(),
+              children: [],
+            },
+          ),
+        )
+      }
+
+      // Get abbreviation entry
+      match abbrev_table.get(abbrev_code) {
+        Some(abbrev) => {
+          // Parse attributes
+          let attrs : Map[DWAttr, AttrValue] = Map::new()
+          for attr_spec in abbrev.attrs {
+            match parse_attr_value(data, p, attr_spec.form, addr_size) {
+              Some((new_p, value)) => {
+                p = new_p
+                attrs[attr_spec.name] = value
+              }
+              None => return None
+            }
+          }
+
+          Some(
+            (
+              p,
+              {
+                offset,
+                abbrev_code,
+                tag: abbrev.tag,
+                has_children: abbrev.has_children,
+                attrs,
+                children: [],
+              },
+            ),
+          )
+        }
+        None => None
+      }
+    }
+    None => None
+  }
+}
+
+///|
+/// Parse attribute value based on form
+fn parse_attr_value(
+  data : FixedArray[Byte],
+  pos : Int,
+  form : DWForm,
+  addr_size : Int,
+) -> (Int, AttrValue)? {
+  match form {
+    DWForm::Addr =>
+      if addr_size == 8 {
+        match read_u64_at_data(data, pos) {
+          Some((new_pos, val)) => Some((new_pos, AttrValue::Addr(val)))
+          None => None
+        }
+      } else {
+        let val = read_u32_at(data, pos)
+        Some((pos + 4, AttrValue::Addr(val)))
+      }
+    DWForm::Data1 => {
+      if pos >= data.length() {
+        return None
+      }
+      Some((pos + 1, AttrValue::UData(data[pos].to_uint())))
+    }
+    DWForm::Data2 => {
+      if pos + 1 >= data.length() {
+        return None
+      }
+      let val = (data[pos + 1].to_uint() << 8) | data[pos].to_uint()
+      Some((pos + 2, AttrValue::UData(val)))
+    }
+    DWForm::Data4 => {
+      let val = read_u32_at(data, pos)
+      Some((pos + 4, AttrValue::UData(val)))
+    }
+    DWForm::Data8 =>
+      match read_u64_at_data(data, pos) {
+        Some((new_pos, val)) => Some((new_pos, AttrValue::UData(val)))
+        None => None
+      }
+    DWForm::String => {
+      // Read null-terminated string
+      let mut result = ""
+      let mut p = pos
+      let mut done = false
+      while !done {
+        if p >= data.length() {
+          done = true
+        } else {
+          let b = data[p]
+          p = p + 1
+          if b == b'\x00' {
+            done = true
+          } else {
+            result = result + b.to_int().unsafe_to_char().to_string()
+          }
+        }
+      }
+      Some((p, AttrValue::String(result)))
+    }
+    DWForm::Flag => {
+      if pos >= data.length() {
+        return None
+      }
+      Some((pos + 1, AttrValue::Flag(data[pos] != b'\x00')))
+    }
+    DWForm::FlagPresent => Some((pos, AttrValue::Flag(true)))
+    DWForm::Ref1 => {
+      if pos >= data.length() {
+        return None
+      }
+      Some((pos + 1, AttrValue::Ref(data[pos].to_uint())))
+    }
+    DWForm::Ref2 => {
+      if pos + 1 >= data.length() {
+        return None
+      }
+      let val = (data[pos + 1].to_uint() << 8) | data[pos].to_uint()
+      Some((pos + 2, AttrValue::Ref(val)))
+    }
+    DWForm::Ref4 => {
+      let val = read_u32_at(data, pos)
+      Some((pos + 4, AttrValue::Ref(val)))
+    }
+    DWForm::Ref8 =>
+      match read_u64_at_data(data, pos) {
+        Some((new_pos, val)) => Some((new_pos, AttrValue::Ref(val)))
+        None => None
+      }
+    DWForm::UData =>
+      match read_uleb128_at(data, pos) {
+        Some((new_pos, val)) => Some((new_pos, AttrValue::UData(val)))
+        None => None
+      }
+    DWForm::SData =>
+      match read_sleb128_at(data, pos) {
+        Some((new_pos, val)) => Some((new_pos, AttrValue::SData(val)))
+        None => None
+      }
+    DWForm::SecOffset => {
+      let val = read_u32_at(data, pos)
+      Some((pos + 4, AttrValue::SecOffset(val)))
+    }
+    DWForm::ExprLoc =>
+      match read_uleb128_at(data, pos) {
+        Some((new_pos, len)) => {
+          let length = len.reinterpret_as_int()
+          if new_pos + length > data.length() {
+            return None
+          }
+          let expr = FixedArray::make(length, b'\x00')
+          for i in 0..<length {
+            expr[i] = data[new_pos + i]
+          }
+          Some((new_pos + length, AttrValue::ExprLoc(expr)))
+        }
+        None => None
+      }
+    DWForm::Block1 => {
+      if pos >= data.length() {
+        return None
+      }
+      let length = data[pos].to_int()
+      let block = FixedArray::make(length, b'\x00')
+      for i in 0..<length {
+        if pos + 1 + i >= data.length() {
+          return None
+        }
+        block[i] = data[pos + 1 + i]
+      }
+      Some((pos + 1 + length, AttrValue::Block(block)))
+    }
+    DWForm::Block2 => {
+      if pos + 1 >= data.length() {
+        return None
+      }
+      let length = data[pos].to_int() | (data[pos + 1].to_int() << 8)
+      let block = FixedArray::make(length, b'\x00')
+      for i in 0..<length {
+        if pos + 2 + i >= data.length() {
+          return None
+        }
+        block[i] = data[pos + 2 + i]
+      }
+      Some((pos + 2 + length, AttrValue::Block(block)))
+    }
+    DWForm::Block4 => {
+      let length = read_u32_at(data, pos).reinterpret_as_int()
+      let block = FixedArray::make(length, b'\x00')
+      for i in 0..<length {
+        if pos + 4 + i >= data.length() {
+          return None
+        }
+        block[i] = data[pos + 4 + i]
+      }
+      Some((pos + 4 + length, AttrValue::Block(block)))
+    }
+    DWForm::Block =>
+      match read_uleb128_at(data, pos) {
+        Some((new_pos, len)) => {
+          let length = len.reinterpret_as_int()
+          let block = FixedArray::make(length, b'\x00')
+          for i in 0..<length {
+            if new_pos + i >= data.length() {
+              return None
+            }
+            block[i] = data[new_pos + i]
+          }
+          Some((new_pos + length, AttrValue::Block(block)))
+        }
+        None => None
+      }
+    DWForm::StrP => {
+      let offset = read_u32_at(data, pos)
+      Some((pos + 4, AttrValue::UData(offset))) // Will be resolved later
+    }
+    DWForm::RefAddr => {
+      let val = read_u32_at(data, pos)
+      Some((pos + 4, AttrValue::Ref(val)))
+    }
+    DWForm::RefUData =>
+      match read_uleb128_at(data, pos) {
+        Some((new_pos, val)) => Some((new_pos, AttrValue::Ref(val)))
+        None => None
+      }
+    DWForm::Indirect =>
+      // Read the actual form first
+      match read_uleb128_at(data, pos) {
+        Some((new_pos, actual_form_val)) => {
+          let actual_form = dw_form_from_uint(actual_form_val)
+          parse_attr_value(data, new_pos, actual_form, addr_size)
+        }
+        None => None
+      }
+    DWForm::RefSig8 =>
+      match read_u64_at_data(data, pos) {
+        Some((new_pos, val)) => Some((new_pos, AttrValue::Ref(val)))
+        None => None
+      }
+    // DWARF 5 forms - simplified handling
+    DWForm::StrX =>
+      match read_uleb128_at(data, pos) {
+        Some((new_pos, val)) => Some((new_pos, AttrValue::UData(val)))
+        None => None
+      }
+    DWForm::AddrX =>
+      match read_uleb128_at(data, pos) {
+        Some((new_pos, val)) => Some((new_pos, AttrValue::UData(val)))
+        None => None
+      }
+    DWForm::RefSup4 => {
+      let val = read_u32_at(data, pos)
+      Some((pos + 4, AttrValue::Ref(val)))
+    }
+    DWForm::StrPSup => Some((pos, AttrValue::Unknown))
+    DWForm::Data16 => {
+      if pos + 15 >= data.length() {
+        return None
+      }
+      Some((pos + 16, AttrValue::Unknown))
+    }
+    DWForm::LineStrP => {
+      let offset = read_u32_at(data, pos)
+      Some((pos + 4, AttrValue::UData(offset)))
+    }
+    DWForm::ImplicitConst => Some((pos, AttrValue::Unknown))
+    DWForm::LocListX =>
+      match read_uleb128_at(data, pos) {
+        Some((new_pos, val)) => Some((new_pos, AttrValue::UData(val)))
+        None => None
+      }
+    DWForm::RngListX =>
+      match read_uleb128_at(data, pos) {
+        Some((new_pos, val)) => Some((new_pos, AttrValue::UData(val)))
+        None => None
+      }
+    DWForm::RefSup8 =>
+      match read_u64_at_data(data, pos) {
+        Some((new_pos, val)) => Some((new_pos, AttrValue::Ref(val)))
+        None => None
+      }
+    DWForm::StrX1 => {
+      if pos >= data.length() {
+        return None
+      }
+      Some((pos + 1, AttrValue::UData(data[pos].to_uint())))
+    }
+    DWForm::StrX2 => {
+      if pos + 1 >= data.length() {
+        return None
+      }
+      let val = (data[pos + 1].to_uint() << 8) | data[pos].to_uint()
+      Some((pos + 2, AttrValue::UData(val)))
+    }
+    DWForm::StrX3 => {
+      if pos + 2 >= data.length() {
+        return None
+      }
+      let val = data[pos].to_uint() |
+        (data[pos + 1].to_uint() << 8) |
+        (data[pos + 2].to_uint() << 16)
+      Some((pos + 3, AttrValue::UData(val)))
+    }
+    DWForm::StrX4 => {
+      let val = read_u32_at(data, pos)
+      Some((pos + 4, AttrValue::UData(val)))
+    }
+    DWForm::AddrX1 => {
+      if pos >= data.length() {
+        return None
+      }
+      Some((pos + 1, AttrValue::UData(data[pos].to_uint())))
+    }
+    DWForm::AddrX2 => {
+      if pos + 1 >= data.length() {
+        return None
+      }
+      let val = (data[pos + 1].to_uint() << 8) | data[pos].to_uint()
+      Some((pos + 2, AttrValue::UData(val)))
+    }
+    DWForm::AddrX3 => {
+      if pos + 2 >= data.length() {
+        return None
+      }
+      let val = data[pos].to_uint() |
+        (data[pos + 1].to_uint() << 8) |
+        (data[pos + 2].to_uint() << 16)
+      Some((pos + 3, AttrValue::UData(val)))
+    }
+    DWForm::AddrX4 => {
+      let val = read_u32_at(data, pos)
+      Some((pos + 4, AttrValue::UData(val)))
+    }
+    DWForm::Unknown => Some((pos, AttrValue::Unknown))
+  }
+}
+
+///|
+/// Read u64 from data array
+fn read_u64_at_data(data : FixedArray[Byte], pos : Int) -> (Int, UInt)? {
+  if pos + 7 >= data.length() {
+    return None
+  }
+  let mut val : UInt = 0U
+  for i in 0..<8 {
+    val = val | (data[pos + i].to_int().reinterpret_as_uint() << (i * 8))
+  }
+  Some((pos + 8, val))
+}
+
+///|
+/// Parse DIE tree from .debug_info section
+pub fn parse_die_tree(
+  info_data : FixedArray[Byte],
+  abbrev_data : FixedArray[Byte],
+) -> Array[DIE] {
+  let abbrev_table = parse_abbrev_table(abbrev_data)
+  let dies : Array[DIE] = []
+  let mut pos = 0
+
+  while pos < info_data.length() {
+    // Parse compilation unit header first
+    let cu = match parse_compilation_unit_header_at(info_data, pos) {
+      Some((new_pos, header)) => {
+        pos = new_pos
+        header
+      }
+      None => break
+    }
+
+    // Parse DIEs in this compilation unit
+    let cu_end = pos + cu.unit_length.reinterpret_as_int() - 4
+    let root_die = match
+      parse_die_tree_recursive(
+        info_data,
+        pos,
+        cu_end,
+        abbrev_table,
+        cu.addr_size,
+      ) {
+      Some((new_pos, die)) => {
+        pos = new_pos
+        die
+      }
+      None => break
+    }
+    dies.push(root_die)
+  }
+  dies
+}
+
+///|
+/// Parse compilation unit header at specific position
+fn parse_compilation_unit_header_at(
+  data : FixedArray[Byte],
+  pos : Int,
+) -> (Int, CompilationUnit)? {
+  let p = DWARFParser::new(data)
+  let parser = { data: p.data, pos, addr_size: p.addr_size, version: p.version }
+
+  let (p1, unit_length) = match read_u32(parser) {
+    Some((np, v)) => (np, v)
+    None => return None
+  }
+
+  let (is_64bit, actual_length, p2) = if unit_length == 0xFFFFFFFFU {
+    match read_u64(p1) {
+      Some((p, len)) => (true, len, p)
+      None => return None
+    }
+  } else {
+    (false, unit_length, p1)
+  }
+
+  let (p3, version) = match read_u16(p2) {
+    Some((p, v)) => (p, v)
+    None => return None
+  }
+
+  let (p4, abbrev_offset) = if is_64bit || version.reinterpret_as_int() >= 5 {
+    match read_u64(p3) {
+      Some((p, off)) => (p, off)
+      None => return None
+    }
+  } else {
+    match read_u32(p3) {
+      Some((p, off)) => (p, off)
+      None => return None
+    }
+  }
+
+  let (p5, addr_size_byte) = match read_u8(p4) {
+    Some((p, b)) => (p, b)
+    None => return None
+  }
+
+  Some(
+    (
+      p5.pos,
+      {
+        unit_length: actual_length,
+        version: version.reinterpret_as_int(),
+        abbrev_offset,
+        addr_size: addr_size_byte.to_int(),
+        root: None,
+      },
+    ),
+  )
+}
+
+///|
+/// Parse DIE tree recursively
+fn parse_die_tree_recursive(
+  data : FixedArray[Byte],
+  pos : Int,
+  end_pos : Int,
+  abbrev_table : Map[UInt, AbbrevEntry],
+  addr_size : Int,
+) -> (Int, DIE)? {
+  if pos >= end_pos {
+    return None
+  }
+
+  match parse_die(data, pos, abbrev_table, addr_size) {
+    Some((new_pos, die)) => {
+      let mut p = new_pos
+
+      if die.abbrev_code == 0U {
+        return Some((p, die))
+      }
+
+      if die.has_children {
+        let children : Array[DIE] = []
+        let mut done = false
+        while !done {
+          if p >= end_pos {
+            done = true
+          } else {
+            match
+              parse_die_tree_recursive(
+                data, p, end_pos, abbrev_table, addr_size,
+              ) {
+              Some((new_p, child)) => {
+                p = new_p
+                if child.abbrev_code == 0U {
+                  done = true
+                } else {
+                  children.push(child)
+                }
+              }
+              None => done = true
+            }
+          }
+        }
+        // Create new DIE with children
+        Some(
+          (
+            p,
+            {
+              offset: die.offset,
+              abbrev_code: die.abbrev_code,
+              tag: die.tag,
+              has_children: die.has_children,
+              attrs: die.attrs,
+              children,
+            },
+          ),
+        )
+      } else {
+        Some((p, die))
+      }
+    }
+    None => None
+  }
+}
+
+///|
+/// Find DIE by offset
+pub fn find_die_by_offset(dies : Array[DIE], offset : UInt) -> DIE? {
+  for die in dies {
+    if die.offset == offset {
+      return Some(die)
+    }
+    if die.children.length() > 0 {
+      match find_die_by_offset(die.children, offset) {
+        Some(d) => return Some(d)
+        None => ()
+      }
+    }
+  }
+  None
+}
+
+///|
+/// Find DIEs by tag
+pub fn find_dies_by_tag(dies : Array[DIE], tag : DWTag) -> Array[DIE] {
+  let result : Array[DIE] = []
+  for die in dies {
+    if die.tag == tag {
+      result.push(die)
+    }
+    if die.children.length() > 0 {
+      let child_results = find_dies_by_tag(die.children, tag)
+      for child in child_results {
+        result.push(child)
+      }
+    }
+  }
+  result
+}
+
+///|
+/// Get attribute value from DIE
+pub fn get_die_attr(die : DIE, attr : DWAttr) -> AttrValue? {
+  die.attrs.get(attr)
+}
+
+///|
+/// Get string attribute from DIE
+pub fn get_die_string(die : DIE, attr : DWAttr) -> String? {
+  match die.attrs.get(attr) {
+    Some(AttrValue::String(s)) => Some(s)
+    Some(AttrValue::UData(_)) => Some("") // Would need .debug_str lookup
+    _ => None
+  }
+}
+
+///|
+/// Get address attribute from DIE
+pub fn get_die_address(die : DIE, attr : DWAttr) -> UInt? {
+  match die.attrs.get(attr) {
+    Some(AttrValue::Addr(a)) => Some(a)
+    _ => None
+  }
 }
