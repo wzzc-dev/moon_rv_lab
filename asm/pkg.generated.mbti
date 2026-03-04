@@ -33,7 +33,7 @@ pub struct AsmDirective {
 }
 pub impl Show for AsmDirective
 
-pub enum AsmStatement {
+pub(all) enum AsmStatement {
   Instruction(@decode.Instruction)
   Label(String)
   Directive(String, Array[Token])
@@ -79,7 +79,7 @@ pub struct SymbolTable {
   current_address : UInt
 }
 
-pub enum Token {
+pub(all) enum Token {
   Ident(String)
   Reg(String)
   Imm(Int)

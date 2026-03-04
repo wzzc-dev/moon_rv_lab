@@ -100,9 +100,9 @@ pub fn disassemble(inst : @decode.Instruction) -> String {
   match inst {
     // U-type instructions
     @decode.LUI(rd, imm) =>
-      "lui \{@decode.reg_name(rd)}, \{format_hex_imm(imm >> 12)}"
+      "lui \{@decode.reg_name(rd)}, \{format_hex_imm(imm)}"
     @decode.AUIPC(rd, imm) =>
-      "auipc \{@decode.reg_name(rd)}, \{format_hex_imm(imm >> 12)}"
+      "auipc \{@decode.reg_name(rd)}, \{format_hex_imm(imm)}"
 
     // J-type instructions
     @decode.JAL(rd, imm) =>

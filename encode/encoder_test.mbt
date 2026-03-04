@@ -67,7 +67,7 @@ test "encode_u_type" {
   inspect(
     result.code.to_string(),
     content=(
-      #|1157628599
+      #|305418935
     ),
   )
 }

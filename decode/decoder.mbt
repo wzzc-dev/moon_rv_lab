@@ -80,13 +80,13 @@ fn decode_b_imm(code : UInt) -> Int {
 fn decode_u_imm(code : UInt) -> Int {
   // Extract bits [31:12] and shift left by 12 to get the final immediate
   // This gives a 32-bit value where bits [31:12] are the immediate
-  let imm_high = code & 0xFFFFF000U
+  let imm_high = (code >> 12) & 0xFFFFFU
   // Now we need to interpret this as a signed 32-bit integer
-  // If bit 31 is set, it's negative
-  let sign_bit = (imm_high >> 31).reinterpret_as_int()
+  // If bit 19 is set, it's negative
+  let sign_bit = (imm_high >> 19).reinterpret_as_int()
   if sign_bit == 1 {
     // For negative values, we need to sign extend
-    // The value in imm_high has bit 31 set, so as unsigned it's >= 2^31
+    // The value in imm_high has bit 19 set, so as unsigned it's >= 2^31
     // We need to convert it to a negative Int
     imm_high.reinterpret_as_int()
   } else {

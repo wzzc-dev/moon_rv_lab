@@ -9,7 +9,12 @@ test "decode_lui" {
   match result {
     LUI(rd, imm) => {
       inspect(rd, content="5")
-      inspect(imm, content="305418240")
+      inspect(
+        imm,
+        content=(
+          #|74565
+        ),
+      )
     }
     _ => inspect(result, content="LUI(_, _)")
   }
@@ -25,7 +30,12 @@ test "decode_auipc" {
   match result {
     AUIPC(rd, imm) => {
       inspect(rd, content="10")
-      inspect(imm, content="65536") // 0x10000 << 12 = 0x10000000
+      inspect(
+        imm,
+        content=(
+          #|16
+        ),
+      ) // 0x10000 << 12 = 0x10000000
     }
     _ => inspect(result, content="AUIPC(_, _)")
   }

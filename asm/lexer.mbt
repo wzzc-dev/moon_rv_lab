@@ -57,7 +57,8 @@ pub fn Lexer::advance(self : Lexer) -> (Lexer, Char) {
 /// Skip whitespace (but not newlines)
 pub fn Lexer::skip_whitespace(self : Lexer) -> Lexer {
   let mut l = self
-  while l.peek() == ' ' || l.peek() == '\t' || l.peek() == '\r' {
+  while !l.is_at_end() &&
+        (l.peek() == ' ' || l.peek() == '\t' || l.peek() == '\r') {
     let (new_l, _) = l.advance()
     l = new_l
   }

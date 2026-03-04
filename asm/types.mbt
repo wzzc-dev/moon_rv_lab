@@ -2,7 +2,7 @@
 
 ///|
 /// Assembler token types
-pub enum Token {
+pub(all) enum Token {
   // Identifiers and literals
   Ident(String) // identifier (instruction mnemonic, label, etc.)
   Reg(String) // register name (x0-x31, a0-a7, t0-t6, etc.)
@@ -35,7 +35,7 @@ pub struct TokenWithPos {
 
 ///|
 /// Assembly statement types
-pub enum AsmStatement {
+pub(all) enum AsmStatement {
   Instruction(@decode.Instruction)
   Label(String)
   Directive(String, Array[Token]) // directive name and arguments
