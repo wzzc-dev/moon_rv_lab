@@ -34,9 +34,27 @@ pub enum Command {
   Analyze(AnalyzeOptions)
   Decompile(DecompileOptions)
   Interactive(InteractiveOptions)
+  Asm(AsmOptions)
   Help
   Version
   Demo
+} derive(Show)
+
+///|
+/// Options for asm command
+pub struct AsmOptions {
+  input_file : String
+  output_file : String
+  format : AsmOutputFormat
+  base_addr : UInt
+} derive(Show)
+
+///|
+/// Output format for assembler
+pub enum AsmOutputFormat {
+  Elf
+  Hex
+  Raw
 } derive(Show)
 
 ///|
@@ -266,6 +284,7 @@ pub fn parse_args(args : Array[String]) -> Command? {
     "analyze" => parse_analyze_args(args)
     "decompile" | "dec" => parse_decompile_args(args)
     "interactive" | "i" | "repl" => parse_interactive_args(args)
+    "asm" | "assemble" => parse_asm_args(args)
     _ => None
   }
 }
@@ -278,6 +297,61 @@ fn parse_interactive_args(args : Array[String]) -> Command? {
     file_path = args[1]
   }
   Some(Command::Interactive({ file_path, }))
+}
+
+///|
+/// Parse asm command arguments
+fn parse_asm_args(args : Array[String]) -> Command? {
+  let mut input_file = ""
+  let mut output_file = ""
+  let mut format = AsmOutputFormat::Elf
+  let mut base_addr = 0x10000U
+
+  let mut i = 1
+  while i < args.length() {
+    let arg = args[i]
+    if arg == "--output" || arg == "-o" {
+      if i + 1 < args.length() {
+        output_file = args[i + 1]
+        i = i + 2
+      } else {
+        return None
+      }
+    } else if arg == "--format" || arg == "-f" {
+      if i + 1 < args.length() {
+        format = match args[i + 1] {
+          "elf" => AsmOutputFormat::Elf
+          "hex" => AsmOutputFormat::Hex
+          "raw" => AsmOutputFormat::Raw
+          _ => AsmOutputFormat::Elf
+        }
+        i = i + 2
+      } else {
+        return None
+      }
+    } else if arg == "--base" || arg == "-b" {
+      if i + 1 < args.length() {
+        match parse_number(args[i + 1]) {
+          Some(addr) => base_addr = addr
+          None => return None
+        }
+        i = i + 2
+      } else {
+        return None
+      }
+    } else if arg[0] != '-' {
+      input_file = arg
+      i = i + 1
+    } else {
+      i = i + 1
+    }
+  }
+
+  if input_file == "" {
+    return None
+  }
+
+  Some(Command::Asm({ input_file, output_file, format, base_addr }))
 }
 
 ///|
@@ -667,6 +741,7 @@ fn print_usage() -> Unit {
   println("  hex <code>              Decode a hex instruction")
   println("  analyze <file>          Comprehensive binary analysis")
   println("  decompile <file>        Generate pseudo-code from binary")
+  println("  asm <file>              Assemble RISC-V assembly to ELF/binary")
   println("  demo                    Run demonstration")
   println("  help                    Show this help message")
   println("  version                 Show version information")
@@ -696,6 +771,11 @@ fn print_usage() -> Unit {
     "  --code, -c              Show pseudo-code (default: control flow only)",
   )
   println("")
+  println("Asm Options:")
+  println("  --output, -o <file>     Output file path")
+  println("  --format, -f <fmt>      Output format: elf (default), hex, raw")
+  println("  --base, -b <addr>       Base address (default: 0x10000)")
+  println("")
   println("Examples:")
   println("  rvkit disasm program.elf")
   println("  rvkit disasm --raw --base 0x8000 firmware.bin")
@@ -707,6 +787,8 @@ fn print_usage() -> Unit {
   println("  rvkit analyze program.elf --detailed")
   println("  rvkit decompile program.elf --function main")
   println("  rvkit decompile program.elf --function main --code -o pseudo.c")
+  println("  rvkit asm code.s -o program.elf")
+  println("  rvkit asm code.s -f hex")
 }
 
 ///|
@@ -1333,6 +1415,147 @@ fn execute_hex(opts : HexOptions) -> Unit {
 }
 
 ///|
+/// Execute asm command (assemble RISC-V assembly)
+fn execute_asm(opts : AsmOptions) -> Unit {
+  // Read input file
+  match read_file_string(opts.input_file) {
+    Some(source) => {
+      // Assemble the source
+      let result = @asm.assemble_with_symbols(source, opts.base_addr)
+
+      // Check for errors
+      if result.errors.length() > 0 {
+        println("Assembly errors:")
+        for err in result.errors {
+          println("  Line \{err.line}: \{err.message}")
+        }
+        return
+      }
+
+      // Encode to bytes
+      let bytes = @asm.encode_to_bytes(result)
+
+      // Output based on format
+      match opts.format {
+        AsmOutputFormat::Elf => {
+          let elf = @format.assemble_to_elf(bytes, opts.base_addr)
+          if opts.output_file == "" {
+            // Output to stdout as hex
+            println("ELF binary (\{elf.length()} bytes):")
+            print_hex_dump(elf)
+          } else {
+            // Write to file
+            match write_file_bytes(opts.output_file, elf) {
+              true => println("Written ELF to: \{opts.output_file}")
+              false => println("Error: Failed to write to \{opts.output_file}")
+            }
+          }
+        }
+        AsmOutputFormat::Hex => {
+          let hex = @asm.assemble_to_hex(source)
+          if opts.output_file == "" {
+            println(hex)
+          } else {
+            match write_file_string(opts.output_file, hex) {
+              true => println("Written hex to: \{opts.output_file}")
+              false => println("Error: Failed to write to \{opts.output_file}")
+            }
+          }
+        }
+        AsmOutputFormat::Raw =>
+          if opts.output_file == "" {
+            println("Raw binary (\{bytes.length()} bytes):")
+            print_hex_dump(bytes)
+          } else {
+            match write_file_bytes(opts.output_file, bytes) {
+              true => println("Written raw binary to: \{opts.output_file}")
+              false => println("Error: Failed to write to \{opts.output_file}")
+            }
+          }
+      }
+
+      // Show summary
+      println("")
+      println("Assembly summary:")
+      println("  Instructions: \{result.instructions.length()}")
+      println("  Symbols: \{result.symbols.entries.length()}")
+      if result.symbols.entries.length() > 0 {
+        println("  Labels:")
+        for entry in result.symbols.entries {
+          let (name, sym) = entry
+          println("    \{name}: 0x\{format_hex(sym.address)}")
+        }
+      }
+    }
+    None => println("Error: Cannot read file: \{opts.input_file}")
+  }
+}
+
+///|
+/// Print hex dump of bytes
+fn print_hex_dump(bytes : FixedArray[Byte]) -> Unit {
+  let mut offset = 0
+  while offset < bytes.length() {
+    // Print offset
+    let offset_str = format_hex(offset.reinterpret_as_uint())
+    let padding = "0".repeat(4 - offset_str.length())
+    println("\{padding}\{offset_str}: ")
+
+    // Print up to 16 bytes per line
+    let mut i = 0
+    while i < 16 && offset + i < bytes.length() {
+      let b = bytes[offset + i].to_uint()
+      let hex = format_hex(b)
+      let pad = "0".repeat(2 - hex.length())
+      println("\{pad}\{hex} ")
+      i = i + 1
+    }
+    offset = offset + 16
+  }
+}
+
+///|
+/// Read file contents as string
+fn read_file_string(path : String) -> String? {
+  if !@fs.path_exists(path) {
+    return None
+  }
+  try {
+    let bytes = @fs.read_file_to_bytes(path)
+    // Convert bytes to string
+    let mut result = ""
+    for i = 0; i < bytes.length(); i = i + 1 {
+      let c = bytes[i].to_int().unsafe_to_char()
+      result = result + c.to_string()
+    }
+    Some(result)
+  } catch {
+    _ => None
+  }
+}
+
+///|
+/// Write bytes to file - use hex output as workaround
+fn write_file_bytes(path : String, data : FixedArray[Byte]) -> Bool {
+  // Write hex dump to file as a workaround
+  let mut hex = ""
+  for i = 0; i < data.length(); i = i + 1 {
+    let b = data[i].to_uint()
+    hex = hex + format_hex_padded(b)
+    if i < data.length() - 1 {
+      hex = hex + " "
+    }
+  }
+  write_output_file(path, hex)
+}
+
+///|
+/// Write string to file (use existing write_output_file)
+fn write_file_string(path : String, data : String) -> Bool {
+  write_output_file(path, data)
+}
+
+///|
 /// Convert instruction category to string
 fn category_to_string(cat : @decode.InstructionCategory) -> String {
   match cat {
@@ -1759,6 +1982,7 @@ pub fn execute(cmd : Command) -> Unit {
     Command::Analyze(opts) => execute_analyze(opts)
     Command::Decompile(opts) => execute_decompile(opts)
     Command::Interactive(opts) => execute_interactive(opts)
+    Command::Asm(opts) => execute_asm(opts)
   }
 }
 

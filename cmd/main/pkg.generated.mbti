@@ -17,6 +17,21 @@ pub struct AnalyzeOptions {
 }
 pub impl Show for AnalyzeOptions
 
+pub struct AsmOptions {
+  input_file : String
+  output_file : String
+  format : AsmOutputFormat
+  base_addr : UInt
+}
+pub impl Show for AsmOptions
+
+pub enum AsmOutputFormat {
+  Elf
+  Hex
+  Raw
+}
+pub impl Show for AsmOutputFormat
+
 pub struct CallGraphOptions {
   file_path : String
   format : OutputFormat
@@ -55,6 +70,7 @@ pub enum Command {
   Analyze(AnalyzeOptions)
   Decompile(DecompileOptions)
   Interactive(InteractiveOptions)
+  Asm(AsmOptions)
   Help
   Version
   Demo

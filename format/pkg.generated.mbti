@@ -178,6 +178,10 @@ pub const STT_OBJECT : UInt = 1
 
 pub const STT_SECTION : UInt = 3
 
+pub fn assemble_to_elf(FixedArray[Byte], UInt) -> FixedArray[Byte]
+
+pub fn default_elf_config(UInt) -> ElfWriterConfig
+
 pub fn detect_format(FixedArray[Byte]) -> BinaryFormat
 
 pub fn dw_ate_from_uint(UInt) -> DWATE
@@ -281,6 +285,8 @@ pub fn read_uleb128(DWARFParser) -> (DWARFParser, UInt)?
 pub fn read_uleb128_at(FixedArray[Byte], Int) -> (Int, UInt)?
 
 pub fn resolve_type_name(UInt, Map[UInt, DWARFType]) -> String
+
+pub fn write_elf32_executable(FixedArray[Byte], UInt, UInt) -> FixedArray[Byte]
 
 // Errors
 
@@ -821,6 +827,13 @@ pub fn ElfFile::parse_dwarf_info(Self) -> DwarfDebugInfo
 pub fn ElfFile::program_count(Self) -> Int
 pub fn ElfFile::section_count(Self) -> Int
 pub impl Show for ElfFile
+
+pub struct ElfWriterConfig {
+  entry_point : UInt
+  is_64bit : Bool
+  is_executable : Bool
+}
+pub impl Show for ElfWriterConfig
 
 pub struct FileInfo {
   name : String
