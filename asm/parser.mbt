@@ -1634,13 +1634,23 @@ pub fn parse_statement(tokens : Array[TokenWithPos]) -> AsmStatement {
       AsmStatement::Directive(d, args)
     }
     Token::Ident(name) => {
-      // Parse instruction
+      // Check if it's a label (followed by colon)
+      if tokens.length() >= 2 && tokens[1].token is Token::Colon {
+        return AsmStatement::Label(name)
+      }
+
+      // Parse instruction - skip commas
       let operands : Array[Token] = []
       for i = 1; i < tokens.length(); i = i + 1 {
-        if tokens[i].token is Token::Newline {
+        let tok = tokens[i].token
+        if tok is Token::Newline {
           break
         }
-        operands.push(tokens[i].token)
+        // Skip commas
+        if tok is Token::Comma {
+          continue
+        }
+        operands.push(tok)
       }
 
       match parse_instruction(name, operands) {

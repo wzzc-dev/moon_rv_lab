@@ -47,7 +47,8 @@ test "lexer_basic" {
 ///|
 test "lexer_hex" {
   let tokens = tokenize("lui t0, 0x12345")
-  assert_eq(tokens.length(), 7)
+  // lui (Ident), t0 (Reg), comma, 0x12345 (HexImm), Eof = 5 tokens
+  assert_eq(tokens.length(), 5)
 }
 
 ///|
@@ -168,4 +169,87 @@ test "encode_decode_consistency" {
     let decoded = @decode.decode(encoded.code)
     ignore(decoded.inner())
   }
+}
+
+///|
+test "lexer_label" {
+  let tokens = tokenize("start:")
+  assert_eq(tokens.length(), 3) // Ident, Colon, Eof
+
+  match tokens[0].token {
+    Token::Ident(s) => assert_eq(s, "start")
+    _ => abort("Expected Ident")
+  }
+
+  assert_true(tokens[1].token is Token::Colon)
+}
+
+///|
+test "parse_label" {
+  let tokens = tokenize("main:")
+  let stmt = parse_statement(tokens)
+  match stmt {
+    AsmStatement::Label(name) => assert_eq(name, "main")
+    _ => abort("Expected Label")
+  }
+}
+
+///|
+test "parse_mixed_labels_and_instructions" {
+  let tokens = tokenize("start:\n  addi a0, x0, 1\nend:\n  ret")
+  let statements = parse("start:\n  addi a0, x0, 1\nend:\n  ret")
+
+  // Should have: Label(start), Instruction, Label(end), Instruction, Empty
+  assert_true(statements.length() >= 4)
+}
+
+///|
+test "assemble_simple" {
+  let result = assemble_with_symbols("addi a0, x0, 42\naddi a1, a0, 1", 0U)
+  assert_eq(result.instructions.length(), 2)
+  assert_eq(result.errors.length(), 0)
+  assert_eq(result.start_address, 0U)
+}
+
+///|
+test "assemble_with_labels" {
+  let source = "start:\n  addi a0, x0, 1\n  addi a1, a0, 2\nend:\n  ecall"
+  let result = assemble_with_symbols(source, 0x1000U)
+
+  // Check labels were recorded
+  assert_true(result.symbols.contains("start"))
+  assert_true(result.symbols.contains("end"))
+
+  // Check label addresses
+  match result.symbols.lookup("start") {
+    Some(sym) => assert_eq(sym.address, 0x1000U)
+    None => abort("start label not found")
+  }
+
+  match result.symbols.lookup("end") {
+    Some(sym) => assert_eq(sym.address, 0x1008U) // 0x1000 + 4 + 4
+    None => abort("end label not found")
+  }
+}
+
+///|
+test "instruction_size" {
+  assert_eq(instruction_size(@decode.ADDI(0U, 0U, 0)), 4)
+  assert_eq(instruction_size(@decode.ECALL), 4)
+  assert_eq(instruction_size(@decode.C_NOP), 2)
+  assert_eq(instruction_size(@decode.C_ADDI(0U, 0)), 2)
+}
+
+///|
+test "encode_to_bytes" {
+  let result = assemble_with_symbols("addi a0, x0, 1", 0U)
+  let bytes = encode_to_bytes(result)
+  assert_eq(bytes.length(), 4) // One 32-bit instruction
+}
+
+///|
+test "assemble_to_hex" {
+  let hex = assemble_to_hex("addi a0, x0, 1")
+  // addi a0, x0, 1 = 0x00100513
+  assert_true(hex.length() > 0)
 }

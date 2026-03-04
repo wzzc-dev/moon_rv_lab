@@ -154,6 +154,30 @@ fn read_number(lexer : Lexer) -> (Lexer, Token) {
 }
 
 ///|
+/// Check if a string is a known ABI register name
+fn is_abi_reg_name(name : String) -> Bool {
+  match name {
+    "zero" | "ra" | "sp" | "gp" | "tp" => true
+    "t0" | "t1" | "t2" | "t3" | "t4" | "t5" | "t6" => true
+    "s0"
+    | "s1"
+    | "s2"
+    | "s3"
+    | "s4"
+    | "s5"
+    | "s6"
+    | "s7"
+    | "s8"
+    | "s9"
+    | "s10"
+    | "s11" => true
+    "a0" | "a1" | "a2" | "a3" | "a4" | "a5" | "a6" | "a7" => true
+    "fp" => true
+    _ => false
+  }
+}
+
+///|
 /// Read an identifier or directive
 fn read_ident(lexer : Lexer) -> (Lexer, Token) {
   let mut l = lexer
@@ -168,6 +192,9 @@ fn read_ident(lexer : Lexer) -> (Lexer, Token) {
   // Check if it's a directive (starts with .)
   if ident.length() > 0 && ident[0] == '.' {
     (l, Token::Directive(ident))
+  } else if is_abi_reg_name(ident) {
+    // Check if it's an ABI register name
+    (l, Token::Reg(ident))
   } else {
     (l, Token::Ident(ident))
   }

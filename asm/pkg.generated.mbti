@@ -8,6 +8,16 @@ import {
 // Values
 pub fn assemble(String) -> Array[@decode.Instruction]
 
+pub fn assemble_to_bytes(String) -> FixedArray[Byte]
+
+pub fn assemble_to_hex(String) -> String
+
+pub fn assemble_with_symbols(String, UInt) -> AssemblyResult
+
+pub fn encode_to_bytes(AssemblyResult) -> FixedArray[Byte]
+
+pub fn instruction_size(@decode.Instruction) -> Int
+
 pub fn new_lexer(String) -> Lexer
 
 pub fn parse(String) -> Array[AsmStatement]
@@ -33,6 +43,13 @@ pub struct AsmDirective {
 }
 pub impl Show for AsmDirective
 
+pub struct AsmError {
+  message : String
+  line : Int
+  col : Int
+}
+pub impl Show for AsmError
+
 pub(all) enum AsmStatement {
   Instruction(@decode.Instruction)
   Label(String)
@@ -42,6 +59,22 @@ pub(all) enum AsmStatement {
   Error(ParseError)
 }
 pub impl Show for AsmStatement
+
+pub struct AssembledInst {
+  instruction : @decode.Instruction
+  address : UInt
+  size : Int
+}
+pub impl Show for AssembledInst
+
+type Assembler
+
+pub struct AssemblyResult {
+  instructions : Array[AssembledInst]
+  symbols : SymbolTable
+  errors : Array[AsmError]
+  start_address : UInt
+}
 
 type InstType
 
@@ -66,6 +99,15 @@ pub struct ParseError {
 }
 pub impl Show for ParseError
 
+pub enum RefType {
+  Branch
+  Jump
+  Jalr
+  UType
+  Call
+}
+pub impl Show for RefType
+
 pub struct Symbol {
   name : String
   address : UInt
@@ -75,9 +117,13 @@ pub struct Symbol {
 pub impl Show for Symbol
 
 pub struct SymbolTable {
-  symbols : Map[String, Symbol]
-  current_address : UInt
+  entries : Array[(String, Symbol)]
 }
+pub fn SymbolTable::add(Self, String, UInt, Bool) -> Self
+pub fn SymbolTable::contains(Self, String) -> Bool
+pub fn SymbolTable::lookup(Self, String) -> Symbol?
+pub fn SymbolTable::new() -> Self
+pub impl Show for SymbolTable
 
 pub(all) enum Token {
   Ident(String)
@@ -106,9 +152,8 @@ pub impl Show for TokenWithPos
 pub struct UnresolvedRef {
   name : String
   address : UInt
-  offset : Int
-  width : Int
-  is_relative : Bool
+  inst_index : Int
+  ref_type : RefType
 }
 pub impl Show for UnresolvedRef
 
