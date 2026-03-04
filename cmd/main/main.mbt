@@ -656,7 +656,7 @@ fn parse_decompile_args(args : Array[String]) -> Command? {
 fn print_usage() -> Unit {
   println("RISC-V Binary Analyzer v\{VERSION}")
   println("")
-  println("Usage: rv-analyzer <command> [options] <file>")
+  println("Usage: rvkit <command> [options] <file>")
   println("")
   println("Commands:")
   println("  disasm <file>           Disassemble a binary file")
@@ -697,24 +697,22 @@ fn print_usage() -> Unit {
   )
   println("")
   println("Examples:")
-  println("  rv-analyzer disasm program.elf")
-  println("  rv-analyzer disasm --raw --base 0x8000 firmware.bin")
-  println("  rv-analyzer info program.elf")
-  println("  rv-analyzer symbols program.elf")
-  println("  rv-analyzer cfg program.elf --function main -o cfg.dot")
-  println("  rv-analyzer callgraph program.elf -o callgraph.dot")
-  println("  rv-analyzer hex 0x123452B7")
-  println("  rv-analyzer analyze program.elf --detailed")
-  println("  rv-analyzer decompile program.elf --function main")
-  println(
-    "  rv-analyzer decompile program.elf --function main --code -o pseudo.c",
-  )
+  println("  rvkit disasm program.elf")
+  println("  rvkit disasm --raw --base 0x8000 firmware.bin")
+  println("  rvkit info program.elf")
+  println("  rvkit symbols program.elf")
+  println("  rvkit cfg program.elf --function main -o cfg.dot")
+  println("  rvkit callgraph program.elf -o callgraph.dot")
+  println("  rvkit hex 0x123452B7")
+  println("  rvkit analyze program.elf --detailed")
+  println("  rvkit decompile program.elf --function main")
+  println("  rvkit decompile program.elf --function main --code -o pseudo.c")
 }
 
 ///|
 /// Print version information
 fn print_version() -> Unit {
-  println("rv-analyzer \{VERSION}")
+  println("rvkit \{VERSION}")
   println("RISC-V Binary Analyzer")
   println(
     "Supported: RV32I, RV32M, RV32C, RV64I, RV64M, RV32A, RV64A, RV32F, RV64F, RV32D, RV64D, RVV, Zicsr, Zba, Zbb, Zbc, Zbs",

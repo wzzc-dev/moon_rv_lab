@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "wzzc-dev/riscv_analyzer/decode"
+package "wzzc-dev/rvkit/decode"
 
 // Values
 pub fn creg_name(UInt) -> String
@@ -31,7 +31,7 @@ pub struct DecodeResult(Instruction)
 #deprecated
 pub fn DecodeResult::inner(Self) -> Instruction
 
-pub enum Instruction {
+pub(all) enum Instruction {
   LUI(UInt, Int)
   AUIPC(UInt, Int)
   JAL(UInt, Int)

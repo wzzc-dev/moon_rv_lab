@@ -1,5 +1,5 @@
 {
-  "name": "wzzc-dev/riscv_analyzer",
+  "name": "wzzc-dev/rvkit",
   "version": "0.1.0",
   "deps": {
     "moonbitlang/x": "0.4.40"

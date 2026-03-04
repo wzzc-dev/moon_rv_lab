@@ -1,8 +1,8 @@
 import {
-  "wzzc-dev/riscv_analyzer/decode" @decode,
-  "wzzc-dev/riscv_analyzer/disasm" @disasm,
-  "wzzc-dev/riscv_analyzer/format" @format,
-  "wzzc-dev/riscv_analyzer/analysis" @analysis,
+  "wzzc-dev/rvkit/decode" @decode,
+  "wzzc-dev/rvkit/disasm" @disasm,
+  "wzzc-dev/rvkit/format" @format,
+  "wzzc-dev/rvkit/analysis" @analysis,
   "moonbitlang/x/fs" @fs,
   "moonbitlang/x/sys" @sys,
 }

@@ -1,8 +1,8 @@
-///| Package configuration for main riscv_analyzer module
+///| Package configuration for main rvkit module
 
 import {
-  "wzzc-dev/riscv_analyzer/decode" @decode,
-  "wzzc-dev/riscv_analyzer/analysis" @analysis,
-  "wzzc-dev/riscv_analyzer/disasm" @disasm,
-  "wzzc-dev/riscv_analyzer/format" @format,
+  "wzzc-dev/rvkit/decode" @decode,
+  "wzzc-dev/rvkit/analysis" @analysis,
+  "wzzc-dev/rvkit/disasm" @disasm,
+  "wzzc-dev/rvkit/format" @format,
 }

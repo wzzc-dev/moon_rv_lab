@@ -1,6 +1,6 @@
-# RISC-V Binary Analyzer
+# RISC-V Toolkit (rvkit)
 
-A MoonBit library for analyzing RISC-V binaries, providing instruction decoding, disassembly, control flow analysis, and ELF file parsing.
+A MoonBit library for assembling, disassembling, and analyzing RISC-V binaries, providing instruction encoding/decoding, assembly/disassembly, control flow analysis, and ELF file parsing.
 
 ## Features
 
@@ -49,7 +49,7 @@ Add to your `moon.mod.json`:
 ```json
 {
   "deps": {
-    "wzzc-dev/riscv_analyzer": "0.1.0"
+    "wzzc-dev/rvkit": "0.1.0"
   }
 }
 ```
@@ -59,7 +59,7 @@ Add to your `moon.mod.json`:
 ### Decode Instructions
 
 ```moonbit nocheck
-import "wzzc-dev/riscv_analyzer/decode" @decode
+import "wzzc-dev/rvkit/decode" @decode
 
 // Decode 32-bit instruction
 let @decode.DecodeResult(inst) = @decode.decode(0x123452B7U)
@@ -76,8 +76,8 @@ let is_compressed = @decode.is_compressed(0x4000U)  // true
 ### Disassemble Instructions
 
 ```moonbit nocheck
-import "wzzc-dev/riscv_analyzer/decode" @decode
-import "wzzc-dev/riscv_analyzer/disasm" @disasm
+import "wzzc-dev/rvkit/decode" @decode
+import "wzzc-dev/rvkit/disasm" @disasm
 
 let @decode.DecodeResult(inst) = @decode.decode(0x007302B3U)
 let asm = @disasm.disassemble(inst)
@@ -91,7 +91,7 @@ let asm_with_addr = @disasm.disassemble_with_addr(inst, 0x8000U)
 ### Parse ELF Files
 
 ```moonbit nocheck
-import "wzzc-dev/riscv_analyzer/format" @format
+import "wzzc-dev/rvkit/format" @format
 
 let elf = @format.parse_elf(bytes).?
 let entry = elf.entry_point()
@@ -108,7 +108,7 @@ for sym in funcs {
 ### Control Flow Analysis
 
 ```moonbit nocheck
-import "wzzc-dev/riscv_analyzer/analysis" @analysis
+import "wzzc-dev/rvkit/analysis" @analysis
 
 // Analyze code and build CFG
 let cfg = @analysis.analyze_code(code_bytes, start_addr)
@@ -125,7 +125,7 @@ let dot = @analysis.cfg_to_dot(cfg, "main")
 ### Call Graph Analysis
 
 ```moonbit nocheck
-import "wzzc-dev/riscv_analyzer/analysis" @analysis
+import "wzzc-dev/rvkit/analysis" @analysis
 
 let instructions = @analysis.decode_instructions(bytes, 0x8000U)
 let cfg = @analysis.build_cfg(instructions, 0x8000U)
@@ -180,39 +180,39 @@ let dot = @analysis.callgraph_to_dot(cg, "callgraph")
 
 ## Command Line Tool
 
-The project includes a CLI tool `rv-analyzer`:
+The project includes a CLI tool `rvkit`:
 
 ```bash
 # Disassemble an ELF file
-rv-analyzer disasm program.elf
+rvkit disasm program.elf
 
 # Disassemble raw binary with base address
-rv-analyzer disasm --raw --base 0x8000 firmware.bin
+rvkit disasm --raw --base 0x8000 firmware.bin
 
 # View ELF information
-rv-analyzer info program.elf
+rvkit info program.elf
 
 # List symbols
-rv-analyzer symbols program.elf
-rv-analyzer symbols --all program.elf  # Include local symbols
+rvkit symbols program.elf
+rvkit symbols --all program.elf  # Include local symbols
 
 # Generate CFG for a function
-rv-analyzer cfg program.elf --function main > cfg.dot
+rvkit cfg program.elf --function main > cfg.dot
 
 # Generate call graph
-rv-analyzer callgraph program.elf > callgraph.dot
+rvkit callgraph program.elf > callgraph.dot
 
 # Decompile a function (control flow summary)
-rv-analyzer decompile program.elf --function main
+rvkit decompile program.elf --function main
 
 # Decompile with pseudo-code output
-rv-analyzer decompile program.elf --function main --code
+rvkit decompile program.elf --function main --code
 
 # Decode a hex instruction
-rv-analyzer hex 0x007302B3
+rvkit hex 0x007302B3
 
 # Run demo
-rv-analyzer demo
+rvkit demo
 ```
 
 ## Building
@@ -240,10 +240,10 @@ Compile and analyze a simple RISC-V program:
 riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d hello.c -o hello
 
 # Disassemble
-rv-analyzer disasm hello
+rvkit disasm hello
 
 # Generate CFG for main function
-rv-analyzer cfg hello --function main > main.dot
+rvkit cfg hello --function main > main.dot
 
 # View with Graphviz
 dot -Tpng main.dot -o main.png

@@ -1,6 +1,6 @@
 ///| Package configuration for analysis module
 
 import {
-  "wzzc-dev/riscv_analyzer/decode" @decode,
-  "wzzc-dev/riscv_analyzer/disasm" @disasm,
+  "wzzc-dev/rvkit/decode" @decode,
+  "wzzc-dev/rvkit/disasm" @disasm,
 }

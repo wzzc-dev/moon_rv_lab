@@ -1,0 +1,118 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "wzzc-dev/rvkit/asm"
+
+import {
+  "wzzc-dev/rvkit/decode",
+}
+
+// Values
+pub fn assemble(String) -> Array[@decode.Instruction]
+
+pub fn new_lexer(String) -> Lexer
+
+pub fn parse(String) -> Array[AsmStatement]
+
+pub fn parse_imm(Token) -> Int?
+
+pub fn parse_imm_uint(Token) -> UInt?
+
+pub fn parse_instruction(String, Array[Token]) -> @decode.Instruction?
+
+pub fn parse_reg(String) -> UInt?
+
+pub fn parse_statement(Array[TokenWithPos]) -> AsmStatement
+
+pub fn tokenize(String) -> Array[TokenWithPos]
+
+// Errors
+
+// Types and methods
+pub struct AsmDirective {
+  name : String
+  args : Array[String]
+}
+pub impl Show for AsmDirective
+
+pub enum AsmStatement {
+  Instruction(@decode.Instruction)
+  Label(String)
+  Directive(String, Array[Token])
+  Data(FixedArray[Byte])
+  Empty
+  Error(ParseError)
+}
+pub impl Show for AsmStatement
+
+type InstType
+
+pub struct Lexer {
+  input : String
+  pos : Int
+  line : Int
+  col : Int
+}
+pub fn Lexer::advance(Self) -> (Self, Char)
+pub fn Lexer::is_at_end(Self) -> Bool
+pub fn Lexer::next_token(Self) -> (Self, TokenWithPos)
+pub fn Lexer::peek(Self) -> Char
+pub fn Lexer::peek_next(Self) -> Char
+pub fn Lexer::skip_comment(Self) -> Self
+pub fn Lexer::skip_whitespace(Self) -> Self
+
+pub struct ParseError {
+  message : String
+  line : Int
+  col : Int
+}
+pub impl Show for ParseError
+
+pub struct Symbol {
+  name : String
+  address : UInt
+  is_global : Bool
+  is_defined : Bool
+}
+pub impl Show for Symbol
+
+pub struct SymbolTable {
+  symbols : Map[String, Symbol]
+  current_address : UInt
+}
+
+pub enum Token {
+  Ident(String)
+  Reg(String)
+  Imm(Int)
+  HexImm(UInt)
+  Comma
+  Colon
+  LParen
+  RParen
+  Plus
+  Minus
+  Newline
+  Directive(String)
+  Eof
+}
+pub impl Show for Token
+
+pub struct TokenWithPos {
+  token : Token
+  line : Int
+  col : Int
+}
+pub impl Show for TokenWithPos
+
+pub struct UnresolvedRef {
+  name : String
+  address : UInt
+  offset : Int
+  width : Int
+  is_relative : Bool
+}
+pub impl Show for UnresolvedRef
+
+// Type aliases
+
+// Traits
+

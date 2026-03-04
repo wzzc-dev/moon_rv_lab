@@ -1,3 +1,4 @@
 import {
   "wzzc-dev/rvkit/decode" @decode,
+  "wzzc-dev/rvkit/encode" @encode,
 }

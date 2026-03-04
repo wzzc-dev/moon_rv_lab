@@ -6,7 +6,7 @@ RISC-V Binary Analyzer 是一个用 MoonBit 语言编写的 RISC-V 二进制分�
 
 **版本**: 0.1.0  
 **许可证**: Apache-2.0  
-**包名**: `wzzc-dev/riscv_analyzer`
+**包名**: `wzzc-dev/rvkit`
 
 ---
 
@@ -51,7 +51,7 @@ cmd/main
 ```json
 {
   "deps": {
-    "wzzc-dev/riscv_analyzer": "0.1.0"
+    "wzzc-dev/rvkit": "0.1.0"
   }
 }
 ```
@@ -65,7 +65,7 @@ cmd/main
 #### 基本解码函数
 
 ```moonbit
-"wzzc-dev/riscv_analyzer/decode" @decode
+"wzzc-dev/rvkit/decode" @decode
 
 /// 解码 32 位指令
 pub fn decode(code : UInt) -> DecodeResult
@@ -130,7 +130,7 @@ pub fn vreg_name(reg : UInt) -> String
 ### 2. 反汇编模块 (`disasm`)
 
 ```moonbit
- "wzzc-dev/riscv_analyzer/disasm" @disasm
+ "wzzc-dev/rvkit/disasm" @disasm
 
 /// 将指令反汇编为汇编字符串
 pub fn disassemble(inst : @decode.Instruction) -> String
@@ -155,7 +155,7 @@ let with_addr = @disasm.disassemble_with_addr(inst, 0x8000U)
 #### ELF 解析
 
 ```moonbit
- "wzzc-dev/riscv_analyzer/format" @format
+ "wzzc-dev/rvkit/format" @format
 
 /// 判断是否为 ELF 文件
 pub fn is_elf(bytes : FixedArray[Byte]) -> Bool
@@ -229,7 +229,7 @@ pub enum SymbolBinding {
 #### 控制流图 (CFG)
 
 ```moonbit
- "wzzc-dev/riscv_analyzer/analysis" @analysis
+ "wzzc-dev/rvkit/analysis" @analysis
 
 /// 解码指令序列
 pub fn decode_instructions(
@@ -459,7 +459,7 @@ pub enum OperandRole {
 主包重新导出所有子模块的 API，提供统一入口：
 
 ```moonbit
- "wzzc-dev/riscv_analyzer" // 直接导入主包
+ "wzzc-dev/rvkit" // 直接导入主包
 
 // 解码
 pub fn decode(UInt) -> DecodeResult
@@ -551,7 +551,7 @@ pub fn compute_liveness(CFG, FixedArray[DecodedInst]) -> FixedArray[BlockLivenes
 ### 示例 1：解码指令
 
 ```moonbit
- "wzzc-dev/riscv_analyzer/decode" @decode
+ "wzzc-dev/rvkit/decode" @decode
 
 fn example_decode() -> Unit {
   // 解码 32 位指令
@@ -571,7 +571,7 @@ fn example_decode() -> Unit {
 ### 示例 2：反汇编
 
 ```moonbit
- "wzzc-dev/riscv_analyzer" 
+ "wzzc-dev/rvkit" 
 
 fn example_disasm() -> Unit {
   let code = 0x007302B3U
@@ -584,7 +584,7 @@ fn example_disasm() -> Unit {
 ### 示例 3：解析 ELF 文件
 
 ```moonbit
- "wzzc-dev/riscv_analyzer"
+ "wzzc-dev/rvkit"
 
 fn example_elf(bytes : FixedArray[Byte]) -> Unit {
   if is_elf(bytes) {
@@ -608,7 +608,7 @@ fn example_elf(bytes : FixedArray[Byte]) -> Unit {
 ### 示例 4：构建 CFG
 
 ```moonbit
- "wzzc-dev/riscv_analyzer"
+ "wzzc-dev/rvkit"
 
 fn example_cfg(bytes : FixedArray[Byte]) -> Unit {
   // 分析代码
@@ -629,7 +629,7 @@ fn example_cfg(bytes : FixedArray[Byte]) -> Unit {
 ### 示例 5：构建调用图
 
 ```moonbit
- "wzzc-dev/riscv_analyzer"
+ "wzzc-dev/rvkit"
 
 fn example_callgraph(bytes : FixedArray[Byte]) -> Unit {
   let instructions = decode_instructions(bytes, 0x8000U)
@@ -652,7 +652,7 @@ fn example_callgraph(bytes : FixedArray[Byte]) -> Unit {
 ### 示例 6：活跃变量分析
 
 ```moonbit
- "wzzc-dev/riscv_analyzer"
+ "wzzc-dev/rvkit"
 
 fn example_liveness(bytes : FixedArray[Byte]) -> Unit {
   let instructions = decode_instructions(bytes, 0x8000U)
@@ -671,28 +671,28 @@ fn example_liveness(bytes : FixedArray[Byte]) -> Unit {
 
 ## 命令行工具
 
-项目提供一个 CLI 工具 `rv-analyzer`：
+项目提供一个 CLI 工具 `rvkit`：
 
 ```bash
 # 反汇编
-rv-analyzer disasm program.elf
-rv-analyzer disasm --raw --base 0x8000 firmware.bin
+rvkit disasm program.elf
+rvkit disasm --raw --base 0x8000 firmware.bin
 
 # 查看 ELF 信息
-rv-analyzer info program.elf
+rvkit info program.elf
 
 # 列出符号
-rv-analyzer symbols program.elf
-rv-analyzer symbols --all program.elf
+rvkit symbols program.elf
+rvkit symbols --all program.elf
 
 # 生成 CFG
-rv-analyzer cfg program.elf --function main > cfg.dot
+rvkit cfg program.elf --function main > cfg.dot
 
 # 生成调用图
-rv-analyzer callgraph program.elf > callgraph.dot
+rvkit callgraph program.elf > callgraph.dot
 
 # 运行演示
-rv-analyzer demo
+rvkit demo
 ```
 
 ---

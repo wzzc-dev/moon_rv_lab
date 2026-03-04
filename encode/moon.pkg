@@ -1,0 +1,5 @@
+///| Package configuration for encoder module
+
+import {
+  "wzzc-dev/rvkit/decode" @decode,
+}

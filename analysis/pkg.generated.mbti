@@ -1,8 +1,8 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "wzzc-dev/riscv_analyzer/analysis"
+package "wzzc-dev/rvkit/analysis"
 
 import {
-  "wzzc-dev/riscv_analyzer/decode",
+  "wzzc-dev/rvkit/decode",
 }
 
 // Values

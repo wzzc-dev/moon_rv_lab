@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "wzzc-dev/riscv_analyzer/format"
+package "wzzc-dev/rvkit/format"
 
 // Values
 pub const DEBUG_ABBREV : String = ".debug_abbrev"

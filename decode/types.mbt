@@ -4,7 +4,7 @@
 
 ///|
 /// RISC-V instruction enumeration
-pub enum Instruction {
+pub(all) enum Instruction {
   // U-type instructions
   LUI(UInt, Int) // rd, imm
   AUIPC(UInt, Int) // rd, imm

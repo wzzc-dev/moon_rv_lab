@@ -1,0 +1,26 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "wzzc-dev/rvkit/encode"
+
+import {
+  "wzzc-dev/rvkit/decode",
+}
+
+// Values
+pub fn encode(@decode.Instruction) -> EncodeResult
+
+pub fn encode_compressed(@decode.Instruction) -> EncodeResult
+
+pub fn encode_to_bytes(@decode.Instruction) -> FixedArray[Byte]
+
+// Errors
+
+// Types and methods
+pub struct EncodeResult {
+  code : UInt
+  is_compressed : Bool
+}
+
+// Type aliases
+
+// Traits
+
