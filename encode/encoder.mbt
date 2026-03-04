@@ -111,8 +111,8 @@ pub fn encode(inst : @decode.Instruction) -> EncodeResult {
     @decode.XORI(rd, rs1, imm) => encode_i_type(rd, rs1, imm, 0x4U, OP_IMM)
     @decode.ORI(rd, rs1, imm) => encode_i_type(rd, rs1, imm, 0x6U, OP_IMM)
     @decode.ANDI(rd, rs1, imm) => encode_i_type(rd, rs1, imm, 0x7U, OP_IMM)
-    @decode.SLLI(rd, rs1, shamt) => encode_shift_imm(rd, rs1, shamt, 0x0U, 0x0U)
-    @decode.SRLI(rd, rs1, shamt) => encode_shift_imm(rd, rs1, shamt, 0x0U, 0x1U)
+    @decode.SLLI(rd, rs1, shamt) => encode_shift_imm(rd, rs1, shamt, 0x0U, 0x1U)
+    @decode.SRLI(rd, rs1, shamt) => encode_shift_imm(rd, rs1, shamt, 0x0U, 0x5U)
     @decode.SRAI(rd, rs1, shamt) =>
       encode_shift_imm(rd, rs1, shamt, 0x20U, 0x1U)
 

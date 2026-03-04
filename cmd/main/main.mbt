@@ -1483,7 +1483,7 @@ fn execute_asm(opts : AsmOptions) -> Unit {
         println("  Labels:")
         for entry in result.symbols.entries {
           let (name, sym) = entry
-          println("    \{name}: 0x\{format_hex(sym.address)}")
+          println("    \{name}: \{format_hex(sym.address)}")
         }
       }
     }
@@ -1535,18 +1535,15 @@ fn read_file_string(path : String) -> String? {
 }
 
 ///|
-/// Write bytes to file - use hex output as workaround
+/// Write bytes to file
 fn write_file_bytes(path : String, data : FixedArray[Byte]) -> Bool {
-  // Write hex dump to file as a workaround
-  let mut hex = ""
-  for i = 0; i < data.length(); i = i + 1 {
-    let b = data[i].to_uint()
-    hex = hex + format_hex_padded(b)
-    if i < data.length() - 1 {
-      hex = hex + " "
-    }
+  let bytes = Bytes::from_array(data)
+  try {
+    @fs.write_bytes_to_file(path, bytes)
+    true
+  } catch {
+    _ => false
   }
-  write_output_file(path, hex)
 }
 
 ///|
