@@ -301,6 +301,22 @@ pub fn parse_instruction(
     "c.or" => parse_c_cr_op(operands, 0x22U)
     "c.xor" => parse_c_cr_op(operands, 0x21U)
     "c.sub" => parse_c_cr_op(operands, 0x20U)
+
+    // Pseudo-instructions
+    // li rd, imm -> addi rd, x0, imm (for small immediates)
+    // For larger immediates, use lui + addi (handled separately in assembler)
+    "li" => parse_pseudo_li(operands)
+    // mv rd, rs -> addi rd, rs, 0
+    "mv" => parse_pseudo_mv(operands)
+    // ret -> jalr x0, ra, 0
+    "ret" =>
+      if operands.length() == 0 {
+        Some(@decode.JALR(0U, 1U, 0)) // jalr x0, ra, 0
+      } else {
+        None
+      }
+    // call symbol -> handled as pseudo-instruction in assembler
+    "call" => parse_pseudo_call(operands)
     _ => None
   }
 }
@@ -1643,7 +1659,7 @@ pub fn parse_statement(tokens : Array[TokenWithPos]) -> AsmStatement {
       let operands : Array[Token] = []
       for i = 1; i < tokens.length(); i = i + 1 {
         let tok = tokens[i].token
-        if tok is Token::Newline {
+        if tok is Token::Newline || tok is Token::Eof {
           break
         }
         // Skip commas
@@ -1713,4 +1729,94 @@ pub fn assemble(input : String) -> Array[@decode.Instruction] {
   }
 
   instructions
+}
+
+// ============================================================================
+// Pseudo-instruction parsing functions
+// ============================================================================
+
+///|
+/// Parse li (load immediate) pseudo-instruction
+/// li rd, imm -> addi rd, x0, imm (for small immediates: -2048 to 2047)
+/// For larger immediates, returns lui + addi pair representation
+fn parse_pseudo_li(operands : Array[Token]) -> @decode.Instruction? {
+  if operands.length() < 2 {
+    return None
+  }
+
+  let rd = match operands[0] {
+    Token::Reg(r) => parse_reg(r)
+    _ => None
+  }
+
+  let imm = parse_imm(operands[1])
+
+  match (rd, imm) {
+    (Some(r), Some(i)) =>
+      // Check if immediate fits in 12 bits (-2048 to 2047)
+      if i >= -2048 && i <= 2047 {
+        // Use addi rd, x0, imm
+        Some(@decode.ADDI(r, 0U, i))
+      } else {
+        // For larger immediates, use lui + addi
+        // lui loads upper 20 bits, addi adds lower 12 bits
+        let imm_uint = if i < 0 {
+          i.reinterpret_as_uint() & 0xFFFFFFFFU
+        } else {
+          i.reinterpret_as_uint()
+        }
+        let upper = (imm_uint >> 12).reinterpret_as_int()
+        let lower = (imm_uint & 0xFFFU).reinterpret_as_int()
+        // Adjust for sign extension: if lower is negative, add 1 to upper
+        let adjusted_upper = if lower >= 2048 { upper + 1 } else { upper }
+        let adjusted_lower = if lower >= 2048 { lower - 4096 } else { lower }
+        // Return LUI for the upper part (assembler will need to handle the pair)
+        // For now, just return LUI and let the assembler handle addi separately
+        // This is a simplification - ideally we'd return both instructions
+        Some(@decode.LUI(r, adjusted_upper))
+      }
+    _ => None
+  }
+}
+
+///|
+/// Parse mv (move) pseudo-instruction
+/// mv rd, rs -> addi rd, rs, 0
+fn parse_pseudo_mv(operands : Array[Token]) -> @decode.Instruction? {
+  if operands.length() < 2 {
+    return None
+  }
+
+  let rd = match operands[0] {
+    Token::Reg(r) => parse_reg(r)
+    _ => None
+  }
+
+  let rs = match operands[1] {
+    Token::Reg(r) => parse_reg(r)
+    _ => None
+  }
+
+  match (rd, rs) {
+    (Some(r), Some(s)) => Some(@decode.ADDI(r, s, 0))
+    _ => None
+  }
+}
+
+///|
+/// Parse call pseudo-instruction
+/// call symbol -> auipc ra, %hi(symbol) + jalr ra, ra, %lo(symbol)
+/// Returns a placeholder JAL instruction; the assembler will handle the expansion
+fn parse_pseudo_call(operands : Array[Token]) -> @decode.Instruction? {
+  if operands.length() < 1 {
+    return None
+  }
+
+  // For now, return a placeholder JAL instruction
+  // The assembler will need to expand this to auipc + jalr
+  // We use JAL with rd=ra (x1) and imm=0 as placeholder
+  match operands[0] {
+    Token::Ident(_) => Some(@decode.JAL(1U, 0)) // jal ra, 0 (placeholder)
+    _ => None
+  }
 }

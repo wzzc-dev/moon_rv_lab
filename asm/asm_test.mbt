@@ -253,3 +253,62 @@ test "assemble_to_hex" {
   // addi a0, x0, 1 = 0x00100513
   assert_true(hex.length() > 0)
 }
+
+///|
+test "parse_pseudo_li" {
+  // li t2, 1 should parse as addi t2, x0, 1
+  let result = parse_instruction("li", [Token::Reg("t2"), Token::Imm(1)])
+  match result {
+    Some(@decode.ADDI(rd, rs, imm)) => {
+      assert_eq(rd, 7U) // t2 = x7
+      assert_eq(rs, 0U) // x0
+      assert_eq(imm, 1)
+    }
+    _ => abort("Expected ADDI from li pseudo-instruction")
+  }
+}
+
+///|
+test "parse_pseudo_mv" {
+  // mv a0, t2 should parse as addi a0, t2, 0
+  let result = parse_instruction("mv", [Token::Reg("a0"), Token::Reg("t2")])
+  match result {
+    Some(@decode.ADDI(rd, rs, imm)) => {
+      assert_eq(rd, 10U) // a0 = x10
+      assert_eq(rs, 7U) // t2 = x7
+      assert_eq(imm, 0)
+    }
+    _ => abort("Expected ADDI from mv pseudo-instruction")
+  }
+}
+
+///|
+test "parse_pseudo_ret" {
+  // ret should parse as jalr x0, ra, 0
+  let result = parse_instruction("ret", [])
+  match result {
+    Some(@decode.JALR(rd, rs, imm)) => {
+      assert_eq(rd, 0U) // x0
+      assert_eq(rs, 1U) // ra = x1
+      assert_eq(imm, 0)
+    }
+    _ => abort("Expected JALR from ret pseudo-instruction")
+  }
+}
+
+///|
+test "assemble_pseudo_instructions" {
+  let result = assemble_with_symbols(
+    "start:\n  li t2, 1\n  mv a0, t2\n  ret\n  ebreak", 0x10000U,
+  )
+  assert_eq(result.errors.length(), 0)
+  // li + mv + ret + ebreak = 4 instructions
+  assert_eq(result.instructions.length(), 4)
+}
+
+///|
+test "tokenize_with_comment" {
+  let tokens = tokenize("# comment\nstart:\n  li t2, 1")
+  // Should have: Newline, Ident(start), Colon, Newline, Ident(li), Reg(t2), Comma, Imm(1), Eof
+  assert_true(tokens.length() >= 5)
+}
