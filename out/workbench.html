@@ -1,0 +1,626 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>MoonRV Lab Demo</title>
+  <style>
+    :root {
+      --bg: #f4f6fb;
+      --ink: #0b1328;
+      --muted: #5d6a85;
+      --panel: #ffffff;
+      --line: #d6deec;
+      --accent: #0f766e;
+      --accent-soft: #dcf4f2;
+      --warning: #92400e;
+      --shadow: 0 8px 24px rgba(19, 35, 79, 0.08);
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "SFMono-Regular", "Iosevka", "JetBrains Mono", monospace;
+      background: radial-gradient(circle at 8% 10%, #f5fbff 0%, var(--bg) 42%, #eef2ff 100%);
+      color: var(--ink);
+    }
+    .app {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      min-height: 100vh;
+      gap: 10px;
+      padding: 10px;
+    }
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      box-shadow: var(--shadow);
+    }
+    .toolbar {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 12px 14px;
+    }
+    .toolbar h1 {
+      margin: 0 0 4px 0;
+      font-size: 18px;
+      line-height: 1.25;
+    }
+    .toolbar .sub {
+      color: var(--muted);
+      font-size: 12px;
+      max-width: 760px;
+      word-break: break-all;
+    }
+    .controls {
+      display: grid;
+      grid-template-columns: minmax(220px, 1fr) repeat(4, auto);
+      gap: 8px;
+      align-items: center;
+      min-width: min(100%, 680px);
+    }
+    button, select {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: #fff;
+      padding: 8px 10px;
+      color: var(--ink);
+      font-family: "SFMono-Regular", "Iosevka", "JetBrains Mono", monospace;
+      font-size: 12px;
+      cursor: pointer;
+    }
+    button.primary {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+    }
+    .main {
+      display: grid;
+      grid-template-columns: minmax(220px, 260px) 1fr minmax(240px, 300px);
+      gap: 10px;
+      min-height: 0;
+    }
+    .pane {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      overflow: hidden;
+    }
+    .pane h2 {
+      margin: 0;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      font-size: 13px;
+      letter-spacing: 0.4px;
+      background: linear-gradient(180deg, #ffffff 0%, #f9fbff 100%);
+    }
+    .pane .scroll {
+      overflow: auto;
+      min-height: 0;
+      padding: 8px;
+    }
+    .function-item {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 6px 8px;
+      margin-bottom: 6px;
+      cursor: pointer;
+      background: #fff;
+    }
+    .function-item.active {
+      border-color: var(--accent);
+      background: var(--accent-soft);
+    }
+    .summary-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px;
+      margin-bottom: 8px;
+    }
+    .stat {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 6px;
+      background: #fff;
+    }
+    .stat .k { color: var(--muted); font-size: 11px; }
+    .stat .v { font-size: 13px; margin-top: 4px; }
+    .center {
+      display: grid;
+      grid-template-rows: minmax(260px, 1fr) minmax(220px, 1fr);
+      gap: 10px;
+      min-height: 0;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+    th, td {
+      border-bottom: 1px solid var(--line);
+      padding: 5px 6px;
+      text-align: left;
+      vertical-align: top;
+    }
+    tr.active td {
+      background: #fff8db;
+    }
+    tr:hover td {
+      background: #f5f8ff;
+    }
+    .cfg-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 8px;
+      margin-bottom: 10px;
+    }
+    .cfg-block {
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      padding: 7px;
+      background: #fff;
+      font-size: 12px;
+    }
+    .cfg-block.active {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px var(--accent-soft) inset;
+    }
+    .edge-list {
+      margin: 0;
+      padding-left: 18px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .reg-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 6px;
+      font-size: 12px;
+    }
+    .reg {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 6px;
+      background: #fff;
+    }
+    .reg .name { color: var(--muted); font-size: 11px; }
+    .reg .value { font-size: 12px; margin-top: 4px; }
+    .trace {
+      min-height: 160px;
+      max-height: 220px;
+      overflow: auto;
+      padding: 8px;
+      font-size: 12px;
+    }
+    .trace-item {
+      border-left: 3px solid var(--accent);
+      padding: 5px 8px;
+      margin-bottom: 5px;
+      background: #f8fcfb;
+      border-radius: 6px;
+    }
+    .warning {
+      margin: 0 8px 8px;
+      border: 1px solid #f4c483;
+      background: #fff7ea;
+      color: var(--warning);
+      border-radius: 8px;
+      padding: 7px 9px;
+      font-size: 12px;
+    }
+    @media (max-width: 1100px) {
+      .main {
+        grid-template-columns: 1fr;
+      }
+      .center {
+        grid-template-rows: minmax(220px, 1fr) minmax(220px, 1fr);
+      }
+      .controls {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="toolbar panel">
+      <div>
+        <h1 id="title"></h1>
+        <div class="sub" id="source"></div>
+      </div>
+      <div class="controls">
+        <select id="function-select"></select>
+        <button id="reset-btn">重置</button>
+        <button id="prev-btn">上一步</button>
+        <button id="next-btn" class="primary">下一步</button>
+        <button id="play-btn">自动播放</button>
+      </div>
+    </header>
+    <div class="main">
+      <aside class="pane panel">
+        <h2>导航与摘要</h2>
+        <div class="scroll">
+          <div class="summary-grid" id="summary-grid"></div>
+          <h3>函数列表</h3>
+          <div id="function-list"></div>
+          <h3>节区</h3>
+          <div id="section-list"></div>
+        </div>
+      </aside>
+      <section class="center">
+        <div class="pane panel">
+          <h2>反汇编视图</h2>
+          <div id="truncated-banner" class="warning" style="display:none"></div>
+          <div class="scroll">
+            <table>
+              <thead>
+                <tr><th>#</th><th>地址</th><th>指令</th><th>分类</th></tr>
+              </thead>
+              <tbody id="disasm-body"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="pane panel">
+          <h2>CFG 视图</h2>
+          <div class="scroll" id="cfg-view"></div>
+        </div>
+      </section>
+      <aside class="pane panel">
+        <h2>状态面板</h2>
+        <div class="scroll">
+          <div class="summary-grid" id="runtime-summary"></div>
+          <h3>寄存器（教学模拟）</h3>
+          <div class="reg-grid" id="register-grid"></div>
+          <h3>最近访存事件</h3>
+          <ul class="edge-list" id="memory-events"></ul>
+          <h3>调用栈摘要</h3>
+          <ul class="edge-list" id="call-stack"></ul>
+        </div>
+      </aside>
+    </div>
+    <footer class="panel">
+      <h2 style="margin:0;padding:10px 12px;border-bottom:1px solid var(--line);font-size:13px;">执行轨迹</h2>
+      <div class="trace" id="trace"></div>
+    </footer>
+  </div>
+  <script>
+    const RVLAB_DATA = {"meta":{"title":"MoonRV Lab Demo","source_file":"example/simple.elf","entry_point":"0x10000","file_class":"ELF32","architecture":"RISC-V","section_count":3,"program_count":1,"function_count":0,"instruction_count":20,"total_instruction_count":20,"basic_block_count":1,"cfg_edge_count":0,"truncated":false},"functions":[],"sections":[{"index":0,"name":"","addr":"0x62617472","size":"0x0"},{"index":1,"name":"","addr":"0x0","size":"0x100"},{"index":2,"name":"","addr":"0x0","size":"0x300"}],"instructions":[{"index":0,"addr":"0x10000","asm":".invalid 0x464c457f","category":"Unknown"},{"index":1,"addr":"0x10004","asm":"c.addi sp, 0","category":"Arithmetic"},{"index":2,"addr":"0x10006","asm":"c.nop","category":"Arithmetic"},{"index":3,"addr":"0x10008","asm":".invalid 0x0","category":"Unknown"},{"index":4,"addr":"0x1000a","asm":".invalid 0x0","category":"Unknown"},{"index":5,"addr":"0x1000c","asm":".invalid 0x0","category":"Unknown"},{"index":6,"addr":"0x1000e","asm":".invalid 0x0","category":"Unknown"},{"index":7,"addr":"0x10010","asm":"c.slli zero, 0","category":"Arithmetic"},{"index":8,"addr":"0x10012","asm":".invalid 0x100f3","category":"Unknown"},{"index":9,"addr":"0x10016","asm":".invalid 0x0","category":"Unknown"},{"index":10,"addr":"0x10018","asm":".invalid 0x0","category":"Unknown"},{"index":11,"addr":"0x1001a","asm":"c.nop","category":"Arithmetic"},{"index":12,"addr":"0x1001c","asm":"c.addi4spn a3, sp, 8","category":"Arithmetic"},{"index":13,"addr":"0x1001e","asm":".invalid 0x0","category":"Unknown"},{"index":14,"addr":"0x10020","asm":"c.addi4spn s0, sp, 64","category":"Arithmetic"},{"index":15,"addr":"0x10022","asm":".invalid 0x0","category":"Unknown"},{"index":16,"addr":"0x10024","asm":".invalid 0x0","category":"Unknown"},{"index":17,"addr":"0x10026","asm":".invalid 0x0","category":"Unknown"},{"index":18,"addr":"0x10028","asm":"c.addi4spn a3, sp, 8","category":"Arithmetic"},{"index":19,"addr":"0x1002a","asm":"c.addi4spn s0, sp, 8","category":"Arithmetic"}],"blocks":[{"start_addr":"0x10000","end_addr":"0x1002a","instruction_count":20,"is_terminated":false}],"edges":[]};
+  </script>
+  <script>
+    (() => {
+      const data = RVLAB_DATA;
+      const refs = {
+        title: document.getElementById('title'),
+        source: document.getElementById('source'),
+        summaryGrid: document.getElementById('summary-grid'),
+        runtimeSummary: document.getElementById('runtime-summary'),
+        functionSelect: document.getElementById('function-select'),
+        functionList: document.getElementById('function-list'),
+        sectionList: document.getElementById('section-list'),
+        disasmBody: document.getElementById('disasm-body'),
+        cfgView: document.getElementById('cfg-view'),
+        registerGrid: document.getElementById('register-grid'),
+        memoryEvents: document.getElementById('memory-events'),
+        callStack: document.getElementById('call-stack'),
+        trace: document.getElementById('trace'),
+        truncatedBanner: document.getElementById('truncated-banner'),
+        resetBtn: document.getElementById('reset-btn'),
+        prevBtn: document.getElementById('prev-btn'),
+        nextBtn: document.getElementById('next-btn'),
+        playBtn: document.getElementById('play-btn')
+      };
+
+      const REGISTER_ORDER = [
+        'zero','ra','sp','gp','tp','t0','t1','t2','s0','s1','a0','a1','a2','a3','a4','a5','a6','a7',
+        's2','s3','s4','s5','s6','s7','s8','s9','s10','s11','t3','t4','t5','t6'
+      ];
+
+      const state = {
+        selectedFunction: null,
+        viewInstructions: data.instructions.slice(),
+        cursor: data.instructions.length() > 0 ? 0 : -1,
+        registers: {},
+        memoryEvents: [],
+        trace: [],
+        callStack: [],
+        timer: null
+      };
+
+      function escapeHtml(value) {
+        return String(value)
+          .replaceAll('&', '&amp;')
+          .replaceAll('<', '&lt;')
+          .replaceAll('>', '&gt;')
+          .replaceAll('"', '&quot;')
+          .replaceAll("'", '&#39;');
+      }
+
+      function hexToBigInt(hex) {
+        try {
+          return BigInt(hex);
+        } catch (_) {
+          return 0n;
+        }
+      }
+
+      function resetRuntimeState() {
+        state.registers = {};
+        for (const r of REGISTER_ORDER) {
+          state.registers[r] = '0x0';
+        }
+        state.memoryEvents = [];
+        state.trace = [];
+        state.callStack = [];
+      }
+
+      function summaryItems() {
+        return [
+          ['入口', data.meta.entry_point],
+          ['函数', data.meta.function_count],
+          ['节区', data.meta.section_count],
+          ['指令(展示)', data.meta.instruction_count],
+          ['基本块', data.meta.basic_block_count],
+          ['CFG 边', data.meta.cfg_edge_count]
+        ];
+      }
+
+      function renderSummary() {
+        refs.summaryGrid.innerHTML = summaryItems().map(([k, v]) => (
+          `<div class="stat"><div class="k">${escapeHtml(k)}</div><div class="v">${escapeHtml(v)}</div></div>`
+        )).join('');
+      }
+
+      function renderRuntimeSummary() {
+        const current = state.cursor >= 0 ? state.viewInstructions[state.cursor] : null;
+        refs.runtimeSummary.innerHTML = [
+          ['PC', current ? current.addr : 'N/A'],
+          ['游标', current ? `${state.cursor + 1}/${state.viewInstructions.length}` : '0/0'],
+          ['模式', state.timer ? '自动播放' : '单步'],
+          ['轨迹事件', state.trace.length]
+        ].map(([k, v]) => `<div class="stat"><div class="k">${escapeHtml(k)}</div><div class="v">${escapeHtml(v)}</div></div>`).join('');
+      }
+
+      function renderSections() {
+        refs.sectionList.innerHTML = data.sections.map(section => (
+          `<div class="function-item"><div>#${section.index} ${escapeHtml(section.name)}</div><div class="sub">${escapeHtml(section.addr)} / ${escapeHtml(section.size)}</div></div>`
+        )).join('');
+      }
+
+      function renderFunctions() {
+        refs.functionSelect.innerHTML = '';
+        const allOption = document.createElement('option');
+        allOption.value = '__all__';
+        allOption.textContent = '全部指令视图';
+        refs.functionSelect.appendChild(allOption);
+        for (const fn of data.functions) {
+          const option = document.createElement('option');
+          option.value = fn.addr;
+          option.textContent = `${fn.name} @ ${fn.addr}`;
+          refs.functionSelect.appendChild(option);
+        }
+        refs.functionList.innerHTML = data.functions.map(fn => (
+          `<div class="function-item" data-addr="${fn.addr}"><div>${escapeHtml(fn.name)}</div><div class="sub">${escapeHtml(fn.addr)} / ${escapeHtml(fn.size)}</div></div>`
+        )).join('');
+
+        refs.functionList.querySelectorAll('.function-item').forEach((element) => {
+          element.addEventListener('click', () => {
+            const addr = element.getAttribute('data-addr');
+            const target = data.functions.find(x => x.addr === addr);
+            selectFunction(target ?? null);
+          });
+        });
+      }
+
+      function instructionsForFunction(target) {
+        if (!target) {
+          return data.instructions.slice();
+        }
+        const start = hexToBigInt(target.addr);
+        const size = hexToBigInt(target.size || '0x0');
+        if (size > 0n) {
+          const end = start + size;
+          const exact = data.instructions.filter(inst => {
+            const addr = hexToBigInt(inst.addr);
+            return addr >= start && addr < end;
+          });
+          if (exact.length > 0) {
+            return exact;
+          }
+        }
+        const nearest = data.instructions.findIndex(inst => hexToBigInt(inst.addr) >= start);
+        const begin = nearest >= 0 ? Math.max(0, nearest - 10) : 0;
+        return data.instructions.slice(begin, Math.min(data.instructions.length, begin + 120));
+      }
+
+      function selectFunction(target) {
+        state.selectedFunction = target;
+        state.viewInstructions = instructionsForFunction(target);
+        state.cursor = state.viewInstructions.length > 0 ? 0 : -1;
+        refs.functionSelect.value = target ? target.addr : '__all__';
+        refs.functionList.querySelectorAll('.function-item').forEach((element) => {
+          const selected = target && element.getAttribute('data-addr') === target.addr;
+          element.classList.toggle('active', !!selected);
+        });
+        rebuildToCursor(state.cursor);
+        renderAll();
+      }
+
+      function parseInstruction(inst) {
+        const parts = inst.asm.trim().split(/\s+/, 2);
+        const mnemonic = parts[0] || '';
+        const operands = parts.length > 1
+          ? parts[1].split(',').map(x => x.trim()).filter(Boolean)
+          : [];
+        return { mnemonic, operands };
+      }
+
+      function inferDestRegister(mnemonic, operands) {
+        if (operands.length === 0) return null;
+        const stores = new Set(['sb','sh','sw','sd','fsw','fsd','c.sw','c.sd']);
+        const noWrite = new Set(['ret','ecall','ebreak','fence','fence.i']);
+        if (stores.has(mnemonic) || noWrite.has(mnemonic)) return null;
+        if (mnemonic.startsWith('b')) return null;
+        const dest = operands[0].replace(/[()]/g, '');
+        if (!dest) return null;
+        return dest;
+      }
+
+      function applyInstruction(inst) {
+        const { mnemonic, operands } = parseInstruction(inst);
+        const dest = inferDestRegister(mnemonic, operands);
+        if (dest && dest !== 'zero' && dest !== 'x0') {
+          state.registers[dest] = inst.addr;
+        }
+        if (mnemonic.includes('w') || mnemonic.includes('d')) {
+          if (['sw','sd','sb','sh','c.sw','c.sd','fsw','fsd'].includes(mnemonic)) {
+            state.memoryEvents.unshift(`${inst.addr}: ${inst.asm}`);
+            if (state.memoryEvents.length > 14) state.memoryEvents.pop();
+          }
+        }
+        if (mnemonic === 'jal' || mnemonic === 'call' || mnemonic === 'c.jal') {
+          state.callStack.unshift(`${inst.addr} -> ${operands.length > 1 ? operands[1] : 'target'}`);
+          if (state.callStack.length > 8) state.callStack.pop();
+        }
+        if (mnemonic === 'ret' || (mnemonic === 'jalr' && inst.asm.includes('zero, ra'))) {
+          if (state.callStack.length > 0) state.callStack.shift();
+        }
+        state.trace.unshift(`${inst.addr}: ${inst.asm}`);
+        if (state.trace.length > 60) state.trace.pop();
+      }
+
+      function rebuildToCursor(cursor) {
+        resetRuntimeState();
+        if (cursor < 0) return;
+        for (let i = 0; i <= cursor && i < state.viewInstructions.length; i += 1) {
+          applyInstruction(state.viewInstructions[i]);
+        }
+      }
+
+      function renderDisasm() {
+        refs.disasmBody.innerHTML = state.viewInstructions.map((inst, index) => {
+          const active = index === state.cursor ? ' class="active"' : '';
+          return `<tr data-index="${index}"${active}><td>${index}</td><td>${escapeHtml(inst.addr)}</td><td>${escapeHtml(inst.asm)}</td><td>${escapeHtml(inst.category)}</td></tr>`;
+        }).join('');
+        refs.disasmBody.querySelectorAll('tr').forEach((tr) => {
+          tr.addEventListener('click', () => {
+            const index = Number(tr.getAttribute('data-index'));
+            if (!Number.isNaN(index)) {
+              state.cursor = index;
+              rebuildToCursor(state.cursor);
+              renderAll();
+            }
+          });
+        });
+      }
+
+      function renderCfg() {
+        const blocks = data.blocks;
+        const current = state.cursor >= 0 ? state.viewInstructions[state.cursor] : null;
+        const currentAddr = current ? hexToBigInt(current.addr) : null;
+        const cards = blocks.slice(0, 180).map(block => {
+          const start = hexToBigInt(block.start_addr);
+          const end = hexToBigInt(block.end_addr);
+          const active = currentAddr !== null && currentAddr >= start && currentAddr <= end;
+          return `<div class="cfg-block${active ? ' active' : ''}"><div>${escapeHtml(block.start_addr)} - ${escapeHtml(block.end_addr)}</div><div class="sub">inst=${block.instruction_count}, term=${block.is_terminated}</div></div>`;
+        }).join('');
+
+        const edges = data.edges.slice(0, 220).map(edge => (
+          `<li>${escapeHtml(edge.from_block)} -> ${escapeHtml(edge.to_block)} [${escapeHtml(edge.edge_type)}]</li>`
+        )).join('');
+
+        refs.cfgView.innerHTML = `<div class="cfg-grid">${cards}</div><h3>边关系</h3><ul class="edge-list">${edges || '<li>无</li>'}</ul>`;
+      }
+
+      function renderRegisters() {
+        refs.registerGrid.innerHTML = REGISTER_ORDER.map(name => {
+          const value = state.registers[name] || '0x0';
+          return `<div class="reg"><div class="name">${escapeHtml(name)}</div><div class="value">${escapeHtml(value)}</div></div>`;
+        }).join('');
+      }
+
+      function renderMemoryAndCalls() {
+        refs.memoryEvents.innerHTML = state.memoryEvents.length > 0
+          ? state.memoryEvents.map(item => `<li>${escapeHtml(item)}</li>`).join('')
+          : '<li>暂无访存写事件</li>';
+        refs.callStack.innerHTML = state.callStack.length > 0
+          ? state.callStack.map(item => `<li>${escapeHtml(item)}</li>`).join('')
+          : '<li>暂无调用轨迹</li>';
+      }
+
+      function renderTrace() {
+        refs.trace.innerHTML = state.trace.length > 0
+          ? state.trace.map(item => `<div class="trace-item">${escapeHtml(item)}</div>`).join('')
+          : '<div class="trace-item">暂无轨迹</div>';
+      }
+
+      function renderAll() {
+        renderRuntimeSummary();
+        renderDisasm();
+        renderCfg();
+        renderRegisters();
+        renderMemoryAndCalls();
+        renderTrace();
+      }
+
+      function step(delta) {
+        if (state.viewInstructions.length === 0) return;
+        const next = Math.max(0, Math.min(state.viewInstructions.length - 1, state.cursor + delta));
+        if (next === state.cursor) return;
+        state.cursor = next;
+        rebuildToCursor(state.cursor);
+        renderAll();
+      }
+
+      function togglePlay() {
+        if (state.timer) {
+          clearInterval(state.timer);
+          state.timer = null;
+          refs.playBtn.textContent = '自动播放';
+          renderRuntimeSummary();
+          return;
+        }
+        refs.playBtn.textContent = '暂停';
+        state.timer = setInterval(() => {
+          if (state.cursor >= state.viewInstructions.length - 1) {
+            togglePlay();
+            return;
+          }
+          step(1);
+        }, 400);
+      }
+
+      refs.functionSelect.addEventListener('change', (event) => {
+        const value = event.target.value;
+        if (value === '__all__') {
+          selectFunction(null);
+          return;
+        }
+        const target = data.functions.find(fn => fn.addr === value);
+        selectFunction(target ?? null);
+      });
+      refs.resetBtn.addEventListener('click', () => {
+        state.cursor = state.viewInstructions.length > 0 ? 0 : -1;
+        rebuildToCursor(state.cursor);
+        renderAll();
+      });
+      refs.prevBtn.addEventListener('click', () => step(-1));
+      refs.nextBtn.addEventListener('click', () => step(1));
+      refs.playBtn.addEventListener('click', togglePlay);
+
+      refs.title.textContent = data.meta.title;
+      refs.source.textContent = `${data.meta.source_file} | ${data.meta.file_class} ${data.meta.architecture}`;
+      if (data.meta.truncated) {
+        refs.truncatedBanner.style.display = 'block';
+        refs.truncatedBanner.textContent = `当前页面仅展示前 ${data.meta.instruction_count} 条指令（总计 ${data.meta.total_instruction_count} 条）。可通过 CLI 参数 --max-inst 调整。`;
+      }
+
+      renderSummary();
+      renderSections();
+      renderFunctions();
+      selectFunction(null);
+    })();
+  </script>
+</body>
+</html>

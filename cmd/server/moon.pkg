@@ -1,0 +1,14 @@
+import {
+  "wzzc-dev/rvkit/workbench" @workbench,
+  "mizchi/luna/core" @luna,
+  "mizchi/mars" @mars,
+  "moonbitlang/async" @async,
+  "moonbitlang/core/json" @json,
+  "moonbitlang/x/sys" @sys,
+}
+
+options(
+  "is-main": true,
+  "supported-targets": "native",
+  targets: { "*": [ "native" ] },
+)

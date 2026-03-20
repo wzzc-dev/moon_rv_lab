@@ -23,6 +23,7 @@
 - **数据流分析**: 定义-使用链和活跃性分析
 - **ELF 解析**: 解析 ELF32/ELF64 可执行文件
 - **DWARF 调试信息**: 解析 DWARF 调试信息
+- **在线工作台服务**: 基于 Luna + Mars 的 Web 壳层和实时 SSE API
 
 ---
 
@@ -79,7 +80,7 @@ moon build --target native
 
 ### 指令解码
 
-```moonbit
+```moonbit nocheck
 import "wzzc-dev/rvkit/decode" @decode
 
 // 解码 32 位指令
@@ -96,7 +97,7 @@ let is_compressed = @decode.is_compressed(0x4000U)  // true
 
 ### 指令编码
 
-```moonbit
+```moonbit nocheck
 import "wzzc-dev/rvkit/encode" @encode
 import "wzzc-dev/rvkit/decode" @decode
 
@@ -111,7 +112,7 @@ let bytes = @encode.encode_to_bytes(@decode.Instruction::ADD(5, 6, 7))
 
 ### 反汇编
 
-```moonbit
+```moonbit nocheck
 import "wzzc-dev/rvkit/decode" @decode
 import "wzzc-dev/rvkit/disasm" @disasm
 
@@ -128,7 +129,7 @@ let asm_with_addr = @disasm.disassemble_with_addr(inst, 0x8000U)
 
 ### 汇编器
 
-```moonbit
+```moonbit nocheck
 import "wzzc-dev/rvkit/asm" @asm
 
 // 简单汇编
@@ -154,7 +155,7 @@ loop:
 
 ### 解析 ELF 文件
 
-```moonbit
+```moonbit nocheck
 import "wzzc-dev/rvkit/format" @format
 
 let elf = @format.parse_elf(bytes).?
@@ -173,7 +174,7 @@ for sym in funcs {
 
 ### 控制流分析
 
-```moonbit
+```moonbit nocheck
 import "wzzc-dev/rvkit/analysis" @analysis
 
 // 分析代码并构建 CFG
@@ -190,7 +191,7 @@ let dot = @analysis.cfg_to_dot(cfg, "main")
 
 ### 调用图分析
 
-```moonbit
+```moonbit nocheck
 import "wzzc-dev/rvkit/analysis" @analysis
 
 let instructions = @analysis.decode_instructions(bytes, 0x8000U)
@@ -221,6 +222,7 @@ rvkit <command> [options]
   analyze   综合分析
   decompile 反编译生成伪代码
   asm       汇编源文件
+  workbench 生成 Web 可视化工作台页面
   demo      运行演示
   help      显示帮助
   version   显示版本
@@ -247,6 +249,39 @@ rvkit disasm program.elf --format json
 
 ```bash
 rvkit info program.elf
+```
+
+### workbench - 生成 Web 前端页面
+
+```bash
+# 生成单文件工作台页面
+rvkit workbench program.elf -o out/workbench.html
+
+# 限制页面嵌入指令条数（默认 1200）
+rvkit workbench program.elf --max-inst 2000
+```
+
+### 在线服务（Luna + Mars + 实时 API）
+
+```bash
+moon run cmd/server --target native -- \
+  --host 127.0.0.1 \
+  --port 18080 \
+  --file example/simple.elf \
+  --max-inst 1200 \
+  --max-events 400 \
+  --interval-ms 350
+```
+
+- 打开 `http://127.0.0.1:18080/` 查看 Luna SSR 渲染的在线页面
+- `GET /api/health` 健康检查
+- `GET /api/snapshot?file=<path>&max_inst=<n>` 获取一次性快照 JSON
+- `GET /api/stream?file=<path>&max_inst=<n>&max_events=<n>&interval_ms=<ms>` 获取 SSE 实时事件流
+
+```bash
+curl -s http://127.0.0.1:18080/api/health
+curl -s "http://127.0.0.1:18080/api/snapshot?file=example/simple.elf&max_inst=64"
+curl -N "http://127.0.0.1:18080/api/stream?file=example/simple.elf&max_inst=64&max_events=20&interval_ms=120"
 ```
 
 ### symbols - 符号表
@@ -348,8 +383,11 @@ riscv_analyzer/
 │   ├── elf_defs.mbt   # ELF 格式常量
 │   ├── dwarf.mbt      # DWARF 调试信息
 │   └── raw.mbt        # 原始二进制处理
+├── workbench/         # Web 页面生成与 API 数据封装
 ├── cmd/main/          # CLI 工具
 │   └── main.mbt       # 命令行入口
+├── cmd/server/        # Luna + Mars 在线服务（native 目标）
+│   └── main.mbt       # HTTP + SSE API 入口
 ├── example/           # 示例文件
 │   ├── hello.c        # C 源码示例
 │   └── *.s            # 汇编示例

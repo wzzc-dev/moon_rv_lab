@@ -1,0 +1,7 @@
+import {
+  "wzzc-dev/rvkit/analysis" @analysis,
+  "wzzc-dev/rvkit/decode" @decode,
+  "wzzc-dev/rvkit/disasm" @disasm,
+  "wzzc-dev/rvkit/format" @format,
+  "moonbitlang/x/fs" @fs,
+}

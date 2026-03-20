@@ -35,6 +35,7 @@ pub enum Command {
   Decompile(DecompileOptions)
   Interactive(InteractiveOptions)
   Asm(AsmOptions)
+  Workbench(WorkbenchCmdOptions)
   Help
   Version
   Demo
@@ -47,6 +48,15 @@ pub struct AsmOptions {
   output_file : String
   format : AsmOutputFormat
   base_addr : UInt
+} derive(Show)
+
+///|
+/// Options for workbench command
+pub struct WorkbenchCmdOptions {
+  file_path : String
+  output : String
+  title : String
+  max_instructions : Int
 } derive(Show)
 
 ///|
@@ -285,6 +295,7 @@ pub fn parse_args(args : Array[String]) -> Command? {
     "decompile" | "dec" => parse_decompile_args(args)
     "interactive" | "i" | "repl" => parse_interactive_args(args)
     "asm" | "assemble" => parse_asm_args(args)
+    "workbench" | "wb" => parse_workbench_args(args)
     _ => None
   }
 }
@@ -352,6 +363,60 @@ fn parse_asm_args(args : Array[String]) -> Command? {
   }
 
   Some(Command::Asm({ input_file, output_file, format, base_addr }))
+}
+
+///|
+/// Parse workbench command arguments
+fn parse_workbench_args(args : Array[String]) -> Command? {
+  if args.length() < 2 {
+    return None
+  }
+
+  let mut file_path = ""
+  let mut output = "workbench.html"
+  let mut title = ""
+  let mut max_instructions = 1200
+  let mut i = 1
+
+  while i < args.length() {
+    let arg = args[i]
+    if arg == "--output" || arg == "-o" {
+      if i + 1 < args.length() {
+        output = args[i + 1]
+        i = i + 2
+      } else {
+        return None
+      }
+    } else if arg == "--title" {
+      if i + 1 < args.length() {
+        title = args[i + 1]
+        i = i + 2
+      } else {
+        return None
+      }
+    } else if arg == "--max-inst" || arg == "--max-instructions" {
+      if i + 1 < args.length() {
+        match parse_uint_dec(args[i + 1]) {
+          Some(value) => max_instructions = value.reinterpret_as_int()
+          None => return None
+        }
+        i = i + 2
+      } else {
+        return None
+      }
+    } else if arg[0] != '-' {
+      file_path = arg
+      i = i + 1
+    } else {
+      i = i + 1
+    }
+  }
+
+  if file_path == "" {
+    return None
+  }
+
+  Some(Command::Workbench({ file_path, output, title, max_instructions }))
 }
 
 ///|
@@ -742,6 +807,7 @@ fn print_usage() -> Unit {
   println("  analyze <file>          Comprehensive binary analysis")
   println("  decompile <file>        Generate pseudo-code from binary")
   println("  asm <file>              Assemble RISC-V assembly to ELF/binary")
+  println("  workbench <file>        Generate Web workbench HTML")
   println("  demo                    Run demonstration")
   println("  help                    Show this help message")
   println("  version                 Show version information")
@@ -776,6 +842,15 @@ fn print_usage() -> Unit {
   println("  --format, -f <fmt>      Output format: elf (default), hex, raw")
   println("  --base, -b <addr>       Base address (default: 0x10000)")
   println("")
+  println("Workbench Options:")
+  println(
+    "  --output, -o <file>     Output HTML path (default: workbench.html)",
+  )
+  println("  --title <text>          Override page title")
+  println(
+    "  --max-inst <n>          Max instructions embedded in page (default: 1200)",
+  )
+  println("")
   println("Examples:")
   println("  rvkit disasm program.elf")
   println("  rvkit disasm --raw --base 0x8000 firmware.bin")
@@ -789,6 +864,7 @@ fn print_usage() -> Unit {
   println("  rvkit decompile program.elf --function main --code -o pseudo.c")
   println("  rvkit asm code.s -o program.elf")
   println("  rvkit asm code.s -f hex")
+  println("  rvkit workbench example/hello.elf -o out/workbench.html")
 }
 
 ///|
@@ -1492,6 +1568,22 @@ fn execute_asm(opts : AsmOptions) -> Unit {
 }
 
 ///|
+/// Execute workbench command (generate standalone Web frontend page)
+fn execute_workbench(opts : WorkbenchCmdOptions) -> Unit {
+  let wb_opts = @workbench.create_options(opts.title, opts.max_instructions)
+
+  match @workbench.generate_from_file(opts.file_path, opts.output, wb_opts) {
+    Some(err) => println("Error: \{err}")
+    None => {
+      println("Workbench generated: \{opts.output}")
+      println(
+        "Open the HTML file in a browser to use the disassembly/CFG/trace workbench.",
+      )
+    }
+  }
+}
+
+///|
 /// Print hex dump of bytes
 fn print_hex_dump(bytes : FixedArray[Byte]) -> Unit {
   let mut offset = 0
@@ -1980,6 +2072,7 @@ pub fn execute(cmd : Command) -> Unit {
     Command::Decompile(opts) => execute_decompile(opts)
     Command::Interactive(opts) => execute_interactive(opts)
     Command::Asm(opts) => execute_asm(opts)
+    Command::Workbench(opts) => execute_workbench(opts)
   }
 }
 

@@ -2,7 +2,10 @@
   "name": "wzzc-dev/rvkit",
   "version": "0.1.0",
   "deps": {
-    "moonbitlang/x": "0.4.40"
+    "moonbitlang/x": "0.4.40",
+    "moonbitlang/async": "0.16.6",
+    "mizchi/mars": "0.3.10",
+    "mizchi/luna": "0.18.1"
   },
   "readme": "README.mbt.md",
   "repository": "",

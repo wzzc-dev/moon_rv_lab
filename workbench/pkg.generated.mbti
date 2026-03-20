@@ -1,0 +1,66 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "wzzc-dev/rvkit/workbench"
+
+// Values
+pub fn create_options(String, Int) -> WorkbenchOptions
+
+pub fn default_options() -> WorkbenchOptions
+
+pub fn generate_from_file(String, String, WorkbenchOptions) -> WorkbenchError?
+
+pub fn snapshot_api_json_from_file(String, Int) -> String
+
+pub fn stream_api_json_from_file(String, Int, Int) -> String
+
+pub fn stream_event_payloads_from_file(String, Int, Int) -> StreamEventsLoadResult
+
+// Errors
+
+// Types and methods
+pub enum StreamEventsLoadResult {
+  StreamEventsOk(Array[String])
+  StreamEventsErr(String)
+}
+pub impl Show for StreamEventsLoadResult
+
+type WorkbenchBlock
+pub impl Show for WorkbenchBlock
+
+type WorkbenchData
+pub impl Show for WorkbenchData
+
+type WorkbenchEdge
+pub impl Show for WorkbenchEdge
+
+pub enum WorkbenchError {
+  FileNotFound(String)
+  InvalidElf(String)
+  ParseElfFailed(String)
+  NotRiscV(String)
+  NoCodeSection(String)
+  WriteFailed(String)
+}
+pub impl Show for WorkbenchError
+
+type WorkbenchFunction
+pub impl Show for WorkbenchFunction
+
+type WorkbenchInstruction
+pub impl Show for WorkbenchInstruction
+
+type WorkbenchMeta
+pub impl Show for WorkbenchMeta
+
+pub struct WorkbenchOptions {
+  title : String
+  max_instructions : Int
+}
+pub impl Show for WorkbenchOptions
+
+type WorkbenchSection
+pub impl Show for WorkbenchSection
+
+// Type aliases
+
+// Traits
+

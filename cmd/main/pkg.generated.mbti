@@ -71,6 +71,7 @@ pub enum Command {
   Decompile(DecompileOptions)
   Interactive(InteractiveOptions)
   Asm(AsmOptions)
+  Workbench(WorkbenchCmdOptions)
   Help
   Version
   Demo
@@ -129,6 +130,14 @@ pub struct SymbolsOptions {
   output : String
 }
 pub impl Show for SymbolsOptions
+
+pub struct WorkbenchCmdOptions {
+  file_path : String
+  output : String
+  title : String
+  max_instructions : Int
+}
+pub impl Show for WorkbenchCmdOptions
 
 // Type aliases
 
