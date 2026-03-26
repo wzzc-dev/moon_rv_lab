@@ -103,3 +103,24 @@ test "generated workbench html includes godbolt style panes and controls" {
   assert_true(html.contains("data.events"))
   assert_true(html.contains("data.runtime.initial_registers"))
 }
+
+///|
+test "online workbench html bootstraps from remote snapshot api" {
+  let html = online_page_html(
+    "example/simple.elf", "example/simple.elf", 64, "/api/snapshot",
+  )
+
+  assert_true(html.contains("WORKBENCH_BOOT"))
+  assert_true(html.contains("\"mode\":\"remote\""))
+  assert_true(html.contains("/api/snapshot"))
+  assert_true(html.contains("fetch(url)"))
+  assert_true(html.contains("id=\"file-input\""))
+  assert_true(html.contains("id=\"file-load-btn\""))
+  assert_true(html.contains("class=\"workbench-shell\""))
+  assert_true(html.contains("class=\"pane-tabs\""))
+  assert_true(
+    html.contains(
+      "loadSnapshot(state.currentFile || boot.default_file || '', false)",
+    ),
+  )
+}

@@ -130,7 +130,7 @@
     }
     .toolbar-controls {
       display: grid;
-      grid-template-columns: minmax(180px, 240px) minmax(180px, 1fr) auto auto;
+      grid-template-columns: minmax(220px, 1.2fr) minmax(180px, 240px) minmax(180px, 1fr) auto auto;
       gap: 8px;
       align-items: end;
     }
@@ -145,12 +145,25 @@
       color: var(--muted);
       font-size: 11px;
     }
+    .toolbar-inline {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      min-width: 0;
+    }
+    .toolbar-inline > input {
+      min-width: 0;
+      flex: 1 1 auto;
+    }
     .toolbar-buttons,
     .toolbar-toggles {
       display: flex;
       gap: 6px;
       align-items: center;
       flex-wrap: wrap;
+    }
+    .hidden {
+      display: none !important;
     }
     .status-strip {
       display: none;
@@ -491,6 +504,9 @@
       .toolbar-controls {
         grid-template-columns: repeat(2, minmax(0, 1fr));
       }
+      .toolbar-inline {
+        flex-wrap: wrap;
+      }
     }
     @media (max-width: 1100px) {
       .workbench-shell {
@@ -537,6 +553,13 @@
         <div class="path-row" id="source"></div>
       </div>
       <div class="toolbar-controls">
+        <div class="toolbar-field" id="file-toolbar-field">
+          <span>文件</span>
+          <div class="toolbar-inline">
+            <input id="file-input" type="text" placeholder="ELF file path" />
+            <button id="file-load-btn">Load</button>
+          </div>
+        </div>
         <div class="toolbar-field">
           <span>函数</span>
           <select id="function-select"></select>
@@ -653,15 +676,19 @@
     </main>
   </div>
   <script>
-    const RVLAB_DATA = {"meta":{"title":"MoonRV Lab Workbench","source_file":"example/simple.elf","entry_point":"0x10000","file_class":"ELF32","architecture":"RISC-V","section_count":3,"program_count":1,"function_count":0,"instruction_count":12,"total_instruction_count":12,"basic_block_count":1,"cfg_edge_count":0,"runtime_event_count":12,"truncated":false},"functions":[],"sections":[{"index":0,"name":"","addr":"0x0","size":"0x0"},{"index":1,"name":".text","addr":"0x10000","size":"0x30"},{"index":2,"name":".shstrtab","addr":"0x0","size":"0x11"}],"instructions":[{"index":0,"addr":"0x10000","asm":"addi a0, zero, 42","category":"Arithmetic"},{"index":1,"addr":"0x10004","asm":"addi a1, a0, 10","category":"Arithmetic"},{"index":2,"addr":"0x10008","asm":"add a2, a0, a1","category":"Arithmetic"},{"index":3,"addr":"0x1000c","asm":"sub a3, a1, a0","category":"Arithmetic"},{"index":4,"addr":"0x10010","asm":"andi a4, a0, 255","category":"Logical"},{"index":5,"addr":"0x10014","asm":"ori a5, a0, 256","category":"Logical"},{"index":6,"addr":"0x10018","asm":"xori a6, a0, 255","category":"Logical"},{"index":7,"addr":"0x1001c","asm":"slli a7, a0, 2","category":"Arithmetic"},{"index":8,"addr":"0x10020","asm":"srli s0, a0, 1","category":"Arithmetic"},{"index":9,"addr":"0x10024","asm":"lui t0, 0x12345","category":"Arithmetic"},{"index":10,"addr":"0x10028","asm":"slti t1, a0, 100","category":"Compare"},{"index":11,"addr":"0x1002c","asm":"ebreak","category":"System"}],"blocks":[{"start_addr":"0x10000","end_addr":"0x1002c","instruction_count":12,"is_terminated":true}],"edges":[],"runtime":{"initial_pc":"0x10000","stop_reason":"ebreak @0x1002c","initial_registers":[{"name":"zero","value":"0x0"},{"name":"ra","value":"0x0"},{"name":"sp","value":"0x7fff0000"},{"name":"gp","value":"0x0"},{"name":"tp","value":"0x0"},{"name":"t0","value":"0x0"},{"name":"t1","value":"0x0"},{"name":"t2","value":"0x0"},{"name":"s0","value":"0x0"},{"name":"s1","value":"0x0"},{"name":"a0","value":"0x0"},{"name":"a1","value":"0x0"},{"name":"a2","value":"0x0"},{"name":"a3","value":"0x0"},{"name":"a4","value":"0x0"},{"name":"a5","value":"0x0"},{"name":"a6","value":"0x0"},{"name":"a7","value":"0x0"},{"name":"s2","value":"0x0"},{"name":"s3","value":"0x0"},{"name":"s4","value":"0x0"},{"name":"s5","value":"0x0"},{"name":"s6","value":"0x0"},{"name":"s7","value":"0x0"},{"name":"s8","value":"0x0"},{"name":"s9","value":"0x0"},{"name":"s10","value":"0x0"},{"name":"s11","value":"0x0"},{"name":"t3","value":"0x0"},{"name":"t4","value":"0x0"},{"name":"t5","value":"0x0"},{"name":"t6","value":"0x0"}]},"events":[{"step":1,"addr":"0x10000","next_addr":"0x10004","asm":"addi a0, zero, 42","category":"Arithmetic","block_start":"0x10000","register_writes":[{"name":"a0","before":"0x0","after":"0x2a"}],"memory_writes":[],"stdout_append":"","stderr_append":"","syscall":"","stop_reason":"running"},{"step":2,"addr":"0x10004","next_addr":"0x10008","asm":"addi a1, a0, 10","category":"Arithmetic","block_start":"0x10000","register_writes":[{"name":"a1","before":"0x0","after":"0x34"}],"memory_writes":[],"stdout_append":"","stderr_append":"","syscall":"","stop_reason":"running"},{"step":3,"addr":"0x10008","next_addr":"0x1000c","asm":"add a2, a0, a1","category":"Arithmetic","block_start":"0x10000","register_writes":[{"name":"a2","before":"0x0","after":"0x5e"}],"memory_writes":[],"stdout_append":"","stderr_append":"","syscall":"","stop_reason":"running"},{"step":4,"addr":"0x1000c","next_addr":"0x10010","asm":"sub a3, a1, a0","category":"Arithmetic","block_start":"0x10000","register_writes":[{"name":"a3","before":"0x0","after":"0xa"}],"memory_writes":[],"stdout_append":"","stderr_append":"","syscall":"","stop_reason":"running"},{"step":5,"addr":"0x10010","next_addr":"0x10014","asm":"andi a4, a0, 255","category":"Logical","block_start":"0x10000","register_writes":[{"name":"a4","before":"0x0","after":"0x2a"}],"memory_writes":[],"stdout_append":"","stderr_append":"","syscall":"","stop_reason":"running"},{"step":6,"addr":"0x10014","next_addr":"0x10018","asm":"ori a5, a0, 256","category":"Logical","block_start":"0x10000","register_writes":[{"name":"a5","before":"0x0","after":"0x12a"}],"memory_writes":[],"stdout_append":"","stderr_append":"","syscall":"","stop_reason":"running"},{"step":7,"addr":"0x10018","next_addr":"0x1001c","asm":"xori a6, a0, 255","category":"Logical","block_start":"0x10000","register_writes":[{"name":"a6","before":"0x0","after":"0xd5"}],"memory_writes":[],"stdout_append":"","stderr_append":"","syscall":"","stop_reason":"running"},{"step":8,"addr":"0x1001c","next_addr":"0x10020","asm":"slli a7, a0, 2","category":"Arithmetic","block_start":"0x10000","register_writes":[{"name":"a7","before":"0x0","after":"0xa8"}],"memory_writes":[],"stdout_append":"","stderr_append":"","syscall":"","stop_reason":"running"},{"step":9,"addr":"0x10020","next_addr":"0x10024","asm":"srli s0, a0, 1","category":"Arithmetic","block_start":"0x10000","register_writes":[{"name":"s0","before":"0x0","after":"0x15"}],"memory_writes":[],"stdout_append":"","stderr_append":"","syscall":"","stop_reason":"running"},{"step":10,"addr":"0x10024","next_addr":"0x10028","asm":"lui t0, 0x12345","category":"Arithmetic","block_start":"0x10000","register_writes":[{"name":"t0","before":"0x0","after":"0x12345"}],"memory_writes":[],"stdout_append":"","stderr_append":"","syscall":"","stop_reason":"running"},{"step":11,"addr":"0x10028","next_addr":"0x1002c","asm":"slti t1, a0, 100","category":"Compare","block_start":"0x10000","register_writes":[{"name":"t1","before":"0x0","after":"0x1"}],"memory_writes":[],"stdout_append":"","stderr_append":"","syscall":"","stop_reason":"running"},{"step":12,"addr":"0x1002c","next_addr":"0x1002c","asm":"ebreak","category":"System","block_start":"0x10000","register_writes":[],"memory_writes":[],"stdout_append":"","stderr_append":"","syscall":"","stop_reason":"ebreak @0x1002c"}]};
+    const WORKBENCH_BOOT = {"mode":"embedded","default_file":"","initial_file":"","max_inst":1200,"snapshot_endpoint":"/api/snapshot","embedded_data":{"meta":{"title":"MoonRV Lab Workbench","source_file":"example/simple.elf","entry_point":"0x10000","file_class":"ELF32","architecture":"RISC-V","section_count":3,"program_count":1,"function_count":0,"instruction_count":12,"total_instruction_count":12,"basic_block_count":1,"cfg_edge_count":0,"runtime_event_count":12,"truncated":false},"functions":[],"sections":[{"index":0,"name":"","addr":"0x0","size":"0x0"},{"index":1,"name":".text","addr":"0x10000","size":"0x30"},{"index":2,"name":".shstrtab","addr":"0x0","size":"0x11"}],"instructions":[{"index":0,"addr":"0x10000","asm":"addi a0, zero, 42","category":"Arithmetic"},{"index":1,"addr":"0x10004","asm":"addi a1, a0, 10","category":"Arithmetic"},{"index":2,"addr":"0x10008","asm":"add a2, a0, a1","category":"Arithmetic"},{"index":3,"addr":"0x1000c","asm":"sub a3, a1, a0","category":"Arithmetic"},{"index":4,"addr":"0x10010","asm":"andi a4, a0, 255","category":"Logical"},{"index":5,"addr":"0x10014","asm":"ori a5, a0, 256","category":"Logical"},{"index":6,"addr":"0x10018","asm":"xori a6, a0, 255","category":"Logical"},{"index":7,"addr":"0x1001c","asm":"slli a7, a0, 2","category":"Arithmetic"},{"index":8,"addr":"0x10020","asm":"srli s0, a0, 1","category":"Arithmetic"},{"index":9,"addr":"0x10024","asm":"lui t0, 0x12345","category":"Arithmetic"},{"index":10,"addr":"0x10028","asm":"slti t1, a0, 100","category":"Compare"},{"index":11,"addr":"0x1002c","asm":"ebreak","category":"System"}],"blocks":[{"start_addr":"0x10000","end_addr":"0x1002c","instruction_count":12,"is_terminated":true}],"edges":[],"runtime":{"initial_pc":"0x10000","stop_reason":"ebreak @0x1002c","initial_registers":[{"name":"zero","value":"0x0"},{"name":"ra","value":"0x0"},{"name":"sp","value":"0x7fff0000"},{"name":"gp","value":"0x0"},{"name":"tp","value":"0x0"},{"name":"t0","value":"0x0"},{"name":"t1","value":"0x0"},{"name":"t2","value":"0x0"},{"name":"s0","value":"0x0"},{"name":"s1","value":"0x0"},{"name":"a0","value":"0x0"},{"name":"a1","value":"0x0"},{"name":"a2","value":"0x0"},{"name":"a3","value":"0x0"},{"name":"a4","value":"0x0"},{"name":"a5","value":"0x0"},{"name":"a6","value":"0x0"},{"name":"a7","value":"0x0"},{"name":"s2","value":"0x0"},{"name":"s3","value":"0x0"},{"name":"s4","value":"0x0"},{"name":"s5","value":"0x0"},{"name":"s6","value":"0x0"},{"name":"s7","value":"0x0"},{"name":"s8","value":"0x0"},{"name":"s9","value":"0x0"},{"name":"s10","value":"0x0"},{"name":"s11","value":"0x0"},{"name":"t3","value":"0x0"},{"name":"t4","value":"0x0"},{"name":"t5","value":"0x0"},{"name":"t6","value":"0x0"}]},"events":[{"step":1,"addr":"0x10000","next_addr":"0x10004","asm":"addi a0, zero, 42","category":"Arithmetic","block_start":"0x10000","register_writes":[{"name":"a0","before":"0x0","after":"0x2a"}],"memory_writes":[],"stdout_append":"","stderr_append":"","syscall":"","stop_reason":"running"},{"step":2,"addr":"0x10004","next_addr":"0x10008","asm":"addi a1, a0, 10","category":"Arithmetic","block_start":"0x10000","register_writes":[{"name":"a1","before":"0x0","after":"0x34"}],"memory_writes":[],"stdout_append":"","stderr_append":"","syscall":"","stop_reason":"running"},{"step":3,"addr":"0x10008","next_addr":"0x1000c","asm":"add a2, a0, a1","category":"Arithmetic","block_start":"0x10000","register_writes":[{"name":"a2","before":"0x0","after":"0x5e"}],"memory_writes":[],"stdout_append":"","stderr_append":"","syscall":"","stop_reason":"running"},{"step":4,"addr":"0x1000c","next_addr":"0x10010","asm":"sub a3, a1, a0","category":"Arithmetic","block_start":"0x10000","register_writes":[{"name":"a3","before":"0x0","after":"0xa"}],"memory_writes":[],"stdout_append":"","stderr_append":"","syscall":"","stop_reason":"running"},{"step":5,"addr":"0x10010","next_addr":"0x10014","asm":"andi a4, a0, 255","category":"Logical","block_start":"0x10000","register_writes":[{"name":"a4","before":"0x0","after":"0x2a"}],"memory_writes":[],"stdout_append":"","stderr_append":"","syscall":"","stop_reason":"running"},{"step":6,"addr":"0x10014","next_addr":"0x10018","asm":"ori a5, a0, 256","category":"Logical","block_start":"0x10000","register_writes":[{"name":"a5","before":"0x0","after":"0x12a"}],"memory_writes":[],"stdout_append":"","stderr_append":"","syscall":"","stop_reason":"running"},{"step":7,"addr":"0x10018","next_addr":"0x1001c","asm":"xori a6, a0, 255","category":"Logical","block_start":"0x10000","register_writes":[{"name":"a6","before":"0x0","after":"0xd5"}],"memory_writes":[],"stdout_append":"","stderr_append":"","syscall":"","stop_reason":"running"},{"step":8,"addr":"0x1001c","next_addr":"0x10020","asm":"slli a7, a0, 2","category":"Arithmetic","block_start":"0x10000","register_writes":[{"name":"a7","before":"0x0","after":"0xa8"}],"memory_writes":[],"stdout_append":"","stderr_append":"","syscall":"","stop_reason":"running"},{"step":9,"addr":"0x10020","next_addr":"0x10024","asm":"srli s0, a0, 1","category":"Arithmetic","block_start":"0x10000","register_writes":[{"name":"s0","before":"0x0","after":"0x15"}],"memory_writes":[],"stdout_append":"","stderr_append":"","syscall":"","stop_reason":"running"},{"step":10,"addr":"0x10024","next_addr":"0x10028","asm":"lui t0, 0x12345","category":"Arithmetic","block_start":"0x10000","register_writes":[{"name":"t0","before":"0x0","after":"0x12345"}],"memory_writes":[],"stdout_append":"","stderr_append":"","syscall":"","stop_reason":"running"},{"step":11,"addr":"0x10028","next_addr":"0x1002c","asm":"slti t1, a0, 100","category":"Compare","block_start":"0x10000","register_writes":[{"name":"t1","before":"0x0","after":"0x1"}],"memory_writes":[],"stdout_append":"","stderr_append":"","syscall":"","stop_reason":"running"},{"step":12,"addr":"0x1002c","next_addr":"0x1002c","asm":"ebreak","category":"System","block_start":"0x10000","register_writes":[],"memory_writes":[],"stdout_append":"","stderr_append":"","syscall":"","stop_reason":"ebreak @0x1002c"}]}};
   </script>
   <script>
     (() => {
-      const data = RVLAB_DATA;
+      const boot = WORKBENCH_BOOT || {};
+      let data = createEmptyData();
       const refs = {
         title: document.getElementById('title'),
         source: document.getElementById('source'),
         statusPill: document.getElementById('status-pill'),
+        fileToolbarField: document.getElementById('file-toolbar-field'),
+        fileInput: document.getElementById('file-input'),
+        fileLoadBtn: document.getElementById('file-load-btn'),
         summaryGrid: document.getElementById('summary-grid'),
         runtimeSummary: document.getElementById('runtime-summary'),
         executionBody: document.getElementById('execution-body'),
@@ -711,55 +738,42 @@
         { label: '保存', regs: ['s0', 's1', 's2', 's3', 's4', 's5', 's6', 's7', 's8', 's9', 's10', 's11'] },
         { label: '临时', regs: ['t0', 't1', 't2', 't3', 't4', 't5', 't6'] }
       ];
-      const STORAGE_KEY = `moonrv-workbench-ui:${data.meta.source_file || 'default'}`;
-
-      const INITIAL_REGISTERS = Object.fromEntries((data.runtime.initial_registers || []).map(item => [item.name, item.value]));
-      const EVENT_INDEX_BY_ADDR = new Map();
-      (data.events || []).forEach((event, index) => {
-        if (!EVENT_INDEX_BY_ADDR.has(event.addr)) {
-          EVENT_INDEX_BY_ADDR.set(event.addr, index);
-        }
-      });
-      const MAX_INSTRUCTION_ADDR = (data.instructions || []).length > 0
-        ? hexToBigInt(data.instructions[data.instructions.length - 1].addr) + 4n
-        : 0n;
-      const FUNCTION_RANGES = (data.functions || [])
-        .slice()
-        .sort((lhs, rhs) => (hexToBigInt(lhs.addr) < hexToBigInt(rhs.addr) ? -1 : 1))
-        .map((fn, index, items) => {
-          const start = hexToBigInt(fn.addr);
-          const size = hexToBigInt(fn.size || '0x0');
-          const next = index + 1 < items.length ? hexToBigInt(items[index + 1].addr) : (MAX_INSTRUCTION_ADDR + 4n);
-          const end = size > 0n ? start + size : next;
-          return { fn, start, end };
-        });
-      const storedUi = readUiState();
+      const REMOTE_MODE = (boot.mode || 'embedded') === 'remote';
+      let storageKey = storageKeyFor(boot.initial_file || boot.default_file || 'default');
+      let initialRegisters = {};
+      let eventIndexByAddr = new Map();
+      let functionRanges = [];
       const state = {
-        selectedFunctionAddr: storedUi.selectedFunctionAddr || '',
-        searchText: storedUi.searchText || '',
-        activeTab: storedUi.activeTab || 'trace',
-        followPcEnabled: storedUi.followPcEnabled !== false,
-        currentFunctionOnlyEnabled: storedUi.currentFunctionOnlyEnabled === true,
-        showChangedRegistersOnly: storedUi.showChangedRegistersOnly === true,
+        selectedFunctionAddr: '',
+        searchText: '',
+        activeTab: 'trace',
+        followPcEnabled: true,
+        currentFunctionOnlyEnabled: false,
+        showChangedRegistersOnly: false,
         layout: {
-          navWidth: clampNumber(storedUi.navWidth, 180, 420, 240),
-          inspectorWidth: clampNumber(storedUi.inspectorWidth, 240, 460, 320),
-          bottomHeight: clampNumber(storedUi.bottomHeight, 180, 420, 260),
-          navCollapsed: storedUi.navCollapsed === true,
-          bottomCollapsed: storedUi.bottomCollapsed === true,
-          inspectorCollapsed: storedUi.inspectorCollapsed === true
+          navWidth: 240,
+          inspectorWidth: 320,
+          bottomHeight: 260,
+          navCollapsed: false,
+          bottomCollapsed: false,
+          inspectorCollapsed: false
         },
         cursor: -1,
-        focusedAddr: data.runtime.initial_pc || '',
+        focusedAddr: '0x0',
         registers: {},
         memoryHistory: [],
         ioHistory: [],
         stdout: '',
         stderr: '',
+        currentFile: boot.initial_file || boot.default_file || '',
+        loadError: '',
+        loading: false,
         timer: null
       };
 
+      applyStoredUi(readUiState());
       refs.searchInput.value = state.searchText;
+      refs.fileInput.value = state.currentFile;
       function escapeHtml(value) {
         return String(value)
           .replaceAll('&', '&amp;')
@@ -787,13 +801,61 @@
           : fallback;
       }
 
+      function createEmptyData(sourceFile) {
+        return {
+          meta: {
+            title: boot.mode === 'remote' ? 'MoonRV Lab Online Workbench' : 'MoonRV Lab Workbench',
+            source_file: sourceFile || boot.initial_file || boot.default_file || '',
+            entry_point: '0x0',
+            file_class: '',
+            architecture: '',
+            section_count: 0,
+            program_count: 0,
+            function_count: 0,
+            instruction_count: 0,
+            total_instruction_count: 0,
+            basic_block_count: 0,
+            cfg_edge_count: 0,
+            runtime_event_count: 0,
+            truncated: false
+          },
+          functions: [],
+          sections: [],
+          instructions: [],
+          blocks: [],
+          edges: [],
+          runtime: { initial_pc: '0x0', stop_reason: 'unloaded', initial_registers: [] },
+          events: []
+        };
+      }
+
+      function storageKeyFor(file) {
+        return `moonrv-workbench-ui:${file || 'default'}`;
+      }
+
       function readUiState() {
         try {
-          const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+          const parsed = JSON.parse(localStorage.getItem(storageKey) || '{}');
           return parsed && typeof parsed === 'object' ? parsed : {};
         } catch (_) {
           return {};
         }
+      }
+
+      function applyStoredUi(value) {
+        const storedUi = value && typeof value === 'object' ? value : {};
+        state.selectedFunctionAddr = storedUi.selectedFunctionAddr || '';
+        state.searchText = storedUi.searchText || '';
+        state.activeTab = storedUi.activeTab || 'trace';
+        state.followPcEnabled = storedUi.followPcEnabled !== false;
+        state.currentFunctionOnlyEnabled = storedUi.currentFunctionOnlyEnabled === true;
+        state.showChangedRegistersOnly = storedUi.showChangedRegistersOnly === true;
+        state.layout.navWidth = clampNumber(storedUi.navWidth, 180, 420, 240);
+        state.layout.inspectorWidth = clampNumber(storedUi.inspectorWidth, 240, 460, 320);
+        state.layout.bottomHeight = clampNumber(storedUi.bottomHeight, 180, 420, 260);
+        state.layout.navCollapsed = storedUi.navCollapsed === true;
+        state.layout.bottomCollapsed = storedUi.bottomCollapsed === true;
+        state.layout.inspectorCollapsed = storedUi.inspectorCollapsed === true;
       }
 
       function saveUiState() {
@@ -812,9 +874,33 @@
           inspectorCollapsed: state.layout.inspectorCollapsed
         };
         try {
-          localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+          localStorage.setItem(storageKey, JSON.stringify(payload));
         } catch (_) {
         }
+      }
+
+      function rebuildDerivedCaches() {
+        initialRegisters = Object.fromEntries((data.runtime.initial_registers || []).map(item => [item.name, item.value]));
+        eventIndexByAddr = new Map();
+        (data.events || []).forEach((event, index) => {
+          if (!eventIndexByAddr.has(event.addr)) {
+            eventIndexByAddr.set(event.addr, index);
+          }
+        });
+        const maxInstructionAddr = (data.instructions || []).length > 0
+          ? hexToBigInt(data.instructions[data.instructions.length - 1].addr) + 4n
+          : 0n;
+        functionRanges = (data.functions || [])
+          .slice()
+          .sort((lhs, rhs) => (hexToBigInt(lhs.addr) < hexToBigInt(rhs.addr) ? -1 : 1))
+          .map((fn, index, items) => {
+            const start = hexToBigInt(fn.addr);
+            const size = hexToBigInt(fn.size || '0x0');
+            const next = index + 1 < items.length ? hexToBigInt(items[index + 1].addr) : (maxInstructionAddr + 4n);
+            const end = size > 0n ? start + size : next;
+            return { fn, start, end };
+          });
+        state.focusedAddr = data.runtime.initial_pc || data.meta.entry_point || '0x0';
       }
 
       function selectedFunction() {
@@ -822,12 +908,12 @@
       }
 
       function functionRangeForAddr(addr) {
-        return FUNCTION_RANGES.find(item => item.fn.addr === addr) || null;
+        return functionRanges.find(item => item.fn.addr === addr) || null;
       }
 
       function functionForAddress(addr) {
         const target = hexToBigInt(addr);
-        return FUNCTION_RANGES.find(item => target >= item.start && target < item.end)?.fn || (data.functions || []).find(item => item.addr === addr) || null;
+        return functionRanges.find(item => target >= item.start && target < item.end)?.fn || (data.functions || []).find(item => item.addr === addr) || null;
       }
 
       function instructionsForFunction(target) {
@@ -865,7 +951,7 @@
       }
 
       function resetRuntimeState() {
-        state.registers = { ...INITIAL_REGISTERS };
+        state.registers = { ...initialRegisters };
         for (const r of REGISTER_ORDER) {
           if (!(r in state.registers)) state.registers[r] = '0x0';
         }
@@ -896,6 +982,29 @@
         )).join('');
       }
 
+      function renderHeader() {
+        refs.title.textContent = data.meta.title || (REMOTE_MODE ? 'MoonRV Lab Online Workbench' : 'MoonRV Lab Workbench');
+        refs.source.textContent = data.meta.source_file
+          ? `${data.meta.source_file}${data.meta.file_class || data.meta.architecture ? ` | ${data.meta.file_class} ${data.meta.architecture}`.trim() : ''}`
+          : (state.currentFile || '未选择文件');
+        refs.fileToolbarField.classList.toggle('hidden', !REMOTE_MODE);
+      }
+
+      function renderBanner() {
+        if (state.loadError) {
+          refs.truncatedBanner.style.display = 'block';
+          refs.truncatedBanner.textContent = state.loadError;
+          return;
+        }
+        if (data.meta.truncated) {
+          refs.truncatedBanner.style.display = 'block';
+          refs.truncatedBanner.textContent = `当前页面仅展示前 ${data.meta.instruction_count} 条指令（总计 ${data.meta.total_instruction_count} 条）。可通过 CLI 参数 --max-inst 调整。`;
+          return;
+        }
+        refs.truncatedBanner.style.display = 'none';
+        refs.truncatedBanner.textContent = '';
+      }
+
       function renderRuntimeSummary() {
         const current = currentEvent();
         const currentFunction = functionForAddress(current ? current.addr : data.runtime.initial_pc);
@@ -908,7 +1017,7 @@
           ['当前函数', currentFunction ? currentFunction.name : 'N/A'],
           ['stdout', String(state.stdout.length)]
         ].map(([k, v]) => `<div class="stat"><div class="k">${escapeHtml(k)}</div><div class="v">${escapeHtml(v)}</div></div>`).join('');
-        refs.statusPill.textContent = stopText;
+        refs.statusPill.textContent = state.loading ? 'loading' : (state.loadError ? 'error' : stopText);
       }
 
       function renderSections() {
@@ -992,9 +1101,14 @@
         refs.resetBtn.disabled = state.cursor < 0;
         refs.nextBtn.disabled = state.cursor >= data.events.length - 1;
         refs.playBtn.textContent = state.timer ? 'Pause' : 'Play';
+        refs.playBtn.disabled = state.loading || !!state.loadError || data.events.length === 0;
         refs.followPc.classList.toggle('active', state.followPcEnabled);
         refs.currentFunctionOnly.classList.toggle('active', state.currentFunctionOnlyEnabled);
         refs.changedRegistersToggle.classList.toggle('active', state.showChangedRegistersOnly);
+        refs.fileLoadBtn.classList.toggle('hidden', !REMOTE_MODE);
+        refs.fileLoadBtn.disabled = state.loading || refs.fileInput.value.trim() === '';
+        refs.fileLoadBtn.textContent = state.loading ? 'Loading...' : 'Load';
+        refs.fileInput.disabled = !REMOTE_MODE || state.loading;
       }
 
       function renderDisasm() {
@@ -1128,6 +1242,8 @@
       }
 
       function renderAll() {
+        renderHeader();
+        renderBanner();
         renderSummary();
         renderFunctions();
         renderSections();
@@ -1195,6 +1311,68 @@
         renderAll();
       }
 
+      function syncUrl(file) {
+        if (!REMOTE_MODE || !window.history || !window.history.replaceState) {
+          return;
+        }
+        const next = file ? `${window.location.pathname}?file=${encodeURIComponent(file)}` : window.location.pathname;
+        window.history.replaceState(null, '', next);
+      }
+
+      function applyLoadedData(nextData, file, restoreUi) {
+        data = nextData || createEmptyData();
+        state.currentFile = data.meta.source_file || file || state.currentFile;
+        storageKey = storageKeyFor(state.currentFile || file || 'default');
+        if (restoreUi) {
+          applyStoredUi(readUiState());
+        }
+        refs.searchInput.value = state.searchText;
+        refs.fileInput.value = state.currentFile;
+        rebuildDerivedCaches();
+        stopPlay();
+        state.cursor = -1;
+        resetRuntimeState();
+        if (state.selectedFunctionAddr && !(data.functions || []).some(fn => fn.addr === state.selectedFunctionAddr)) {
+          state.selectedFunctionAddr = '';
+        }
+      }
+
+      async function loadSnapshot(file, syncHistory) {
+        const targetFile = String(file || '').trim();
+        if (!targetFile) {
+          state.loadError = 'file path is required';
+          applyLoadedData(createEmptyData(''), '', false);
+          renderAll();
+          return;
+        }
+        state.loading = true;
+        state.loadError = '';
+        state.currentFile = targetFile;
+        storageKey = storageKeyFor(targetFile);
+        refs.fileInput.value = targetFile;
+        if (syncHistory !== false) {
+          syncUrl(targetFile);
+        }
+        renderAll();
+        const endpoint = boot.snapshot_endpoint || '/api/snapshot';
+        const url = `${endpoint}?file=${encodeURIComponent(targetFile)}&max_inst=${String(boot.max_inst || 1200)}`;
+        try {
+          const resp = await fetch(url);
+          const payload = await resp.json();
+          if (!payload.ok || !payload.data) {
+            throw new Error(payload.error || 'snapshot request failed');
+          }
+          state.loading = false;
+          state.loadError = '';
+          applyLoadedData(payload.data, targetFile, true);
+        } catch (err) {
+          state.loading = false;
+          state.loadError = `snapshot failed: ${String(err)}`;
+          applyLoadedData(createEmptyData(targetFile), targetFile, false);
+        }
+        renderAll();
+      }
+
       function bindSplitter(handle, axis, direction, getValue, setValue, getBounds) {
         handle.addEventListener('mousedown', (downEvent) => {
           if (window.innerWidth <= 1100) {
@@ -1238,8 +1416,8 @@
         if (!row) return;
         const addr = row.getAttribute('data-addr') || '';
         state.focusedAddr = addr;
-        if (EVENT_INDEX_BY_ADDR.has(addr)) {
-          setCursor(EVENT_INDEX_BY_ADDR.get(addr));
+        if (eventIndexByAddr.has(addr)) {
+          setCursor(eventIndexByAddr.get(addr));
         } else {
           renderAll();
         }
@@ -1255,6 +1433,15 @@
         state.activeTab = button.getAttribute('data-tab') || 'trace';
         saveUiState();
         renderTabs();
+      });
+      refs.fileLoadBtn.addEventListener('click', () => {
+        if (!REMOTE_MODE) return;
+        loadSnapshot(refs.fileInput.value, true);
+      });
+      refs.fileInput.addEventListener('keydown', (event) => {
+        if (!REMOTE_MODE || event.key !== 'Enter') return;
+        event.preventDefault();
+        loadSnapshot(refs.fileInput.value, true);
       });
       refs.functionSelect.addEventListener('change', (event) => {
         const value = event.target.value;
@@ -1311,19 +1498,16 @@
       bindSplitter(refs.bottomSplitter, 'y', -1, () => state.layout.bottomHeight, (value) => { state.layout.bottomHeight = value; }, () => [180, Math.max(240, Math.floor(window.innerHeight * 0.55))]);
       window.addEventListener('resize', applyLayout);
 
-      refs.title.textContent = data.meta.title;
-      refs.source.textContent = `${data.meta.source_file} | ${data.meta.file_class} ${data.meta.architecture}`;
-      if (data.meta.truncated) {
-        refs.truncatedBanner.style.display = 'block';
-        refs.truncatedBanner.textContent = `当前页面仅展示前 ${data.meta.instruction_count} 条指令（总计 ${data.meta.total_instruction_count} 条）。可通过 CLI 参数 --max-inst 调整。`;
+      if (boot.embedded_data) {
+        applyLoadedData(boot.embedded_data, boot.embedded_data.meta?.source_file || '', false);
+        renderAll();
+      } else if (REMOTE_MODE) {
+        renderAll();
+        loadSnapshot(state.currentFile || boot.default_file || '', false);
+      } else {
+        applyLoadedData(createEmptyData(''), '', false);
+        renderAll();
       }
-
-      resetRuntimeState();
-      if (state.selectedFunctionAddr && !(data.functions || []).some(fn => fn.addr === state.selectedFunctionAddr)) {
-        state.selectedFunctionAddr = '';
-      }
-      rebuildToCursor(state.cursor);
-      renderAll();
     })();
   </script>
 </body>

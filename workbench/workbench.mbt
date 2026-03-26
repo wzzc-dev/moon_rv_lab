@@ -163,7 +163,7 @@ pub fn generate_from_file(
   match load_workbench_data(input_file, options) {
     Ok(data) => {
       let json = to_json(data)
-      let html = build_html_page(data.meta.title, json)
+      let html = build_html_page(data.meta.title, embedded_boot_json(json))
       if write_output_file(output_file, html) {
         None
       } else {
@@ -226,6 +226,22 @@ pub fn stream_event_payloads_from_file(
       StreamEventsOk(build_stream_event_payloads(data.events, event_limit))
     Err(err) => StreamEventsErr(err.to_string())
   }
+}
+
+///|
+/// Build a standalone online workbench page that loads data from `/api/snapshot`.
+pub fn online_page_html(
+  default_file : String,
+  initial_file : String,
+  max_instructions : Int,
+  snapshot_endpoint : String,
+) -> String {
+  build_html_page(
+    "MoonRV Lab Online Workbench",
+    remote_boot_json(
+      default_file, initial_file, max_instructions, snapshot_endpoint,
+    ),
+  )
 }
 
 ///|
@@ -919,7 +935,40 @@ fn escape_html(value : String) -> String {
 }
 
 ///|
-fn build_html_page(title : String, data_json : String) -> String {
+fn embedded_boot_json(data_json : String) -> String {
+  "{\"mode\":\"embedded\",\"default_file\":\"\",\"initial_file\":\"\",\"max_inst\":" +
+  DEFAULT_MAX_INSTRUCTIONS.to_string() +
+  ",\"snapshot_endpoint\":\"/api/snapshot\",\"embedded_data\":" +
+  data_json +
+  "}"
+}
+
+///|
+fn remote_boot_json(
+  default_file : String,
+  initial_file : String,
+  max_instructions : Int,
+  snapshot_endpoint : String,
+) -> String {
+  let max_inst = normalize_max_instructions(max_instructions)
+  let endpoint = if snapshot_endpoint == "" {
+    "/api/snapshot"
+  } else {
+    snapshot_endpoint
+  }
+  "{\"mode\":\"remote\",\"default_file\":" +
+  json_string(default_file) +
+  ",\"initial_file\":" +
+  json_string(initial_file) +
+  ",\"max_inst\":" +
+  max_inst.to_string() +
+  ",\"snapshot_endpoint\":" +
+  json_string(endpoint) +
+  ",\"embedded_data\":null}"
+}
+
+///|
+fn build_html_page(title : String, boot_json : String) -> String {
   let safe_title = escape_html(title)
   let mut html = ""
   html = html + "<!doctype html>\n"
@@ -1058,7 +1107,7 @@ fn build_html_page(title : String, data_json : String) -> String {
   html = html + "    .toolbar-controls {\n"
   html = html + "      display: grid;\n"
   html = html +
-    "      grid-template-columns: minmax(180px, 240px) minmax(180px, 1fr) auto auto;\n"
+    "      grid-template-columns: minmax(220px, 1.2fr) minmax(180px, 240px) minmax(180px, 1fr) auto auto;\n"
   html = html + "      gap: 8px;\n"
   html = html + "      align-items: end;\n"
   html = html + "    }\n"
@@ -1073,12 +1122,25 @@ fn build_html_page(title : String, data_json : String) -> String {
   html = html + "      color: var(--muted);\n"
   html = html + "      font-size: 11px;\n"
   html = html + "    }\n"
+  html = html + "    .toolbar-inline {\n"
+  html = html + "      display: flex;\n"
+  html = html + "      gap: 6px;\n"
+  html = html + "      align-items: center;\n"
+  html = html + "      min-width: 0;\n"
+  html = html + "    }\n"
+  html = html + "    .toolbar-inline > input {\n"
+  html = html + "      min-width: 0;\n"
+  html = html + "      flex: 1 1 auto;\n"
+  html = html + "    }\n"
   html = html + "    .toolbar-buttons,\n"
   html = html + "    .toolbar-toggles {\n"
   html = html + "      display: flex;\n"
   html = html + "      gap: 6px;\n"
   html = html + "      align-items: center;\n"
   html = html + "      flex-wrap: wrap;\n"
+  html = html + "    }\n"
+  html = html + "    .hidden {\n"
+  html = html + "      display: none !important;\n"
   html = html + "    }\n"
   html = html + "    .status-strip {\n"
   html = html + "      display: none;\n"
@@ -1422,6 +1484,9 @@ fn build_html_page(title : String, data_json : String) -> String {
   html = html + "      .toolbar-controls {\n"
   html = html + "        grid-template-columns: repeat(2, minmax(0, 1fr));\n"
   html = html + "      }\n"
+  html = html + "      .toolbar-inline {\n"
+  html = html + "        flex-wrap: wrap;\n"
+  html = html + "      }\n"
   html = html + "    }\n"
   html = html + "    @media (max-width: 1100px) {\n"
   html = html + "      .workbench-shell {\n"
@@ -1469,6 +1534,15 @@ fn build_html_page(title : String, data_json : String) -> String {
   html = html + "        <div class=\"path-row\" id=\"source\"></div>\n"
   html = html + "      </div>\n"
   html = html + "      <div class=\"toolbar-controls\">\n"
+  html = html +
+    "        <div class=\"toolbar-field\" id=\"file-toolbar-field\">\n"
+  html = html + "          <span>文件</span>\n"
+  html = html + "          <div class=\"toolbar-inline\">\n"
+  html = html +
+    "            <input id=\"file-input\" type=\"text\" placeholder=\"ELF file path\" />\n"
+  html = html + "            <button id=\"file-load-btn\">Load</button>\n"
+  html = html + "          </div>\n"
+  html = html + "        </div>\n"
   html = html + "        <div class=\"toolbar-field\">\n"
   html = html + "          <span>函数</span>\n"
   html = html + "          <select id=\"function-select\"></select>\n"
@@ -1618,17 +1692,23 @@ fn build_html_page(title : String, data_json : String) -> String {
   html = html + "    </main>\n"
   html = html + "  </div>\n"
   html = html + "  <script>\n"
-  html = html + "    const RVLAB_DATA = "
-  html = html + data_json
+  html = html + "    const WORKBENCH_BOOT = "
+  html = html + boot_json
   html = html + ";\n"
   html = html + "  </script>\n"
   html = html + "  <script>\n"
   html = html + "    (() => {\n"
-  html = html + "      const data = RVLAB_DATA;\n"
+  html = html + "      const boot = WORKBENCH_BOOT || {};\n"
+  html = html + "      let data = createEmptyData();\n"
   html = html + "      const refs = {\n"
   html = html + "        title: document.getElementById('title'),\n"
   html = html + "        source: document.getElementById('source'),\n"
   html = html + "        statusPill: document.getElementById('status-pill'),\n"
+  html = html +
+    "        fileToolbarField: document.getElementById('file-toolbar-field'),\n"
+  html = html + "        fileInput: document.getElementById('file-input'),\n"
+  html = html +
+    "        fileLoadBtn: document.getElementById('file-load-btn'),\n"
   html = html +
     "        summaryGrid: document.getElementById('summary-grid'),\n"
   html = html +
@@ -1709,68 +1789,44 @@ fn build_html_page(title : String, data_json : String) -> String {
     "        { label: '临时', regs: ['t0', 't1', 't2', 't3', 't4', 't5', 't6'] }\n"
   html = html + "      ];\n"
   html = html +
-    "      const STORAGE_KEY = `moonrv-workbench-ui:${data.meta.source_file || 'default'}`;\n"
-  html = html + "\n"
+    "      const REMOTE_MODE = (boot.mode || 'embedded') === 'remote';\n"
   html = html +
-    "      const INITIAL_REGISTERS = Object.fromEntries((data.runtime.initial_registers || []).map(item => [item.name, item.value]));\n"
-  html = html + "      const EVENT_INDEX_BY_ADDR = new Map();\n"
-  html = html + "      (data.events || []).forEach((event, index) => {\n"
-  html = html + "        if (!EVENT_INDEX_BY_ADDR.has(event.addr)) {\n"
-  html = html + "          EVENT_INDEX_BY_ADDR.set(event.addr, index);\n"
-  html = html + "        }\n"
-  html = html + "      });\n"
-  html = html +
-    "      const MAX_INSTRUCTION_ADDR = (data.instructions || []).length > 0\n"
-  html = html +
-    "        ? hexToBigInt(data.instructions[data.instructions.length - 1].addr) + 4n\n"
-  html = html + "        : 0n;\n"
-  html = html + "      const FUNCTION_RANGES = (data.functions || [])\n"
-  html = html + "        .slice()\n"
-  html = html +
-    "        .sort((lhs, rhs) => (hexToBigInt(lhs.addr) < hexToBigInt(rhs.addr) ? -1 : 1))\n"
-  html = html + "        .map((fn, index, items) => {\n"
-  html = html + "          const start = hexToBigInt(fn.addr);\n"
-  html = html + "          const size = hexToBigInt(fn.size || '0x0');\n"
-  html = html +
-    "          const next = index + 1 < items.length ? hexToBigInt(items[index + 1].addr) : (MAX_INSTRUCTION_ADDR + 4n);\n"
-  html = html + "          const end = size > 0n ? start + size : next;\n"
-  html = html + "          return { fn, start, end };\n"
-  html = html + "        });\n"
-  html = html + "      const storedUi = readUiState();\n"
+    "      let storageKey = storageKeyFor(boot.initial_file || boot.default_file || 'default');\n"
+  html = html + "      let initialRegisters = {};\n"
+  html = html + "      let eventIndexByAddr = new Map();\n"
+  html = html + "      let functionRanges = [];\n"
   html = html + "      const state = {\n"
-  html = html +
-    "        selectedFunctionAddr: storedUi.selectedFunctionAddr || '',\n"
-  html = html + "        searchText: storedUi.searchText || '',\n"
-  html = html + "        activeTab: storedUi.activeTab || 'trace',\n"
-  html = html + "        followPcEnabled: storedUi.followPcEnabled !== false,\n"
-  html = html +
-    "        currentFunctionOnlyEnabled: storedUi.currentFunctionOnlyEnabled === true,\n"
-  html = html +
-    "        showChangedRegistersOnly: storedUi.showChangedRegistersOnly === true,\n"
+  html = html + "        selectedFunctionAddr: '',\n"
+  html = html + "        searchText: '',\n"
+  html = html + "        activeTab: 'trace',\n"
+  html = html + "        followPcEnabled: true,\n"
+  html = html + "        currentFunctionOnlyEnabled: false,\n"
+  html = html + "        showChangedRegistersOnly: false,\n"
   html = html + "        layout: {\n"
-  html = html +
-    "          navWidth: clampNumber(storedUi.navWidth, 180, 420, 240),\n"
-  html = html +
-    "          inspectorWidth: clampNumber(storedUi.inspectorWidth, 240, 460, 320),\n"
-  html = html +
-    "          bottomHeight: clampNumber(storedUi.bottomHeight, 180, 420, 260),\n"
-  html = html + "          navCollapsed: storedUi.navCollapsed === true,\n"
-  html = html +
-    "          bottomCollapsed: storedUi.bottomCollapsed === true,\n"
-  html = html +
-    "          inspectorCollapsed: storedUi.inspectorCollapsed === true\n"
+  html = html + "          navWidth: 240,\n"
+  html = html + "          inspectorWidth: 320,\n"
+  html = html + "          bottomHeight: 260,\n"
+  html = html + "          navCollapsed: false,\n"
+  html = html + "          bottomCollapsed: false,\n"
+  html = html + "          inspectorCollapsed: false\n"
   html = html + "        },\n"
   html = html + "        cursor: -1,\n"
-  html = html + "        focusedAddr: data.runtime.initial_pc || '',\n"
+  html = html + "        focusedAddr: '0x0',\n"
   html = html + "        registers: {},\n"
   html = html + "        memoryHistory: [],\n"
   html = html + "        ioHistory: [],\n"
   html = html + "        stdout: '',\n"
   html = html + "        stderr: '',\n"
+  html = html +
+    "        currentFile: boot.initial_file || boot.default_file || '',\n"
+  html = html + "        loadError: '',\n"
+  html = html + "        loading: false,\n"
   html = html + "        timer: null\n"
   html = html + "      };\n"
   html = html + "\n"
+  html = html + "      applyStoredUi(readUiState());\n"
   html = html + "      refs.searchInput.value = state.searchText;\n"
+  html = html + "      refs.fileInput.value = state.currentFile;\n"
   html = html + "      function escapeHtml(value) {\n"
   html = html + "        return String(value)\n"
   html = html + "          .replaceAll('&', '&amp;')\n"
@@ -1799,15 +1855,77 @@ fn build_html_page(title : String, data_json : String) -> String {
   html = html + "          : fallback;\n"
   html = html + "      }\n"
   html = html + "\n"
+  html = html + "      function createEmptyData(sourceFile) {\n"
+  html = html + "        return {\n"
+  html = html + "          meta: {\n"
+  html = html +
+    "            title: boot.mode === 'remote' ? 'MoonRV Lab Online Workbench' : 'MoonRV Lab Workbench',\n"
+  html = html +
+    "            source_file: sourceFile || boot.initial_file || boot.default_file || '',\n"
+  html = html + "            entry_point: '0x0',\n"
+  html = html + "            file_class: '',\n"
+  html = html + "            architecture: '',\n"
+  html = html + "            section_count: 0,\n"
+  html = html + "            program_count: 0,\n"
+  html = html + "            function_count: 0,\n"
+  html = html + "            instruction_count: 0,\n"
+  html = html + "            total_instruction_count: 0,\n"
+  html = html + "            basic_block_count: 0,\n"
+  html = html + "            cfg_edge_count: 0,\n"
+  html = html + "            runtime_event_count: 0,\n"
+  html = html + "            truncated: false\n"
+  html = html + "          },\n"
+  html = html + "          functions: [],\n"
+  html = html + "          sections: [],\n"
+  html = html + "          instructions: [],\n"
+  html = html + "          blocks: [],\n"
+  html = html + "          edges: [],\n"
+  html = html +
+    "          runtime: { initial_pc: '0x0', stop_reason: 'unloaded', initial_registers: [] },\n"
+  html = html + "          events: []\n"
+  html = html + "        };\n"
+  html = html + "      }\n"
+  html = html + "\n"
+  html = html + "      function storageKeyFor(file) {\n"
+  html = html + "        return `moonrv-workbench-ui:${file || 'default'}`;\n"
+  html = html + "      }\n"
+  html = html + "\n"
   html = html + "      function readUiState() {\n"
   html = html + "        try {\n"
   html = html +
-    "          const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');\n"
+    "          const parsed = JSON.parse(localStorage.getItem(storageKey) || '{}');\n"
   html = html +
     "          return parsed && typeof parsed === 'object' ? parsed : {};\n"
   html = html + "        } catch (_) {\n"
   html = html + "          return {};\n"
   html = html + "        }\n"
+  html = html + "      }\n"
+  html = html + "\n"
+  html = html + "      function applyStoredUi(value) {\n"
+  html = html +
+    "        const storedUi = value && typeof value === 'object' ? value : {};\n"
+  html = html +
+    "        state.selectedFunctionAddr = storedUi.selectedFunctionAddr || '';\n"
+  html = html + "        state.searchText = storedUi.searchText || '';\n"
+  html = html + "        state.activeTab = storedUi.activeTab || 'trace';\n"
+  html = html +
+    "        state.followPcEnabled = storedUi.followPcEnabled !== false;\n"
+  html = html +
+    "        state.currentFunctionOnlyEnabled = storedUi.currentFunctionOnlyEnabled === true;\n"
+  html = html +
+    "        state.showChangedRegistersOnly = storedUi.showChangedRegistersOnly === true;\n"
+  html = html +
+    "        state.layout.navWidth = clampNumber(storedUi.navWidth, 180, 420, 240);\n"
+  html = html +
+    "        state.layout.inspectorWidth = clampNumber(storedUi.inspectorWidth, 240, 460, 320);\n"
+  html = html +
+    "        state.layout.bottomHeight = clampNumber(storedUi.bottomHeight, 180, 420, 260);\n"
+  html = html +
+    "        state.layout.navCollapsed = storedUi.navCollapsed === true;\n"
+  html = html +
+    "        state.layout.bottomCollapsed = storedUi.bottomCollapsed === true;\n"
+  html = html +
+    "        state.layout.inspectorCollapsed = storedUi.inspectorCollapsed === true;\n"
   html = html + "      }\n"
   html = html + "\n"
   html = html + "      function saveUiState() {\n"
@@ -1830,9 +1948,39 @@ fn build_html_page(title : String, data_json : String) -> String {
   html = html + "        };\n"
   html = html + "        try {\n"
   html = html +
-    "          localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));\n"
+    "          localStorage.setItem(storageKey, JSON.stringify(payload));\n"
   html = html + "        } catch (_) {\n"
   html = html + "        }\n"
+  html = html + "      }\n"
+  html = html + "\n"
+  html = html + "      function rebuildDerivedCaches() {\n"
+  html = html +
+    "        initialRegisters = Object.fromEntries((data.runtime.initial_registers || []).map(item => [item.name, item.value]));\n"
+  html = html + "        eventIndexByAddr = new Map();\n"
+  html = html + "        (data.events || []).forEach((event, index) => {\n"
+  html = html + "          if (!eventIndexByAddr.has(event.addr)) {\n"
+  html = html + "            eventIndexByAddr.set(event.addr, index);\n"
+  html = html + "          }\n"
+  html = html + "        });\n"
+  html = html +
+    "        const maxInstructionAddr = (data.instructions || []).length > 0\n"
+  html = html +
+    "          ? hexToBigInt(data.instructions[data.instructions.length - 1].addr) + 4n\n"
+  html = html + "          : 0n;\n"
+  html = html + "        functionRanges = (data.functions || [])\n"
+  html = html + "          .slice()\n"
+  html = html +
+    "          .sort((lhs, rhs) => (hexToBigInt(lhs.addr) < hexToBigInt(rhs.addr) ? -1 : 1))\n"
+  html = html + "          .map((fn, index, items) => {\n"
+  html = html + "            const start = hexToBigInt(fn.addr);\n"
+  html = html + "            const size = hexToBigInt(fn.size || '0x0');\n"
+  html = html +
+    "            const next = index + 1 < items.length ? hexToBigInt(items[index + 1].addr) : (maxInstructionAddr + 4n);\n"
+  html = html + "            const end = size > 0n ? start + size : next;\n"
+  html = html + "            return { fn, start, end };\n"
+  html = html + "          });\n"
+  html = html +
+    "        state.focusedAddr = data.runtime.initial_pc || data.meta.entry_point || '0x0';\n"
   html = html + "      }\n"
   html = html + "\n"
   html = html + "      function selectedFunction() {\n"
@@ -1842,13 +1990,13 @@ fn build_html_page(title : String, data_json : String) -> String {
   html = html + "\n"
   html = html + "      function functionRangeForAddr(addr) {\n"
   html = html +
-    "        return FUNCTION_RANGES.find(item => item.fn.addr === addr) || null;\n"
+    "        return functionRanges.find(item => item.fn.addr === addr) || null;\n"
   html = html + "      }\n"
   html = html + "\n"
   html = html + "      function functionForAddress(addr) {\n"
   html = html + "        const target = hexToBigInt(addr);\n"
   html = html +
-    "        return FUNCTION_RANGES.find(item => target >= item.start && target < item.end)?.fn || (data.functions || []).find(item => item.addr === addr) || null;\n"
+    "        return functionRanges.find(item => target >= item.start && target < item.end)?.fn || (data.functions || []).find(item => item.addr === addr) || null;\n"
   html = html + "      }\n"
   html = html + "\n"
   html = html + "      function instructionsForFunction(target) {\n"
@@ -1889,7 +2037,7 @@ fn build_html_page(title : String, data_json : String) -> String {
   html = html + "      }\n"
   html = html + "\n"
   html = html + "      function resetRuntimeState() {\n"
-  html = html + "        state.registers = { ...INITIAL_REGISTERS };\n"
+  html = html + "        state.registers = { ...initialRegisters };\n"
   html = html + "        for (const r of REGISTER_ORDER) {\n"
   html = html +
     "          if (!(r in state.registers)) state.registers[r] = '0x0';\n"
@@ -1924,6 +2072,34 @@ fn build_html_page(title : String, data_json : String) -> String {
   html = html + "        )).join('');\n"
   html = html + "      }\n"
   html = html + "\n"
+  html = html + "      function renderHeader() {\n"
+  html = html +
+    "        refs.title.textContent = data.meta.title || (REMOTE_MODE ? 'MoonRV Lab Online Workbench' : 'MoonRV Lab Workbench');\n"
+  html = html + "        refs.source.textContent = data.meta.source_file\n"
+  html = html +
+    "          ? `${data.meta.source_file}${data.meta.file_class || data.meta.architecture ? ` | ${data.meta.file_class} ${data.meta.architecture}`.trim() : ''}`\n"
+  html = html + "          : (state.currentFile || '未选择文件');\n"
+  html = html +
+    "        refs.fileToolbarField.classList.toggle('hidden', !REMOTE_MODE);\n"
+  html = html + "      }\n"
+  html = html + "\n"
+  html = html + "      function renderBanner() {\n"
+  html = html + "        if (state.loadError) {\n"
+  html = html + "          refs.truncatedBanner.style.display = 'block';\n"
+  html = html +
+    "          refs.truncatedBanner.textContent = state.loadError;\n"
+  html = html + "          return;\n"
+  html = html + "        }\n"
+  html = html + "        if (data.meta.truncated) {\n"
+  html = html + "          refs.truncatedBanner.style.display = 'block';\n"
+  html = html +
+    "          refs.truncatedBanner.textContent = `当前页面仅展示前 ${data.meta.instruction_count} 条指令（总计 ${data.meta.total_instruction_count} 条）。可通过 CLI 参数 --max-inst 调整。`;\n"
+  html = html + "          return;\n"
+  html = html + "        }\n"
+  html = html + "        refs.truncatedBanner.style.display = 'none';\n"
+  html = html + "        refs.truncatedBanner.textContent = '';\n"
+  html = html + "      }\n"
+  html = html + "\n"
   html = html + "      function renderRuntimeSummary() {\n"
   html = html + "        const current = currentEvent();\n"
   html = html +
@@ -1942,7 +2118,8 @@ fn build_html_page(title : String, data_json : String) -> String {
   html = html + "          ['stdout', String(state.stdout.length)]\n"
   html = html +
     "        ].map(([k, v]) => `<div class=\"stat\"><div class=\"k\">${escapeHtml(k)}</div><div class=\"v\">${escapeHtml(v)}</div></div>`).join('');\n"
-  html = html + "        refs.statusPill.textContent = stopText;\n"
+  html = html +
+    "        refs.statusPill.textContent = state.loading ? 'loading' : (state.loadError ? 'error' : stopText);\n"
   html = html + "      }\n"
   html = html + "\n"
   html = html + "      function renderSections() {\n"
@@ -2051,11 +2228,21 @@ fn build_html_page(title : String, data_json : String) -> String {
   html = html +
     "        refs.playBtn.textContent = state.timer ? 'Pause' : 'Play';\n"
   html = html +
+    "        refs.playBtn.disabled = state.loading || !!state.loadError || data.events.length === 0;\n"
+  html = html +
     "        refs.followPc.classList.toggle('active', state.followPcEnabled);\n"
   html = html +
     "        refs.currentFunctionOnly.classList.toggle('active', state.currentFunctionOnlyEnabled);\n"
   html = html +
     "        refs.changedRegistersToggle.classList.toggle('active', state.showChangedRegistersOnly);\n"
+  html = html +
+    "        refs.fileLoadBtn.classList.toggle('hidden', !REMOTE_MODE);\n"
+  html = html +
+    "        refs.fileLoadBtn.disabled = state.loading || refs.fileInput.value.trim() === '';\n"
+  html = html +
+    "        refs.fileLoadBtn.textContent = state.loading ? 'Loading...' : 'Load';\n"
+  html = html +
+    "        refs.fileInput.disabled = !REMOTE_MODE || state.loading;\n"
   html = html + "      }\n"
   html = html + "\n"
   html = html + "      function renderDisasm() {\n"
@@ -2247,6 +2434,8 @@ fn build_html_page(title : String, data_json : String) -> String {
   html = html + "      }\n"
   html = html + "\n"
   html = html + "      function renderAll() {\n"
+  html = html + "        renderHeader();\n"
+  html = html + "        renderBanner();\n"
   html = html + "        renderSummary();\n"
   html = html + "        renderFunctions();\n"
   html = html + "        renderSections();\n"
@@ -2316,6 +2505,78 @@ fn build_html_page(title : String, data_json : String) -> String {
   html = html + "        renderAll();\n"
   html = html + "      }\n"
   html = html + "\n"
+  html = html + "      function syncUrl(file) {\n"
+  html = html +
+    "        if (!REMOTE_MODE || !window.history || !window.history.replaceState) {\n"
+  html = html + "          return;\n"
+  html = html + "        }\n"
+  html = html +
+    "        const next = file ? `${window.location.pathname}?file=${encodeURIComponent(file)}` : window.location.pathname;\n"
+  html = html + "        window.history.replaceState(null, '', next);\n"
+  html = html + "      }\n"
+  html = html + "\n"
+  html = html + "      function applyLoadedData(nextData, file, restoreUi) {\n"
+  html = html + "        data = nextData || createEmptyData();\n"
+  html = html +
+    "        state.currentFile = data.meta.source_file || file || state.currentFile;\n"
+  html = html +
+    "        storageKey = storageKeyFor(state.currentFile || file || 'default');\n"
+  html = html + "        if (restoreUi) {\n"
+  html = html + "          applyStoredUi(readUiState());\n"
+  html = html + "        }\n"
+  html = html + "        refs.searchInput.value = state.searchText;\n"
+  html = html + "        refs.fileInput.value = state.currentFile;\n"
+  html = html + "        rebuildDerivedCaches();\n"
+  html = html + "        stopPlay();\n"
+  html = html + "        state.cursor = -1;\n"
+  html = html + "        resetRuntimeState();\n"
+  html = html +
+    "        if (state.selectedFunctionAddr && !(data.functions || []).some(fn => fn.addr === state.selectedFunctionAddr)) {\n"
+  html = html + "          state.selectedFunctionAddr = '';\n"
+  html = html + "        }\n"
+  html = html + "      }\n"
+  html = html + "\n"
+  html = html + "      async function loadSnapshot(file, syncHistory) {\n"
+  html = html + "        const targetFile = String(file || '').trim();\n"
+  html = html + "        if (!targetFile) {\n"
+  html = html + "          state.loadError = 'file path is required';\n"
+  html = html + "          applyLoadedData(createEmptyData(''), '', false);\n"
+  html = html + "          renderAll();\n"
+  html = html + "          return;\n"
+  html = html + "        }\n"
+  html = html + "        state.loading = true;\n"
+  html = html + "        state.loadError = '';\n"
+  html = html + "        state.currentFile = targetFile;\n"
+  html = html + "        storageKey = storageKeyFor(targetFile);\n"
+  html = html + "        refs.fileInput.value = targetFile;\n"
+  html = html + "        if (syncHistory !== false) {\n"
+  html = html + "          syncUrl(targetFile);\n"
+  html = html + "        }\n"
+  html = html + "        renderAll();\n"
+  html = html +
+    "        const endpoint = boot.snapshot_endpoint || '/api/snapshot';\n"
+  html = html +
+    "        const url = `${endpoint}?file=${encodeURIComponent(targetFile)}&max_inst=${String(boot.max_inst || 1200)}`;\n"
+  html = html + "        try {\n"
+  html = html + "          const resp = await fetch(url);\n"
+  html = html + "          const payload = await resp.json();\n"
+  html = html + "          if (!payload.ok || !payload.data) {\n"
+  html = html +
+    "            throw new Error(payload.error || 'snapshot request failed');\n"
+  html = html + "          }\n"
+  html = html + "          state.loading = false;\n"
+  html = html + "          state.loadError = '';\n"
+  html = html + "          applyLoadedData(payload.data, targetFile, true);\n"
+  html = html + "        } catch (err) {\n"
+  html = html + "          state.loading = false;\n"
+  html = html +
+    "          state.loadError = `snapshot failed: ${String(err)}`;\n"
+  html = html +
+    "          applyLoadedData(createEmptyData(targetFile), targetFile, false);\n"
+  html = html + "        }\n"
+  html = html + "        renderAll();\n"
+  html = html + "      }\n"
+  html = html + "\n"
   html = html +
     "      function bindSplitter(handle, axis, direction, getValue, setValue, getBounds) {\n"
   html = html +
@@ -2369,8 +2630,8 @@ fn build_html_page(title : String, data_json : String) -> String {
   html = html + "        if (!row) return;\n"
   html = html + "        const addr = row.getAttribute('data-addr') || '';\n"
   html = html + "        state.focusedAddr = addr;\n"
-  html = html + "        if (EVENT_INDEX_BY_ADDR.has(addr)) {\n"
-  html = html + "          setCursor(EVENT_INDEX_BY_ADDR.get(addr));\n"
+  html = html + "        if (eventIndexByAddr.has(addr)) {\n"
+  html = html + "          setCursor(eventIndexByAddr.get(addr));\n"
   html = html + "        } else {\n"
   html = html + "          renderAll();\n"
   html = html + "        }\n"
@@ -2389,6 +2650,16 @@ fn build_html_page(title : String, data_json : String) -> String {
     "        state.activeTab = button.getAttribute('data-tab') || 'trace';\n"
   html = html + "        saveUiState();\n"
   html = html + "        renderTabs();\n"
+  html = html + "      });\n"
+  html = html + "      refs.fileLoadBtn.addEventListener('click', () => {\n"
+  html = html + "        if (!REMOTE_MODE) return;\n"
+  html = html + "        loadSnapshot(refs.fileInput.value, true);\n"
+  html = html + "      });\n"
+  html = html +
+    "      refs.fileInput.addEventListener('keydown', (event) => {\n"
+  html = html + "        if (!REMOTE_MODE || event.key !== 'Enter') return;\n"
+  html = html + "        event.preventDefault();\n"
+  html = html + "        loadSnapshot(refs.fileInput.value, true);\n"
   html = html + "      });\n"
   html = html +
     "      refs.functionSelect.addEventListener('change', (event) => {\n"
@@ -2463,22 +2734,18 @@ fn build_html_page(title : String, data_json : String) -> String {
     "      bindSplitter(refs.bottomSplitter, 'y', -1, () => state.layout.bottomHeight, (value) => { state.layout.bottomHeight = value; }, () => [180, Math.max(240, Math.floor(window.innerHeight * 0.55))]);\n"
   html = html + "      window.addEventListener('resize', applyLayout);\n"
   html = html + "\n"
-  html = html + "      refs.title.textContent = data.meta.title;\n"
+  html = html + "      if (boot.embedded_data) {\n"
   html = html +
-    "      refs.source.textContent = `${data.meta.source_file} | ${data.meta.file_class} ${data.meta.architecture}`;\n"
-  html = html + "      if (data.meta.truncated) {\n"
-  html = html + "        refs.truncatedBanner.style.display = 'block';\n"
+    "        applyLoadedData(boot.embedded_data, boot.embedded_data.meta?.source_file || '', false);\n"
+  html = html + "        renderAll();\n"
+  html = html + "      } else if (REMOTE_MODE) {\n"
+  html = html + "        renderAll();\n"
   html = html +
-    "        refs.truncatedBanner.textContent = `当前页面仅展示前 ${data.meta.instruction_count} 条指令（总计 ${data.meta.total_instruction_count} 条）。可通过 CLI 参数 --max-inst 调整。`;\n"
+    "        loadSnapshot(state.currentFile || boot.default_file || '', false);\n"
+  html = html + "      } else {\n"
+  html = html + "        applyLoadedData(createEmptyData(''), '', false);\n"
+  html = html + "        renderAll();\n"
   html = html + "      }\n"
-  html = html + "\n"
-  html = html + "      resetRuntimeState();\n"
-  html = html +
-    "      if (state.selectedFunctionAddr && !(data.functions || []).some(fn => fn.addr === state.selectedFunctionAddr)) {\n"
-  html = html + "        state.selectedFunctionAddr = '';\n"
-  html = html + "      }\n"
-  html = html + "      rebuildToCursor(state.cursor);\n"
-  html = html + "      renderAll();\n"
   html = html + "    })();\n"
   html = html + "  </script>\n"
   html = html + "</body>\n"

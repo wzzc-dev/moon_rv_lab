@@ -15,4 +15,4 @@ example/output.s
 tools/build/*
 example/*.bin
 example/*.elf
-out/workbench.html
+out/*

@@ -8,6 +8,8 @@ pub fn default_options() -> WorkbenchOptions
 
 pub fn generate_from_file(String, String, WorkbenchOptions) -> WorkbenchError?
 
+pub fn online_page_html(String, String, Int, String) -> String
+
 pub fn snapshot_api_json_from_file(String, Int) -> String
 
 pub fn stream_api_json_from_file(String, Int, Int) -> String

@@ -88,143 +88,6 @@ const INDEX_STYLE : String =
   #|}
 
 ///|
-const CLIENT_BOOTSTRAP_JS : String =
-  #|(function() {
-  #|  const cfg = window.__RVR_CONFIG__ || {};
-  #|  const DEFAULT_FILE = String(cfg.defaultFile || "example/simple.elf");
-  #|  const DEFAULT_MAX_INST = Number(cfg.defaultMaxInst || 1200);
-  #|  const DEFAULT_MAX_EVENTS = Number(cfg.defaultMaxEvents || 400);
-  #|  const DEFAULT_INTERVAL_MS = Number(cfg.defaultIntervalMs || 350);
-  #|  const app = document.getElementById("app");
-  #|  if (!app) return;
-  #|  app.innerHTML =
-  #|    "<div class=\"toolbar\">" +
-  #|      "<input id=\"file\" value=\"" + DEFAULT_FILE + "\" placeholder=\"ELF file path\" />" +
-  #|      "<button id=\"load\" class=\"primary\">Load Snapshot</button>" +
-  #|      "<button id=\"start\">Start Stream</button>" +
-  #|      "<button id=\"stop\">Stop Stream</button>" +
-  #|    "</div>" +
-  #|    "<div class=\"hint\" id=\"status\">Ready</div>" +
-  #|    "<div class=\"split\">" +
-  #|      "<div>" +
-  #|        "<h3>Snapshot Meta</h3>" +
-  #|        "<pre id=\"summary\"></pre>" +
-  #|        "<h3>Instructions (first 120)</h3>" +
-  #|        "<div style=\"max-height:300px;overflow:auto;\">" +
-  #|          "<table>" +
-  #|            "<thead><tr><th>#</th><th>Address</th><th>Instruction</th><th>Category</th></tr></thead>" +
-  #|            "<tbody id=\"inst-body\"></tbody>" +
-  #|          "</table>" +
-  #|        "</div>" +
-  #|      "</div>" +
-  #|      "<div>" +
-  #|        "<h3>Realtime Stream</h3>" +
-  #|        "<div class=\"trace\" id=\"trace\"></div>" +
-  #|      "</div>" +
-  #|    "</div>";
-  #|
-  #|  const statusEl = document.getElementById("status");
-  #|  const summaryEl = document.getElementById("summary");
-  #|  const fileEl = document.getElementById("file");
-  #|  const instBody = document.getElementById("inst-body");
-  #|  const traceEl = document.getElementById("trace");
-  #|  const loadBtn = document.getElementById("load");
-  #|  const startBtn = document.getElementById("start");
-  #|  const stopBtn = document.getElementById("stop");
-  #|  let source = null;
-  #|  let currentAddr = "";
-  #|  let snapshotData = null;
-  #|
-  #|  const setStatus = (text) => { statusEl.textContent = text; };
-  #|
-  #|  function renderInstructions() {
-  #|    const rows = (snapshotData?.instructions || []).slice(0, 120).map((inst) => {
-  #|      const active = inst.addr === currentAddr ? " class=\\\"active\\\"" : "";
-  #|      return "<tr" + active + "><td>" + inst.index + "</td><td>" + inst.addr + "</td><td>" + inst.asm + "</td><td>" + inst.category + "</td></tr>";
-  #|    }).join("");
-  #|    instBody.innerHTML = rows;
-  #|  }
-  #|
-  #|  async function loadSnapshot() {
-  #|    const file = fileEl.value.trim();
-  #|    if (!file) {
-  #|      setStatus("file path is required");
-  #|      return;
-  #|    }
-  #|    setStatus("loading snapshot...");
-  #|    const url = "/api/snapshot?file=" + encodeURIComponent(file) + "&max_inst=" + String(DEFAULT_MAX_INST);
-  #|    try {
-  #|      const resp = await fetch(url);
-  #|      const payload = await resp.json();
-  #|      if (!payload.ok) {
-  #|        setStatus("snapshot failed: " + (payload.error || "unknown"));
-  #|        return;
-  #|      }
-  #|      snapshotData = payload.data;
-  #|      summaryEl.textContent = JSON.stringify(snapshotData.meta, null, 2);
-  #|      currentAddr = "";
-  #|      renderInstructions();
-  #|      setStatus("snapshot loaded");
-  #|    } catch (err) {
-  #|      setStatus("request failed: " + String(err));
-  #|    }
-  #|  }
-  #|
-  #|  function appendTrace(text) {
-  #|    const line = document.createElement("div");
-  #|    line.textContent = text;
-  #|    traceEl.prepend(line);
-  #|    while (traceEl.childNodes.length > 120) {
-  #|      traceEl.removeChild(traceEl.lastChild);
-  #|    }
-  #|  }
-  #|
-  #|  function stopStream() {
-  #|    if (source) {
-  #|      source.close();
-  #|      source = null;
-  #|    }
-  #|  }
-  #|
-  #|  function startStream() {
-  #|    stopStream();
-  #|    const file = fileEl.value.trim();
-  #|    if (!file) {
-  #|      setStatus("file path is required");
-  #|      return;
-  #|    }
-  #|    traceEl.textContent = "";
-  #|    const url = "/api/stream?file=" + encodeURIComponent(file) +
-  #|      "&max_inst=" + String(DEFAULT_MAX_INST) +
-  #|      "&max_events=" + String(DEFAULT_MAX_EVENTS) +
-  #|      "&interval_ms=" + String(DEFAULT_INTERVAL_MS);
-  #|    source = new EventSource(url);
-  #|    source.addEventListener("step", (event) => {
-  #|      const payload = JSON.parse(event.data);
-  #|      currentAddr = payload.addr || "";
-  #|      appendTrace(payload.trace || event.data);
-  #|      renderInstructions();
-  #|    });
-  #|    source.addEventListener("done", () => {
-  #|      setStatus("stream completed");
-  #|      stopStream();
-  #|    });
-  #|    source.onerror = () => {
-  #|      setStatus("stream connection error");
-  #|    };
-  #|    setStatus("stream connecting...");
-  #|  }
-  #|
-  #|  loadBtn.addEventListener("click", loadSnapshot);
-  #|  startBtn.addEventListener("click", startStream);
-  #|  stopBtn.addEventListener("click", () => {
-  #|    stopStream();
-  #|    setStatus("stream stopped");
-  #|  });
-  #|  loadSnapshot();
-  #|})();
-
-///|
 struct ServeOptions {
   host : String
   port : Int
@@ -366,6 +229,7 @@ fn print_usage() -> Unit {
   println("  --interval-ms <ms>      Stream interval in milliseconds")
   println("")
   println("API:")
+  println("  GET /workbench?file=<path>")
   println("  GET /api/health")
   println("  GET /api/snapshot?file=<path>&max_inst=<n>")
   println(
@@ -374,16 +238,26 @@ fn print_usage() -> Unit {
 }
 
 ///|
-fn render_page_body() -> String {
+fn render_page_body(opts : ServeOptions) -> String {
+  let workbench_href = build_workbench_href(opts.default_file)
   let shell : @luna.Node[Unit, String] = @luna.h(
     "div",
     [("id", @luna.attr_static("root"))],
     [
       @luna.h("h1", [], [@luna.text("MoonRV Lab Online Workbench")]),
       @luna.h("p", [], [
-        @luna.text("Luna SSR shell + Mars online API + MoonBit analysis engine"),
+        @luna.text(
+          "在线入口页。完整 Godbolt 风格工作台请使用 /workbench。",
+        ),
       ]),
+      @luna.h("p", [], [
+        @luna.h("a", [("href", @luna.attr_static(workbench_href))], [
+          @luna.text("Open Online Workbench"),
+        ]),
+      ]),
+      @luna.h("p", [], [@luna.text("默认文件: " + opts.default_file)]),
       @luna.h("ul", [], [
+        @luna.h("li", [], [@luna.text("GET /workbench?file=<path>")]),
         @luna.h("li", [], [@luna.text("GET /api/health")]),
         @luna.h("li", [], [
           @luna.text("GET /api/snapshot?file=<path>&max_inst=<n>"),
@@ -394,9 +268,6 @@ fn render_page_body() -> String {
           ),
         ]),
       ]),
-      @luna.h("div", [("id", @luna.attr_static("app"))], [
-        @luna.text("Initializing..."),
-      ]),
     ],
   )
   let sb = StringBuilder::new(size_hint=1024)
@@ -406,17 +277,7 @@ fn render_page_body() -> String {
 
 ///|
 fn build_index_html(opts : ServeOptions) -> String {
-  let body_html = render_page_body()
-  let config_json = "{" +
-    "\"defaultFile\":" +
-    json_string(opts.default_file) +
-    ",\"defaultMaxInst\":" +
-    opts.max_inst.to_string() +
-    ",\"defaultMaxEvents\":" +
-    opts.max_events.to_string() +
-    ",\"defaultIntervalMs\":" +
-    opts.interval_ms.to_string() +
-    "}"
+  let body_html = render_page_body(opts)
 
   "<!doctype html>\n" +
   "<html lang=\"en\">\n" +
@@ -430,13 +291,6 @@ fn build_index_html(opts : ServeOptions) -> String {
   "</head>\n" +
   "<body>\n" +
   body_html +
-  "\n" +
-  "  <script>window.__RVR_CONFIG__ = " +
-  config_json +
-  ";</script>\n" +
-  "  <script>\n" +
-  CLIENT_BOOTSTRAP_JS +
-  "\n  </script>\n" +
   "</body>\n" +
   "</html>"
 }
@@ -588,24 +442,41 @@ fn is_void_tag(tag : String) -> Bool {
 }
 
 ///|
-fn escape_json(value : String) -> String {
-  let mut escaped = ""
-  for c in value {
-    match c {
-      '"' => escaped = escaped + "\\\""
-      '\\' => escaped = escaped + "\\\\"
-      '\n' => escaped = escaped + "\\n"
-      '\r' => escaped = escaped + "\\r"
-      '\t' => escaped = escaped + "\\t"
-      _ => escaped = escaped + c.to_string()
-    }
+fn build_workbench_href(file : String) -> String {
+  if file == "" {
+    "/workbench"
+  } else {
+    "/workbench?file=" + url_query_escape(file)
   }
-  escaped
 }
 
 ///|
-fn json_string(value : String) -> String {
-  "\"" + escape_json(value) + "\""
+fn build_workbench_route_html(opts : ServeOptions, file : String) -> String {
+  @workbench.online_page_html(
+    opts.default_file,
+    file,
+    opts.max_inst,
+    "/api/snapshot",
+  )
+}
+
+///|
+fn url_query_escape(value : String) -> String {
+  let mut escaped = ""
+  for c in value {
+    let encoded = match c {
+      ' ' => "%20"
+      '%' => "%25"
+      '#' => "%23"
+      '&' => "%26"
+      '+' => "%2B"
+      '?' => "%3F"
+      '=' => "%3D"
+      _ => c.to_string()
+    }
+    escaped = escaped + encoded
+  }
+  escaped
 }
 
 ///|
@@ -646,13 +517,14 @@ async fn respond_payload_json(
   ctx : @mars.Context,
   payload_text : String,
 ) -> Unit {
-  match (try? @json.parse(payload_text)) {
-    Ok(payload) => {
+  try @json.parse(payload_text) catch {
+    _ =>
+      ctx.json({ "ok": false, "error": "invalid backend payload" }, status=500)
+  } noraise {
+    payload => {
       let status = status_from_payload(payload)
       ctx.json(payload, status~)
     }
-    Err(_) =>
-      ctx.json({ "ok": false, "error": "invalid backend payload" }, status=500)
   }
 }
 
@@ -703,6 +575,14 @@ async fn run_server(opts : ServeOptions) -> Unit {
   app.get("/", @mars.handler(async fn(ctx) { ctx.html(index_html) }))
 
   app.get("/index.html", @mars.handler(async fn(ctx) { ctx.html(index_html) }))
+
+  app.get(
+    "/workbench",
+    @mars.handler(async fn(ctx) {
+      let file = choose_file(ctx.query("file"), opts.default_file)
+      ctx.html(build_workbench_route_html(opts, file))
+    }),
+  )
 
   app.get(
     "/api/health",
