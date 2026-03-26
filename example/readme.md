@@ -1,95 +1,33 @@
-# 简介
+# Example Readme
 
-```shell
-riscv64-unknown-elf-gcc -S -march=rv64gc -mabi=lp64d -O3 hello.c -o hello.s
-riscv64-unknown-elf-gcc -march=rv64gc -mabi=lp64d hello.s -o a.out
-cp ../_build/native/debug/build/cmd/main/main.exe rvkit
-./rvkit disasm a.out >> output.txt
+`example/` 保存答辩和回归使用的最小样例集，默认以源码 `.s` 为主，稳定演示入口保留 `simple.elf`。
+
+## 快速开始
+
+```bash
+# 1. 组装一个样例
+~/.moon/bin/moon run cmd/main -- asm example/branch_loop.s -o out/branch_loop.elf
+
+# 2. 运行并查看 stop reason / registers
+~/.moon/bin/moon run cmd/main -- run out/branch_loop.elf --max-steps 20
+
+# 3. 导出 trace
+~/.moon/bin/moon run cmd/main -- run out/branch_loop.elf --trace out/branch_loop.trace.json
+
+# 4. 生成离线 workbench
+~/.moon/bin/moon run cmd/main -- workbench out/branch_loop.elf -o out/branch_loop.html
+
+# 5. 启动在线 workbench
+~/.moon/bin/moon run cmd/server --target native -- --file example/simple.elf --port 18080
 ```
 
-```shell
-# 分析一个 RISC-V 固件
-rvkit info firmware.bin        # 查看文件类型和结构
-rvkit symbols firmware.bin     # 查看有哪些函数
-rvkit cfg firmware.bin -n main -o main.dot  # 生成 main 函数的控制流图
-rvkit disasm firmware.bin      # 反汇编查看实际指令
-```
+## 目录说明
 
-## 汇编器演示
+- `simple.s` / `simple.elf`: 默认演示入口，适合 `run`、trace、在线工作台。
+- `branch_loop.s`, `memory_roundtrip.s`, `call_chain.s`: 基础执行与控制流样例。
+- `print_42.s`: 最短 syscall 闭环，覆盖 `write + exit`。
+- `file_open_read_close.s`, `file_lseek_read.s`, `file_fstat_close.s`: 文件 I/O 样例。
+- `sys_brk_ioctl.s`: `brk` 和 `ioctl` 行为观察样例。
+- `io.txt`: 文件 I/O 样例依赖的宿主文件。
 
-将 RISC-V 汇编代码汇编为可执行文件：
-
-```shell
-# 构建 rvkit
-cd /Volumes/Data/Code/moon/scc/riscv_analyzer
-moon build --target native
-
-# 汇编为 ELF 可执行文件（默认格式）
-./_build/native/debug/build/cmd/main/main.exe asm example/simple.s -o example/simple.elf
-
-# 汇编为十六进制格式
-./_build/native/debug/build/cmd/main/main.exe asm example/simple.s -o example/simple.hex --format hex
-
-# 汇编为原始二进制
-./_build/native/debug/build/cmd/main/main.exe asm example/simple.s -o example/simple.bin --format raw
-
-# 指定基地址
-./_build/native/debug/build/cmd/main/main.exe asm example/simple.s -o example/simple.elf --base 0x80000000
-```
-
-## 使用 libriscv 运行二进制
-
-[libriscv](https://github.com/libriscv/libriscv) 是一个高性能 RISC-V 模拟器，可以用来运行 rvkit 生成的二进制文件。
-
-### 构建 libriscv
-
-```shell
-# 克隆 libriscv
-git clone --depth 1 https://github.com/libriscv/libriscv.git /tmp/libriscv
-
-# 构建
-cd /tmp/libriscv/emulator
-./build.sh --defaults
-```
-
-### 构建运行器
-
-```shell
-cd /Volumes/Data/Code/moon/scc/riscv_analyzer/tools
-mkdir -p build && cd build
-cmake .. && make -j4
-```
-
-### 运行测试
-
-```shell
-# 生成二进制
-./_build/native/debug/build/cmd/main/main.exe asm example/simple.s -o example/simple.bin --format raw
-
-# 使用 libriscv 运行
-./tools/build/rvrunner example/simple.bin 0x10000
-```
-
-### 运行结果示例
-
-```
-Loaded 44 bytes from example/simple.bin
-Entry point: 0x10000
-Running...
----
----
-Machine stopped.
-Instructions executed: 11
-
-Final registers:
-  x10 (a0): 0x0000002a   # 42 (初始值)
-  x11 (a1): 0x00000034   # 52 (42 + 10)
-  x12 (a2): 0x0000005e   # 94 (42 + 52)
-  x13 (a3): 0x0000000a   # 10 (52 - 42)
-  x14 (a4): 0x0000002a   # 42 (42 & 0xFF)
-  x15 (a5): 0x0000012a   # 298 (42 | 0x100)
-  x16 (a6): 0x000000d5   # 213 (42 ^ 0xFF)
-  x17 (a7): 0x000000a8   # 168 (42 << 2)
-  x8  (s0): 0x00000015   # 21 (42 >> 1)
-  x5  (t0): 0x12345000   # lui t0, 0x12345
-```
+更完整的用途、命令和观察点见 [INDEX.md](INDEX.md)。

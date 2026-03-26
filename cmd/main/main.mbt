@@ -163,6 +163,12 @@ pub enum OutputFormat {
 } derive(Show, Eq)
 
 ///|
+priv enum CommandExecResult {
+  Success(String)
+  Failure(String)
+} derive(Show)
+
+///|
 /// Parse output format from string
 fn parse_format(s : String) -> OutputFormat {
   match s {
@@ -1653,16 +1659,22 @@ fn format_run_json(state : @simulator.ExecState) -> String {
 ///|
 /// Execute run command.
 fn execute_run(opts : RunOptions) -> Unit {
+  match execute_run_result(opts) {
+    Success(output) => println(output)
+    Failure(err) => println(err)
+  }
+}
+
+///|
+/// Execute run command and return the rendered CLI output.
+fn execute_run_result(opts : RunOptions) -> CommandExecResult {
   match @simulator.load(opts.file_path) {
     @simulator.Loaded(initial_state) => {
       let mut state = initial_state
       if opts.entry != "" {
         match resolve_run_selector(opts.entry, state.image) {
           Some(entry_addr) => state = @simulator.with_entry(state, entry_addr)
-          None => {
-            println("Error: Entry not found: \{opts.entry}")
-            return
-          }
+          None => return Failure("Error: Entry not found: \{opts.entry}")
         }
       }
 
@@ -1670,10 +1682,7 @@ fn execute_run(opts : RunOptions) -> Unit {
       for selector in opts.breakpoints {
         match resolve_run_selector(selector, state.image) {
           Some(addr) => breakpoints.push(@simulator.breakpoint(addr))
-          None => {
-            println("Error: Breakpoint not found: \{selector}")
-            return
-          }
+          None => return Failure("Error: Breakpoint not found: \{selector}")
         }
       }
 
@@ -1685,16 +1694,15 @@ fn execute_run(opts : RunOptions) -> Unit {
           opts.trace,
           @simulator.trace_events_to_json(finished.trace),
         ) {
-        println("Error: Failed to write trace file: \{opts.trace}")
-        return
+        return Failure("Error: Failed to write trace file: \{opts.trace}")
       }
 
       match opts.format {
-        OutputFormat::Json => println(format_run_json(finished))
-        _ => println(format_run_text(finished))
+        OutputFormat::Json => Success(format_run_json(finished))
+        _ => Success(format_run_text(finished))
       }
     }
-    @simulator.LoadFailed(err) => println("Error: \{err}")
+    @simulator.LoadFailed(err) => Failure("Error: \{err}")
   }
 }
 
@@ -1820,16 +1828,24 @@ fn execute_asm(opts : AsmOptions) -> Unit {
 ///|
 /// Execute workbench command (generate standalone Web frontend page)
 fn execute_workbench(opts : WorkbenchCmdOptions) -> Unit {
+  match execute_workbench_result(opts) {
+    Success(output) => println(output)
+    Failure(err) => println(err)
+  }
+}
+
+///|
+/// Execute workbench command and return the rendered CLI output.
+fn execute_workbench_result(opts : WorkbenchCmdOptions) -> CommandExecResult {
   let wb_opts = @workbench.create_options(opts.title, opts.max_instructions)
 
   match @workbench.generate_from_file(opts.file_path, opts.output, wb_opts) {
-    Some(err) => println("Error: \{err}")
-    None => {
-      println("Workbench generated: \{opts.output}")
-      println(
+    Some(err) => Failure("Error: \{err}")
+    None =>
+      Success(
+        "Workbench generated: \{opts.output}\n" +
         "Open the HTML file in a browser to use the disassembly/CFG/trace workbench.",
       )
-    }
   }
 }
 
