@@ -39,6 +39,18 @@ fn branch_trace_program() -> String {
 }
 
 ///|
+fn read_text_file(path : String) -> String {
+  let bytes = @fs.read_file_to_bytes(path).to_fixedarray() catch {
+    _ => abort("failed to read text file")
+  }
+  let mut content = ""
+  for i = 0; i < bytes.length(); i = i + 1 {
+    content = content + bytes[i].to_int().unsafe_to_char().to_string()
+  }
+  content
+}
+
+///|
 test "workbench snapshot json includes runtime metadata" {
   let path = write_test_elf("snapshot_runtime", branch_trace_program())
   let json = snapshot_api_json_from_file(path, 20)
@@ -68,4 +80,26 @@ test "workbench stream payloads follow execution order instead of disasm order" 
     }
     StreamEventsErr(err) => abort(err)
   }
+}
+
+///|
+test "generated workbench html includes godbolt style panes and controls" {
+  let path = write_test_elf("godbolt_layout", branch_trace_program())
+  let output = TEST_DIR + "/godbolt_layout.html"
+  match
+    generate_from_file(path, output, create_options("Godbolt Workbench", 20)) {
+    None => ()
+    Some(err) => abort(err.to_string())
+  }
+
+  let html = read_text_file(output)
+  assert_true(html.contains("class=\"workbench-shell\""))
+  assert_true(html.contains("class=\"splitter splitter-x\""))
+  assert_true(html.contains("class=\"pane-tabs\""))
+  assert_true(html.contains("id=\"follow-pc\""))
+  assert_true(html.contains("id=\"current-function-only\""))
+  assert_true(html.contains("class=\"pane result-pane\""))
+  assert_true(html.contains("localStorage"))
+  assert_true(html.contains("data.events"))
+  assert_true(html.contains("data.runtime.initial_registers"))
 }

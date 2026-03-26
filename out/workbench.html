@@ -3,115 +3,243 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>MoonRV Lab Demo</title>
+  <title>MoonRV Lab Workbench</title>
   <style>
     :root {
-      --bg: #f4f6fb;
-      --ink: #0b1328;
-      --muted: #5d6a85;
+      --bg: #eef1f5;
       --panel: #ffffff;
-      --line: #d6deec;
-      --accent: #0f766e;
-      --accent-soft: #dcf4f2;
-      --warning: #92400e;
-      --shadow: 0 8px 24px rgba(19, 35, 79, 0.08);
+      --panel-muted: #f7f8fa;
+      --toolbar: #f4f6f8;
+      --ink: #1c1f24;
+      --muted: #677184;
+      --line: #d7dbe2;
+      --line-strong: #c4cad4;
+      --accent: #1e6bb8;
+      --accent-soft: #e8f1fb;
+      --pc: #fff8cc;
+      --selected: #eef4ff;
+      --success-soft: #edf7ef;
+      --warning-bg: #fff3df;
+      --warning-ink: #8a4f00;
+      --splitter-size: 6px;
+      --nav-width: 240px;
+      --inspector-width: 320px;
+      --bottom-height: 260px;
+      --nav-split-size: var(--splitter-size);
+      --inspector-split-size: var(--splitter-size);
+      --bottom-split-size: var(--splitter-size);
     }
     * { box-sizing: border-box; }
+    html, body { height: 100%; }
     body {
       margin: 0;
-      font-family: "SFMono-Regular", "Iosevka", "JetBrains Mono", monospace;
-      background: radial-gradient(circle at 8% 10%, #f5fbff 0%, var(--bg) 42%, #eef2ff 100%);
+      font-family: "SFMono-Regular", "Cascadia Mono", "JetBrains Mono", "Iosevka", monospace;
+      font-size: 12px;
+      line-height: 1.45;
+      background: var(--bg);
       color: var(--ink);
     }
-    .app {
-      display: grid;
-      grid-template-rows: auto 1fr auto;
-      min-height: 100vh;
-      gap: 10px;
-      padding: 10px;
+    button,
+    select,
+    input {
+      font: inherit;
+      color: inherit;
     }
-    .panel {
-      background: var(--panel);
-      border: 1px solid var(--line);
-      border-radius: 14px;
-      box-shadow: var(--shadow);
-    }
-    .toolbar {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 12px;
-      padding: 12px 14px;
-    }
-    .toolbar h1 {
-      margin: 0 0 4px 0;
-      font-size: 18px;
-      line-height: 1.25;
-    }
-    .toolbar .sub {
-      color: var(--muted);
-      font-size: 12px;
-      max-width: 760px;
-      word-break: break-all;
-    }
-    .controls {
-      display: grid;
-      grid-template-columns: minmax(220px, 1fr) repeat(4, auto);
-      gap: 8px;
-      align-items: center;
-      min-width: min(100%, 680px);
-    }
-    button, select {
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      background: #fff;
-      padding: 8px 10px;
-      color: var(--ink);
-      font-family: "SFMono-Regular", "Iosevka", "JetBrains Mono", monospace;
-      font-size: 12px;
+    button {
       cursor: pointer;
+      border: 1px solid var(--line-strong);
+      background: #fff;
+      border-radius: 2px;
+      padding: 4px 8px;
+      min-height: 26px;
+    }
+    button:hover { background: #f9fafb; }
+    button:disabled {
+      cursor: default;
+      opacity: 0.55;
+      background: #fbfbfc;
     }
     button.primary {
       background: var(--accent);
-      color: #fff;
       border-color: var(--accent);
+      color: #fff;
     }
-    .main {
+    button.toggle-btn.active {
+      background: var(--accent-soft);
+      border-color: #9fc1e5;
+      color: #154e87;
+    }
+    select,
+    input {
+      width: 100%;
+      min-height: 26px;
+      border: 1px solid var(--line-strong);
+      border-radius: 2px;
+      background: #fff;
+      padding: 4px 8px;
+    }
+    .workbench-app {
       display: grid;
-      grid-template-columns: minmax(220px, 260px) 1fr minmax(240px, 300px);
-      gap: 10px;
-      min-height: 0;
+      grid-template-rows: auto auto 1fr;
+      min-height: 100vh;
+      gap: 0;
     }
-    .pane {
+    .toolbar {
+      display: grid;
+      grid-template-columns: minmax(240px, 1fr) minmax(520px, 2fr);
+      gap: 12px;
+      align-items: center;
+      padding: 8px 10px;
+      border-bottom: 1px solid var(--line);
+      background: var(--toolbar);
+    }
+    .toolbar-title {
+      min-width: 0;
+    }
+    .title-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      min-width: 0;
+    }
+    .title-row h1 {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 700;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .path-row {
+      margin-top: 2px;
+      color: var(--muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 20px;
+      padding: 0 6px;
+      border: 1px solid var(--line-strong);
+      background: #fff;
+      border-radius: 999px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+    .toolbar-controls {
+      display: grid;
+      grid-template-columns: minmax(180px, 240px) minmax(180px, 1fr) auto auto;
+      gap: 8px;
+      align-items: end;
+    }
+    .toolbar-field {
       display: flex;
       flex-direction: column;
-      min-height: 0;
-      overflow: hidden;
+      gap: 3px;
+      min-width: 0;
     }
-    .pane h2 {
-      margin: 0;
-      padding: 10px 12px;
+    .toolbar-field label,
+    .toolbar-field span {
+      color: var(--muted);
+      font-size: 11px;
+    }
+    .toolbar-buttons,
+    .toolbar-toggles {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+    .status-strip {
+      display: none;
+      padding: 6px 10px;
+      border-bottom: 1px solid #f0cf99;
+      background: var(--warning-bg);
+      color: var(--warning-ink);
+    }
+    .workbench-shell {
+      display: grid;
+      min-height: 0;
+      grid-template-columns: var(--nav-width) var(--nav-split-size) minmax(0, 1fr) var(--inspector-split-size) var(--inspector-width);
+    }
+    .pane {
+      min-width: 0;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      background: var(--panel);
+    }
+    .pane-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      min-height: 32px;
+      padding: 0 8px;
       border-bottom: 1px solid var(--line);
-      font-size: 13px;
-      letter-spacing: 0.4px;
-      background: linear-gradient(180deg, #ffffff 0%, #f9fbff 100%);
+      background: #fbfbfc;
     }
-    .pane .scroll {
-      overflow: auto;
+    .pane-title {
+      font-size: 12px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+    .pane-subtitle {
+      color: var(--muted);
+      font-size: 11px;
+    }
+    .pane-actions {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .pane-scroll {
       min-height: 0;
+      overflow: auto;
+    }
+    .pane-body {
       padding: 8px;
     }
-    .function-item {
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 6px 8px;
-      margin-bottom: 6px;
-      cursor: pointer;
-      background: #fff;
+    .splitter {
+      position: relative;
+      background: var(--bg);
+      user-select: none;
     }
-    .function-item.active {
-      border-color: var(--accent);
-      background: var(--accent-soft);
+    .splitter::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: transparent;
+    }
+    .splitter-x {
+      width: var(--splitter-size);
+      cursor: col-resize;
+      border-left: 1px solid var(--line);
+      border-right: 1px solid var(--line);
+    }
+    .splitter-y {
+      height: var(--splitter-size);
+      cursor: row-resize;
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+    }
+    .center-shell {
+      display: grid;
+      min-height: 0;
+      grid-template-rows: minmax(260px, 1fr) var(--bottom-split-size) var(--bottom-height);
+      border-left: 1px solid var(--line);
+      border-right: 1px solid var(--line);
+    }
+    .nav-pane,
+    .inspector-pane {
+      background: var(--panel-muted);
+    }
+    .main-pane,
+    .result-pane {
+      background: var(--panel);
     }
     .summary-grid {
       display: grid;
@@ -120,35 +248,212 @@
       margin-bottom: 8px;
     }
     .stat {
-      border: 1px solid var(--line);
-      border-radius: 8px;
       padding: 6px;
+      border: 1px solid var(--line);
       background: #fff;
     }
-    .stat .k { color: var(--muted); font-size: 11px; }
-    .stat .v { font-size: 13px; margin-top: 4px; }
-    .center {
+    .stat .k {
+      color: var(--muted);
+      font-size: 11px;
+    }
+    .stat .v {
+      margin-top: 3px;
+      font-size: 12px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .compact-list {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .list-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin: 10px 0 4px;
+      color: var(--muted);
+    }
+    .nav-row {
+      width: 100%;
+      text-align: left;
+      padding: 6px 8px;
+      border: 1px solid transparent;
+      background: transparent;
       display: grid;
-      grid-template-rows: minmax(260px, 1fr) minmax(220px, 1fr);
-      gap: 10px;
+      gap: 2px;
+    }
+    .nav-row:hover { background: #fff; }
+    .nav-row.active {
+      background: var(--accent-soft);
+      border-color: #b9d2ec;
+    }
+    .nav-row.current {
+      border-color: #d0b04b;
+    }
+    .nav-row-title {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+    }
+    .nav-row-title span:first-child {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .nav-row-meta {
+      color: var(--muted);
+      font-size: 11px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .pane-tabs {
+      display: flex;
+      gap: 1px;
+      padding: 0 8px;
+      border-bottom: 1px solid var(--line);
+      background: #f8f9fb;
+    }
+    .pane-tab {
+      border: 0;
+      border-bottom: 2px solid transparent;
+      background: transparent;
+      border-radius: 0;
+      min-height: 29px;
+      padding: 0 10px;
+      color: var(--muted);
+    }
+    .pane-tab.active {
+      color: var(--ink);
+      border-bottom-color: var(--accent);
+      background: #fff;
+    }
+    .tab-panel {
+      display: none;
       min-height: 0;
+      flex: 1 1 auto;
+    }
+    .tab-panel.active {
+      display: flex;
+      min-height: 0;
+      flex-direction: column;
+    }
+    .tab-scroll {
+      min-height: 0;
+      overflow: auto;
+      padding: 8px;
     }
     table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 12px;
+      table-layout: fixed;
     }
-    th, td {
+    th,
+    td {
+      padding: 4px 6px;
       border-bottom: 1px solid var(--line);
-      padding: 5px 6px;
       text-align: left;
       vertical-align: top;
+      word-break: break-word;
     }
-    tr.active td {
-      background: #fff8db;
+    thead th {
+      position: sticky;
+      top: 0;
+      z-index: 1;
+      background: #fbfbfc;
+      color: var(--muted);
+      font-weight: 600;
     }
-    tr:hover td {
-      background: #f5f8ff;
+    tbody tr:hover td { background: #f7faff; }
+    tbody tr.active td { background: var(--pc); }
+    tbody tr.focus td { background: var(--selected); }
+    .interactive tbody tr { cursor: pointer; }
+    .mono { font-variant-ligatures: none; }
+    .column-index { width: 50px; }
+    .column-addr { width: 112px; }
+    .column-category { width: 96px; }
+    .column-next { width: 112px; }
+    .code-cell { white-space: pre-wrap; }
+    .muted { color: var(--muted); }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      min-height: 18px;
+      padding: 0 5px;
+      border: 1px solid var(--line-strong);
+      border-radius: 999px;
+      color: var(--muted);
+      background: #fff;
+      font-size: 11px;
+      white-space: nowrap;
+    }
+    .badge.changed {
+      background: var(--success-soft);
+      border-color: #bdd9c4;
+      color: #296238;
+    }
+    .badge.current {
+      background: #fff6d7;
+      border-color: #dbc166;
+      color: #6f5602;
+    }
+    .empty-panel {
+      padding: 14px 8px;
+      color: var(--muted);
+    }
+    .kv-table td:first-child {
+      width: 92px;
+      color: var(--muted);
+    }
+    .section-block + .section-block {
+      margin-top: 10px;
+    }
+    .section-block h3 {
+      margin: 0 0 5px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .register-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 8px;
+    }
+    .register-group + .register-group { margin-top: 10px; }
+    .group-title {
+      margin-bottom: 4px;
+      color: var(--muted);
+    }
+    .register-table td:first-child {
+      width: 74px;
+      color: var(--muted);
+    }
+    .register-table td:last-child {
+      width: 88px;
+      text-align: right;
+    }
+    .output-box {
+      margin-top: 8px;
+      border: 1px solid var(--line);
+      background: #fff;
+    }
+    .output-head {
+      padding: 4px 6px;
+      border-bottom: 1px solid var(--line);
+      color: var(--muted);
+      background: #fbfbfc;
+    }
+    .output-body {
+      margin: 0;
+      padding: 8px;
+      white-space: pre-wrap;
+      word-break: break-word;
     }
     .cfg-grid {
       display: grid;
@@ -156,137 +461,199 @@
       gap: 8px;
       margin-bottom: 10px;
     }
-    .cfg-block {
+    .cfg-card {
       border: 1px solid var(--line);
-      border-radius: 10px;
-      padding: 7px;
       background: #fff;
-      font-size: 12px;
-    }
-    .cfg-block.active {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 2px var(--accent-soft) inset;
-    }
-    .edge-list {
-      margin: 0;
-      padding-left: 18px;
-      color: var(--muted);
-      font-size: 12px;
-    }
-    .reg-grid {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 6px;
-      font-size: 12px;
-    }
-    .reg {
-      border: 1px solid var(--line);
-      border-radius: 8px;
-      padding: 6px;
-      background: #fff;
-    }
-    .reg .name { color: var(--muted); font-size: 11px; }
-    .reg .value { font-size: 12px; margin-top: 4px; }
-    .trace {
-      min-height: 160px;
-      max-height: 220px;
-      overflow: auto;
       padding: 8px;
-      font-size: 12px;
     }
-    .trace-item {
-      border-left: 3px solid var(--accent);
-      padding: 5px 8px;
-      margin-bottom: 5px;
-      background: #f8fcfb;
-      border-radius: 6px;
+    .cfg-card.active {
+      background: var(--pc);
+      border-color: #d4bc68;
     }
-    .warning {
-      margin: 0 8px 8px;
-      border: 1px solid #f4c483;
-      background: #fff7ea;
-      color: var(--warning);
-      border-radius: 8px;
-      padding: 7px 9px;
-      font-size: 12px;
+    .cfg-card-title {
+      font-weight: 700;
+      margin-bottom: 4px;
     }
-    @media (max-width: 1100px) {
-      .main {
+    .io-table td:first-child,
+    .trace-table td:first-child,
+    .trace-table td:nth-child(2),
+    .memory-table td:first-child,
+    .memory-table td:nth-child(2) {
+      white-space: nowrap;
+    }
+    .collapsed-pane {
+      display: none;
+    }
+    @media (max-width: 1180px) {
+      .toolbar {
         grid-template-columns: 1fr;
       }
-      .center {
-        grid-template-rows: minmax(220px, 1fr) minmax(220px, 1fr);
-      }
-      .controls {
+      .toolbar-controls {
         grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+    }
+    @media (max-width: 1100px) {
+      .workbench-shell {
+        grid-template-columns: 1fr;
+      }
+      .splitter {
+        display: none;
+      }
+      .center-shell {
+        grid-template-rows: minmax(260px, 1fr) minmax(220px, 280px);
+        border-left: 0;
+        border-right: 0;
+      }
+      .nav-pane,
+      .inspector-pane,
+      .main-pane,
+      .result-pane {
+        border-bottom: 1px solid var(--line);
+      }
+    }
+    @media (max-width: 760px) {
+      .toolbar-controls {
+        grid-template-columns: 1fr;
+      }
+      .summary-grid {
+        grid-template-columns: 1fr;
+      }
+      .column-index,
+      .column-category,
+      .column-next {
+        display: none;
       }
     }
   </style>
 </head>
 <body>
-  <div class="app">
-    <header class="toolbar panel">
-      <div>
-        <h1 id="title"></h1>
-        <div class="sub" id="source"></div>
+  <div class="workbench-app">
+    <header class="toolbar">
+      <div class="toolbar-title">
+        <div class="title-row">
+          <h1 id="title"></h1>
+          <span class="pill" id="status-pill"></span>
+        </div>
+        <div class="path-row" id="source"></div>
       </div>
-      <div class="controls">
-        <select id="function-select"></select>
-        <button id="reset-btn">重置</button>
-        <button id="prev-btn">上一步</button>
-        <button id="next-btn" class="primary">下一步</button>
-        <button id="play-btn">自动播放</button>
+      <div class="toolbar-controls">
+        <div class="toolbar-field">
+          <span>函数</span>
+          <select id="function-select"></select>
+        </div>
+        <div class="toolbar-field">
+          <span>搜索</span>
+          <input id="search-input" type="search" placeholder="地址 / 函数 / 指令 / category" />
+        </div>
+        <div class="toolbar-buttons">
+          <button id="reset-btn">Reset</button>
+          <button id="prev-btn">Prev</button>
+          <button id="next-btn" class="primary">Next</button>
+          <button id="play-btn">Play</button>
+        </div>
+        <div class="toolbar-toggles">
+          <button id="follow-pc" class="toggle-btn">Follow PC</button>
+          <button id="current-function-only" class="toggle-btn">Show Only Current Function</button>
+        </div>
       </div>
     </header>
-    <div class="main">
-      <aside class="pane panel">
-        <h2>导航与摘要</h2>
-        <div class="scroll">
+    <div class="status-strip" id="truncated-banner"></div>
+    <main class="workbench-shell">
+      <aside class="pane nav-pane" id="nav-pane">
+        <div class="pane-head">
+          <div>
+            <div class="pane-title">导航</div>
+            <div class="pane-subtitle">函数 / 节区 / 摘要</div>
+          </div>
+          <div class="pane-actions">
+            <button id="toggle-nav-pane">折叠</button>
+          </div>
+        </div>
+        <div class="pane-scroll pane-body">
           <div class="summary-grid" id="summary-grid"></div>
-          <h3>函数列表</h3>
-          <div id="function-list"></div>
-          <h3>节区</h3>
-          <div id="section-list"></div>
+          <div class="list-header"><span>Functions</span><span class="muted" id="function-list-count"></span></div>
+          <div class="compact-list" id="function-list"></div>
+          <div class="list-header"><span>Sections</span><span class="muted" id="section-list-count"></span></div>
+          <div class="compact-list" id="section-list"></div>
         </div>
       </aside>
-      <section class="center">
-        <div class="pane panel">
-          <h2>反汇编视图</h2>
-          <div id="truncated-banner" class="warning" style="display:none"></div>
-          <div class="scroll">
-            <table>
+      <div class="splitter splitter-x" id="nav-splitter"></div>
+      <section class="center-shell">
+        <section class="pane main-pane">
+          <div class="pane-head">
+            <div>
+              <div class="pane-title">Disassembly</div>
+              <div class="pane-subtitle" id="disasm-subtitle"></div>
+            </div>
+            <div class="pane-actions">
+              <span class="pill" id="view-pill"></span>
+            </div>
+          </div>
+          <div class="pane-scroll">
+            <table class="interactive mono">
               <thead>
-                <tr><th>#</th><th>地址</th><th>指令</th><th>分类</th></tr>
+                <tr><th class="column-index">#</th><th class="column-addr">地址</th><th class="column-category">分类</th><th>指令</th></tr>
               </thead>
               <tbody id="disasm-body"></tbody>
             </table>
           </div>
-        </div>
-        <div class="pane panel">
-          <h2>CFG 视图</h2>
-          <div class="scroll" id="cfg-view"></div>
-        </div>
+        </section>
+        <div class="splitter splitter-y" id="bottom-splitter"></div>
+        <section class="pane result-pane" id="result-pane">
+          <div class="pane-head">
+            <div>
+              <div class="pane-title">Results</div>
+              <div class="pane-subtitle">CFG / Trace / Memory Writes / Syscalls</div>
+            </div>
+            <div class="pane-actions">
+              <button id="toggle-bottom-pane">折叠</button>
+            </div>
+          </div>
+          <div class="pane-tabs" id="pane-tabs">
+            <button class="pane-tab" data-tab="cfg">CFG</button>
+            <button class="pane-tab" data-tab="trace">Trace</button>
+            <button class="pane-tab" data-tab="memory">Memory Writes</button>
+            <button class="pane-tab" data-tab="syscalls">Syscalls/Output</button>
+          </div>
+          <div class="tab-panel" data-tab-panel="cfg"><div class="tab-scroll" id="cfg-view"></div></div>
+          <div class="tab-panel" data-tab-panel="trace"><div class="tab-scroll"><table class="interactive trace-table mono"><thead><tr><th class="column-index">step</th><th class="column-addr">pc</th><th>instruction</th><th>writes</th><th>syscall/stop</th></tr></thead><tbody id="trace-body"></tbody></table></div></div>
+          <div class="tab-panel" data-tab-panel="memory"><div class="tab-scroll"><table class="memory-table mono"><thead><tr><th class="column-index">step</th><th class="column-addr">addr</th><th class="column-index">size</th><th>before</th><th>after</th></tr></thead><tbody id="memory-body"></tbody></table></div></div>
+          <div class="tab-panel" data-tab-panel="syscalls"><div class="tab-scroll"><table class="io-table mono"><thead><tr><th class="column-index">step</th><th class="column-category">kind</th><th>detail</th></tr></thead><tbody id="syscall-body"></tbody></table><div class="output-box"><div class="output-head">stdout</div><pre class="output-body" id="stdout-output"></pre></div><div class="output-box"><div class="output-head">stderr</div><pre class="output-body" id="stderr-output"></pre></div></div></div>
+        </section>
       </section>
-      <aside class="pane panel">
-        <h2>状态面板</h2>
-        <div class="scroll">
-          <div class="summary-grid" id="runtime-summary"></div>
-          <h3>寄存器（教学模拟）</h3>
-          <div class="reg-grid" id="register-grid"></div>
-          <h3>最近访存事件</h3>
-          <ul class="edge-list" id="memory-events"></ul>
-          <h3>调用栈摘要</h3>
-          <ul class="edge-list" id="call-stack"></ul>
+      <div class="splitter splitter-x" id="inspector-splitter"></div>
+      <aside class="pane inspector-pane" id="inspector-pane">
+        <div class="pane-head">
+          <div>
+            <div class="pane-title">Inspector</div>
+            <div class="pane-subtitle">State / Registers / Execution</div>
+          </div>
+          <div class="pane-actions">
+            <button id="toggle-inspector-pane">折叠</button>
+          </div>
+        </div>
+        <div class="pane-scroll pane-body">
+          <div class="section-block">
+            <h3>State</h3>
+            <div class="summary-grid" id="runtime-summary"></div>
+          </div>
+          <div class="section-block">
+            <h3>Execution</h3>
+            <table class="kv-table mono"><tbody id="execution-body"></tbody></table>
+          </div>
+          <div class="section-block">
+            <div class="register-toolbar">
+              <h3 style="margin:0">Registers</h3>
+              <button id="changed-registers-toggle" class="toggle-btn">仅变化</button>
+            </div>
+            <div id="register-groups"></div>
+          </div>
         </div>
       </aside>
-    </div>
-    <footer class="panel">
-      <h2 style="margin:0;padding:10px 12px;border-bottom:1px solid var(--line);font-size:13px;">执行轨迹</h2>
-      <div class="trace" id="trace"></div>
-    </footer>
+    </main>
   </div>
   <script>
-    const RVLAB_DATA = {"meta":{"title":"MoonRV Lab Demo","source_file":"example/simple.elf","entry_point":"0x10000","file_class":"ELF32","architecture":"RISC-V","section_count":3,"program_count":1,"function_count":0,"instruction_count":20,"total_instruction_count":20,"basic_block_count":1,"cfg_edge_count":0,"truncated":false},"functions":[],"sections":[{"index":0,"name":"","addr":"0x62617472","size":"0x0"},{"index":1,"name":"","addr":"0x0","size":"0x100"},{"index":2,"name":"","addr":"0x0","size":"0x300"}],"instructions":[{"index":0,"addr":"0x10000","asm":".invalid 0x464c457f","category":"Unknown"},{"index":1,"addr":"0x10004","asm":"c.addi sp, 0","category":"Arithmetic"},{"index":2,"addr":"0x10006","asm":"c.nop","category":"Arithmetic"},{"index":3,"addr":"0x10008","asm":".invalid 0x0","category":"Unknown"},{"index":4,"addr":"0x1000a","asm":".invalid 0x0","category":"Unknown"},{"index":5,"addr":"0x1000c","asm":".invalid 0x0","category":"Unknown"},{"index":6,"addr":"0x1000e","asm":".invalid 0x0","category":"Unknown"},{"index":7,"addr":"0x10010","asm":"c.slli zero, 0","category":"Arithmetic"},{"index":8,"addr":"0x10012","asm":".invalid 0x100f3","category":"Unknown"},{"index":9,"addr":"0x10016","asm":".invalid 0x0","category":"Unknown"},{"index":10,"addr":"0x10018","asm":".invalid 0x0","category":"Unknown"},{"index":11,"addr":"0x1001a","asm":"c.nop","category":"Arithmetic"},{"index":12,"addr":"0x1001c","asm":"c.addi4spn a3, sp, 8","category":"Arithmetic"},{"index":13,"addr":"0x1001e","asm":".invalid 0x0","category":"Unknown"},{"index":14,"addr":"0x10020","asm":"c.addi4spn s0, sp, 64","category":"Arithmetic"},{"index":15,"addr":"0x10022","asm":".invalid 0x0","category":"Unknown"},{"index":16,"addr":"0x10024","asm":".invalid 0x0","category":"Unknown"},{"index":17,"addr":"0x10026","asm":".invalid 0x0","category":"Unknown"},{"index":18,"addr":"0x10028","asm":"c.addi4spn a3, sp, 8","category":"Arithmetic"},{"index":19,"addr":"0x1002a","asm":"c.addi4spn s0, sp, 8","category":"Arithmetic"}],"blocks":[{"start_addr":"0x10000","end_addr":"0x1002a","instruction_count":20,"is_terminated":false}],"edges":[]};
+    const RVLAB_DATA = {"meta":{"title":"MoonRV Lab Workbench","source_file":"example/simple.elf","entry_point":"0x10000","file_class":"ELF32","architecture":"RISC-V","section_count":3,"program_count":1,"function_count":0,"instruction_count":12,"total_instruction_count":12,"basic_block_count":1,"cfg_edge_count":0,"runtime_event_count":12,"truncated":false},"functions":[],"sections":[{"index":0,"name":"","addr":"0x0","size":"0x0"},{"index":1,"name":".text","addr":"0x10000","size":"0x30"},{"index":2,"name":".shstrtab","addr":"0x0","size":"0x11"}],"instructions":[{"index":0,"addr":"0x10000","asm":"addi a0, zero, 42","category":"Arithmetic"},{"index":1,"addr":"0x10004","asm":"addi a1, a0, 10","category":"Arithmetic"},{"index":2,"addr":"0x10008","asm":"add a2, a0, a1","category":"Arithmetic"},{"index":3,"addr":"0x1000c","asm":"sub a3, a1, a0","category":"Arithmetic"},{"index":4,"addr":"0x10010","asm":"andi a4, a0, 255","category":"Logical"},{"index":5,"addr":"0x10014","asm":"ori a5, a0, 256","category":"Logical"},{"index":6,"addr":"0x10018","asm":"xori a6, a0, 255","category":"Logical"},{"index":7,"addr":"0x1001c","asm":"slli a7, a0, 2","category":"Arithmetic"},{"index":8,"addr":"0x10020","asm":"srli s0, a0, 1","category":"Arithmetic"},{"index":9,"addr":"0x10024","asm":"lui t0, 0x12345","category":"Arithmetic"},{"index":10,"addr":"0x10028","asm":"slti t1, a0, 100","category":"Compare"},{"index":11,"addr":"0x1002c","asm":"ebreak","category":"System"}],"blocks":[{"start_addr":"0x10000","end_addr":"0x1002c","instruction_count":12,"is_terminated":true}],"edges":[],"runtime":{"initial_pc":"0x10000","stop_reason":"ebreak @0x1002c","initial_registers":[{"name":"zero","value":"0x0"},{"name":"ra","value":"0x0"},{"name":"sp","value":"0x7fff0000"},{"name":"gp","value":"0x0"},{"name":"tp","value":"0x0"},{"name":"t0","value":"0x0"},{"name":"t1","value":"0x0"},{"name":"t2","value":"0x0"},{"name":"s0","value":"0x0"},{"name":"s1","value":"0x0"},{"name":"a0","value":"0x0"},{"name":"a1","value":"0x0"},{"name":"a2","value":"0x0"},{"name":"a3","value":"0x0"},{"name":"a4","value":"0x0"},{"name":"a5","value":"0x0"},{"name":"a6","value":"0x0"},{"name":"a7","value":"0x0"},{"name":"s2","value":"0x0"},{"name":"s3","value":"0x0"},{"name":"s4","value":"0x0"},{"name":"s5","value":"0x0"},{"name":"s6","value":"0x0"},{"name":"s7","value":"0x0"},{"name":"s8","value":"0x0"},{"name":"s9","value":"0x0"},{"name":"s10","value":"0x0"},{"name":"s11","value":"0x0"},{"name":"t3","value":"0x0"},{"name":"t4","value":"0x0"},{"name":"t5","value":"0x0"},{"name":"t6","value":"0x0"}]},"events":[{"step":1,"addr":"0x10000","next_addr":"0x10004","asm":"addi a0, zero, 42","category":"Arithmetic","block_start":"0x10000","register_writes":[{"name":"a0","before":"0x0","after":"0x2a"}],"memory_writes":[],"stdout_append":"","stderr_append":"","syscall":"","stop_reason":"running"},{"step":2,"addr":"0x10004","next_addr":"0x10008","asm":"addi a1, a0, 10","category":"Arithmetic","block_start":"0x10000","register_writes":[{"name":"a1","before":"0x0","after":"0x34"}],"memory_writes":[],"stdout_append":"","stderr_append":"","syscall":"","stop_reason":"running"},{"step":3,"addr":"0x10008","next_addr":"0x1000c","asm":"add a2, a0, a1","category":"Arithmetic","block_start":"0x10000","register_writes":[{"name":"a2","before":"0x0","after":"0x5e"}],"memory_writes":[],"stdout_append":"","stderr_append":"","syscall":"","stop_reason":"running"},{"step":4,"addr":"0x1000c","next_addr":"0x10010","asm":"sub a3, a1, a0","category":"Arithmetic","block_start":"0x10000","register_writes":[{"name":"a3","before":"0x0","after":"0xa"}],"memory_writes":[],"stdout_append":"","stderr_append":"","syscall":"","stop_reason":"running"},{"step":5,"addr":"0x10010","next_addr":"0x10014","asm":"andi a4, a0, 255","category":"Logical","block_start":"0x10000","register_writes":[{"name":"a4","before":"0x0","after":"0x2a"}],"memory_writes":[],"stdout_append":"","stderr_append":"","syscall":"","stop_reason":"running"},{"step":6,"addr":"0x10014","next_addr":"0x10018","asm":"ori a5, a0, 256","category":"Logical","block_start":"0x10000","register_writes":[{"name":"a5","before":"0x0","after":"0x12a"}],"memory_writes":[],"stdout_append":"","stderr_append":"","syscall":"","stop_reason":"running"},{"step":7,"addr":"0x10018","next_addr":"0x1001c","asm":"xori a6, a0, 255","category":"Logical","block_start":"0x10000","register_writes":[{"name":"a6","before":"0x0","after":"0xd5"}],"memory_writes":[],"stdout_append":"","stderr_append":"","syscall":"","stop_reason":"running"},{"step":8,"addr":"0x1001c","next_addr":"0x10020","asm":"slli a7, a0, 2","category":"Arithmetic","block_start":"0x10000","register_writes":[{"name":"a7","before":"0x0","after":"0xa8"}],"memory_writes":[],"stdout_append":"","stderr_append":"","syscall":"","stop_reason":"running"},{"step":9,"addr":"0x10020","next_addr":"0x10024","asm":"srli s0, a0, 1","category":"Arithmetic","block_start":"0x10000","register_writes":[{"name":"s0","before":"0x0","after":"0x15"}],"memory_writes":[],"stdout_append":"","stderr_append":"","syscall":"","stop_reason":"running"},{"step":10,"addr":"0x10024","next_addr":"0x10028","asm":"lui t0, 0x12345","category":"Arithmetic","block_start":"0x10000","register_writes":[{"name":"t0","before":"0x0","after":"0x12345"}],"memory_writes":[],"stdout_append":"","stderr_append":"","syscall":"","stop_reason":"running"},{"step":11,"addr":"0x10028","next_addr":"0x1002c","asm":"slti t1, a0, 100","category":"Compare","block_start":"0x10000","register_writes":[{"name":"t1","before":"0x0","after":"0x1"}],"memory_writes":[],"stdout_append":"","stderr_append":"","syscall":"","stop_reason":"running"},{"step":12,"addr":"0x1002c","next_addr":"0x1002c","asm":"ebreak","category":"System","block_start":"0x10000","register_writes":[],"memory_writes":[],"stdout_append":"","stderr_append":"","syscall":"","stop_reason":"ebreak @0x1002c"}]};
   </script>
   <script>
     (() => {
@@ -294,40 +661,105 @@
       const refs = {
         title: document.getElementById('title'),
         source: document.getElementById('source'),
+        statusPill: document.getElementById('status-pill'),
         summaryGrid: document.getElementById('summary-grid'),
         runtimeSummary: document.getElementById('runtime-summary'),
+        executionBody: document.getElementById('execution-body'),
         functionSelect: document.getElementById('function-select'),
+        functionListCount: document.getElementById('function-list-count'),
         functionList: document.getElementById('function-list'),
+        sectionListCount: document.getElementById('section-list-count'),
         sectionList: document.getElementById('section-list'),
+        searchInput: document.getElementById('search-input'),
+        disasmSubtitle: document.getElementById('disasm-subtitle'),
+        viewPill: document.getElementById('view-pill'),
         disasmBody: document.getElementById('disasm-body'),
         cfgView: document.getElementById('cfg-view'),
-        registerGrid: document.getElementById('register-grid'),
-        memoryEvents: document.getElementById('memory-events'),
-        callStack: document.getElementById('call-stack'),
-        trace: document.getElementById('trace'),
+        traceBody: document.getElementById('trace-body'),
+        memoryBody: document.getElementById('memory-body'),
+        syscallBody: document.getElementById('syscall-body'),
+        stdoutOutput: document.getElementById('stdout-output'),
+        stderrOutput: document.getElementById('stderr-output'),
+        registerGroups: document.getElementById('register-groups'),
         truncatedBanner: document.getElementById('truncated-banner'),
         resetBtn: document.getElementById('reset-btn'),
         prevBtn: document.getElementById('prev-btn'),
         nextBtn: document.getElementById('next-btn'),
-        playBtn: document.getElementById('play-btn')
+        playBtn: document.getElementById('play-btn'),
+        followPc: document.getElementById('follow-pc'),
+        currentFunctionOnly: document.getElementById('current-function-only'),
+        changedRegistersToggle: document.getElementById('changed-registers-toggle'),
+        paneTabs: document.getElementById('pane-tabs'),
+        navPane: document.getElementById('nav-pane'),
+        inspectorPane: document.getElementById('inspector-pane'),
+        resultPane: document.getElementById('result-pane'),
+        navSplitter: document.getElementById('nav-splitter'),
+        inspectorSplitter: document.getElementById('inspector-splitter'),
+        bottomSplitter: document.getElementById('bottom-splitter'),
+        toggleNavPane: document.getElementById('toggle-nav-pane'),
+        toggleBottomPane: document.getElementById('toggle-bottom-pane'),
+        toggleInspectorPane: document.getElementById('toggle-inspector-pane')
       };
 
       const REGISTER_ORDER = [
         'zero','ra','sp','gp','tp','t0','t1','t2','s0','s1','a0','a1','a2','a3','a4','a5','a6','a7',
         's2','s3','s4','s5','s6','s7','s8','s9','s10','s11','t3','t4','t5','t6'
       ];
+      const REGISTER_GROUPS = [
+        { label: '基础', regs: ['zero', 'ra', 'sp', 'gp', 'tp'] },
+        { label: '参数 / 返回', regs: ['a0', 'a1', 'a2', 'a3', 'a4', 'a5', 'a6', 'a7'] },
+        { label: '保存', regs: ['s0', 's1', 's2', 's3', 's4', 's5', 's6', 's7', 's8', 's9', 's10', 's11'] },
+        { label: '临时', regs: ['t0', 't1', 't2', 't3', 't4', 't5', 't6'] }
+      ];
+      const STORAGE_KEY = `moonrv-workbench-ui:${data.meta.source_file || 'default'}`;
 
+      const INITIAL_REGISTERS = Object.fromEntries((data.runtime.initial_registers || []).map(item => [item.name, item.value]));
+      const EVENT_INDEX_BY_ADDR = new Map();
+      (data.events || []).forEach((event, index) => {
+        if (!EVENT_INDEX_BY_ADDR.has(event.addr)) {
+          EVENT_INDEX_BY_ADDR.set(event.addr, index);
+        }
+      });
+      const MAX_INSTRUCTION_ADDR = (data.instructions || []).length > 0
+        ? hexToBigInt(data.instructions[data.instructions.length - 1].addr) + 4n
+        : 0n;
+      const FUNCTION_RANGES = (data.functions || [])
+        .slice()
+        .sort((lhs, rhs) => (hexToBigInt(lhs.addr) < hexToBigInt(rhs.addr) ? -1 : 1))
+        .map((fn, index, items) => {
+          const start = hexToBigInt(fn.addr);
+          const size = hexToBigInt(fn.size || '0x0');
+          const next = index + 1 < items.length ? hexToBigInt(items[index + 1].addr) : (MAX_INSTRUCTION_ADDR + 4n);
+          const end = size > 0n ? start + size : next;
+          return { fn, start, end };
+        });
+      const storedUi = readUiState();
       const state = {
-        selectedFunction: null,
-        viewInstructions: data.instructions.slice(),
-        cursor: data.instructions.length() > 0 ? 0 : -1,
+        selectedFunctionAddr: storedUi.selectedFunctionAddr || '',
+        searchText: storedUi.searchText || '',
+        activeTab: storedUi.activeTab || 'trace',
+        followPcEnabled: storedUi.followPcEnabled !== false,
+        currentFunctionOnlyEnabled: storedUi.currentFunctionOnlyEnabled === true,
+        showChangedRegistersOnly: storedUi.showChangedRegistersOnly === true,
+        layout: {
+          navWidth: clampNumber(storedUi.navWidth, 180, 420, 240),
+          inspectorWidth: clampNumber(storedUi.inspectorWidth, 240, 460, 320),
+          bottomHeight: clampNumber(storedUi.bottomHeight, 180, 420, 260),
+          navCollapsed: storedUi.navCollapsed === true,
+          bottomCollapsed: storedUi.bottomCollapsed === true,
+          inspectorCollapsed: storedUi.inspectorCollapsed === true
+        },
+        cursor: -1,
+        focusedAddr: data.runtime.initial_pc || '',
         registers: {},
-        memoryEvents: [],
-        trace: [],
-        callStack: [],
+        memoryHistory: [],
+        ioHistory: [],
+        stdout: '',
+        stderr: '',
         timer: null
       };
 
+      refs.searchInput.value = state.searchText;
       function escapeHtml(value) {
         return String(value)
           .replaceAll('&', '&amp;')
@@ -345,14 +777,106 @@
         }
       }
 
-      function resetRuntimeState() {
-        state.registers = {};
-        for (const r of REGISTER_ORDER) {
-          state.registers[r] = '0x0';
+      function clamp(value, min, max) {
+        return Math.max(min, Math.min(max, value));
+      }
+
+      function clampNumber(value, min, max, fallback) {
+        return typeof value === 'number' && Number.isFinite(value)
+          ? clamp(value, min, max)
+          : fallback;
+      }
+
+      function readUiState() {
+        try {
+          const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+          return parsed && typeof parsed === 'object' ? parsed : {};
+        } catch (_) {
+          return {};
         }
-        state.memoryEvents = [];
-        state.trace = [];
-        state.callStack = [];
+      }
+
+      function saveUiState() {
+        const payload = {
+          selectedFunctionAddr: state.selectedFunctionAddr,
+          searchText: state.searchText,
+          activeTab: state.activeTab,
+          followPcEnabled: state.followPcEnabled,
+          currentFunctionOnlyEnabled: state.currentFunctionOnlyEnabled,
+          showChangedRegistersOnly: state.showChangedRegistersOnly,
+          navWidth: state.layout.navWidth,
+          inspectorWidth: state.layout.inspectorWidth,
+          bottomHeight: state.layout.bottomHeight,
+          navCollapsed: state.layout.navCollapsed,
+          bottomCollapsed: state.layout.bottomCollapsed,
+          inspectorCollapsed: state.layout.inspectorCollapsed
+        };
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
+        } catch (_) {
+        }
+      }
+
+      function selectedFunction() {
+        return (data.functions || []).find(item => item.addr === state.selectedFunctionAddr) || null;
+      }
+
+      function functionRangeForAddr(addr) {
+        return FUNCTION_RANGES.find(item => item.fn.addr === addr) || null;
+      }
+
+      function functionForAddress(addr) {
+        const target = hexToBigInt(addr);
+        return FUNCTION_RANGES.find(item => target >= item.start && target < item.end)?.fn || (data.functions || []).find(item => item.addr === addr) || null;
+      }
+
+      function instructionsForFunction(target) {
+        if (!target) {
+          return data.instructions.slice();
+        }
+        const range = functionRangeForAddr(target.addr);
+        if (!range) {
+          return data.instructions.slice();
+        }
+        const exact = data.instructions.filter(inst => {
+          const addr = hexToBigInt(inst.addr);
+          return addr >= range.start && addr < range.end;
+        });
+        return exact.length > 0 ? exact : data.instructions.slice();
+      }
+
+      function filterInstructions(instructions) {
+        const query = state.searchText.trim().toLowerCase();
+        if (!query) {
+          return instructions;
+        }
+        return instructions.filter(inst => {
+          const fn = functionForAddress(inst.addr);
+          return inst.addr.toLowerCase().includes(query)
+            || inst.asm.toLowerCase().includes(query)
+            || inst.category.toLowerCase().includes(query)
+            || (fn && fn.name.toLowerCase().includes(query));
+        });
+      }
+
+      function visibleInstructions() {
+        const scoped = state.currentFunctionOnlyEnabled ? instructionsForFunction(selectedFunction()) : data.instructions.slice();
+        return filterInstructions(scoped);
+      }
+
+      function resetRuntimeState() {
+        state.registers = { ...INITIAL_REGISTERS };
+        for (const r of REGISTER_ORDER) {
+          if (!(r in state.registers)) state.registers[r] = '0x0';
+        }
+        state.memoryHistory = [];
+        state.ioHistory = [];
+        state.stdout = '';
+        state.stderr = '';
+      }
+
+      function currentEvent() {
+        return state.cursor >= 0 && state.cursor < data.events.length ? data.events[state.cursor] : null;
       }
 
       function summaryItems() {
@@ -373,19 +897,25 @@
       }
 
       function renderRuntimeSummary() {
-        const current = state.cursor >= 0 ? state.viewInstructions[state.cursor] : null;
+        const current = currentEvent();
+        const currentFunction = functionForAddress(current ? current.addr : data.runtime.initial_pc);
+        const stopText = current && current.stop_reason ? current.stop_reason : (state.cursor < 0 ? 'ready' : 'running');
         refs.runtimeSummary.innerHTML = [
-          ['PC', current ? current.addr : 'N/A'],
-          ['游标', current ? `${state.cursor + 1}/${state.viewInstructions.length}` : '0/0'],
-          ['模式', state.timer ? '自动播放' : '单步'],
-          ['轨迹事件', state.trace.length]
+          ['PC', current ? current.addr : data.runtime.initial_pc],
+          ['步骤', `${Math.max(0, state.cursor + 1)}/${data.events.length}`],
+          ['模式', state.timer ? 'Play' : 'Step'],
+          ['停止原因', stopText],
+          ['当前函数', currentFunction ? currentFunction.name : 'N/A'],
+          ['stdout', String(state.stdout.length)]
         ].map(([k, v]) => `<div class="stat"><div class="k">${escapeHtml(k)}</div><div class="v">${escapeHtml(v)}</div></div>`).join('');
+        refs.statusPill.textContent = stopText;
       }
 
       function renderSections() {
-        refs.sectionList.innerHTML = data.sections.map(section => (
-          `<div class="function-item"><div>#${section.index} ${escapeHtml(section.name)}</div><div class="sub">${escapeHtml(section.addr)} / ${escapeHtml(section.size)}</div></div>`
-        )).join('');
+        refs.sectionListCount.textContent = `${(data.sections || []).length} items`;
+        refs.sectionList.innerHTML = (data.sections || []).map(section => (
+          `<button class="nav-row" data-section-query="${escapeHtml(section.addr)}"><div class="nav-row-title"><span>#${section.index} ${escapeHtml(section.name)}</span></div><div class="nav-row-meta">${escapeHtml(section.addr)} / ${escapeHtml(section.size)}</div></button>`
+        )).join('') || '<div class="empty-panel">无节区信息</div>';
       }
 
       function renderFunctions() {
@@ -400,214 +930,386 @@
           option.textContent = `${fn.name} @ ${fn.addr}`;
           refs.functionSelect.appendChild(option);
         }
-        refs.functionList.innerHTML = data.functions.map(fn => (
-          `<div class="function-item" data-addr="${fn.addr}"><div>${escapeHtml(fn.name)}</div><div class="sub">${escapeHtml(fn.addr)} / ${escapeHtml(fn.size)}</div></div>`
-        )).join('');
-
-        refs.functionList.querySelectorAll('.function-item').forEach((element) => {
-          element.addEventListener('click', () => {
-            const addr = element.getAttribute('data-addr');
-            const target = data.functions.find(x => x.addr === addr);
-            selectFunction(target ?? null);
-          });
-        });
+        refs.functionSelect.value = state.selectedFunctionAddr || '__all__';
+        refs.functionListCount.textContent = `${(data.functions || []).length} items`;
+        const currentFn = functionForAddress(currentEvent() ? currentEvent().addr : data.runtime.initial_pc);
+        refs.functionList.innerHTML = (data.functions || []).map(fn => {
+          const active = state.selectedFunctionAddr === fn.addr;
+          const current = currentFn && currentFn.addr === fn.addr;
+          const badges = [current ? '<span class="badge current">PC</span>' : ''].join('');
+          return `<button class="nav-row${active ? ' active' : ''}${current ? ' current' : ''}" data-fn-addr="${fn.addr}"><div class="nav-row-title"><span>${escapeHtml(fn.name)}</span>${badges}</div><div class="nav-row-meta">${escapeHtml(fn.addr)} / ${escapeHtml(fn.size)}</div></button>`;
+        }).join('') || '<div class="empty-panel">无函数符号</div>';
       }
 
-      function instructionsForFunction(target) {
-        if (!target) {
-          return data.instructions.slice();
+      function applyEvent(event) {
+        for (const delta of event.register_writes || []) {
+          state.registers[delta.name] = delta.after;
         }
-        const start = hexToBigInt(target.addr);
-        const size = hexToBigInt(target.size || '0x0');
-        if (size > 0n) {
-          const end = start + size;
-          const exact = data.instructions.filter(inst => {
-            const addr = hexToBigInt(inst.addr);
-            return addr >= start && addr < end;
-          });
-          if (exact.length > 0) {
-            return exact;
-          }
+        for (const mem of event.memory_writes || []) {
+          state.memoryHistory.unshift({ step: event.step, addr: mem.addr, size: mem.size, before: mem.before, after: mem.after });
+          if (state.memoryHistory.length > 160) state.memoryHistory.pop();
         }
-        const nearest = data.instructions.findIndex(inst => hexToBigInt(inst.addr) >= start);
-        const begin = nearest >= 0 ? Math.max(0, nearest - 10) : 0;
-        return data.instructions.slice(begin, Math.min(data.instructions.length, begin + 120));
-      }
-
-      function selectFunction(target) {
-        state.selectedFunction = target;
-        state.viewInstructions = instructionsForFunction(target);
-        state.cursor = state.viewInstructions.length > 0 ? 0 : -1;
-        refs.functionSelect.value = target ? target.addr : '__all__';
-        refs.functionList.querySelectorAll('.function-item').forEach((element) => {
-          const selected = target && element.getAttribute('data-addr') === target.addr;
-          element.classList.toggle('active', !!selected);
-        });
-        rebuildToCursor(state.cursor);
-        renderAll();
-      }
-
-      function parseInstruction(inst) {
-        const parts = inst.asm.trim().split(/\s+/, 2);
-        const mnemonic = parts[0] || '';
-        const operands = parts.length > 1
-          ? parts[1].split(',').map(x => x.trim()).filter(Boolean)
-          : [];
-        return { mnemonic, operands };
-      }
-
-      function inferDestRegister(mnemonic, operands) {
-        if (operands.length === 0) return null;
-        const stores = new Set(['sb','sh','sw','sd','fsw','fsd','c.sw','c.sd']);
-        const noWrite = new Set(['ret','ecall','ebreak','fence','fence.i']);
-        if (stores.has(mnemonic) || noWrite.has(mnemonic)) return null;
-        if (mnemonic.startsWith('b')) return null;
-        const dest = operands[0].replace(/[()]/g, '');
-        if (!dest) return null;
-        return dest;
-      }
-
-      function applyInstruction(inst) {
-        const { mnemonic, operands } = parseInstruction(inst);
-        const dest = inferDestRegister(mnemonic, operands);
-        if (dest && dest !== 'zero' && dest !== 'x0') {
-          state.registers[dest] = inst.addr;
+        if (event.syscall) {
+          state.ioHistory.unshift({ step: event.step, kind: 'syscall', detail: event.syscall });
         }
-        if (mnemonic.includes('w') || mnemonic.includes('d')) {
-          if (['sw','sd','sb','sh','c.sw','c.sd','fsw','fsd'].includes(mnemonic)) {
-            state.memoryEvents.unshift(`${inst.addr}: ${inst.asm}`);
-            if (state.memoryEvents.length > 14) state.memoryEvents.pop();
-          }
+        if (event.stdout_append) {
+          state.stdout += event.stdout_append;
+          state.ioHistory.unshift({ step: event.step, kind: 'stdout', detail: event.stdout_append });
         }
-        if (mnemonic === 'jal' || mnemonic === 'call' || mnemonic === 'c.jal') {
-          state.callStack.unshift(`${inst.addr} -> ${operands.length > 1 ? operands[1] : 'target'}`);
-          if (state.callStack.length > 8) state.callStack.pop();
+        if (event.stderr_append) {
+          state.stderr += event.stderr_append;
+          state.ioHistory.unshift({ step: event.step, kind: 'stderr', detail: event.stderr_append });
         }
-        if (mnemonic === 'ret' || (mnemonic === 'jalr' && inst.asm.includes('zero, ra'))) {
-          if (state.callStack.length > 0) state.callStack.shift();
+        if (state.ioHistory.length > 160) {
+          state.ioHistory = state.ioHistory.slice(0, 160);
         }
-        state.trace.unshift(`${inst.addr}: ${inst.asm}`);
-        if (state.trace.length > 60) state.trace.pop();
       }
 
       function rebuildToCursor(cursor) {
         resetRuntimeState();
         if (cursor < 0) return;
-        for (let i = 0; i <= cursor && i < state.viewInstructions.length; i += 1) {
-          applyInstruction(state.viewInstructions[i]);
+        for (let i = 0; i <= cursor && i < data.events.length; i += 1) {
+          applyEvent(data.events[i]);
         }
       }
 
+      function renderExecution() {
+        const current = currentEvent();
+        const target = current || { step: '-', addr: data.runtime.initial_pc, next_addr: '-', block_start: '-', category: '-', stop_reason: data.runtime.stop_reason, asm: '未执行' };
+        refs.executionBody.innerHTML = [
+          ['step', target.step],
+          ['pc', target.addr],
+          ['next', target.next_addr || '-'],
+          ['block', target.block_start || '-'],
+          ['category', target.category || '-'],
+          ['stop', target.stop_reason || data.runtime.stop_reason || '-'],
+          ['asm', target.asm || '-']
+        ].map(([key, value]) => `<tr><td>${escapeHtml(String(key))}</td><td>${escapeHtml(String(value))}</td></tr>`).join('');
+      }
+
+      function renderToolbarState() {
+        refs.prevBtn.disabled = state.cursor < 0;
+        refs.resetBtn.disabled = state.cursor < 0;
+        refs.nextBtn.disabled = state.cursor >= data.events.length - 1;
+        refs.playBtn.textContent = state.timer ? 'Pause' : 'Play';
+        refs.followPc.classList.toggle('active', state.followPcEnabled);
+        refs.currentFunctionOnly.classList.toggle('active', state.currentFunctionOnlyEnabled);
+        refs.changedRegistersToggle.classList.toggle('active', state.showChangedRegistersOnly);
+      }
+
       function renderDisasm() {
-        refs.disasmBody.innerHTML = state.viewInstructions.map((inst, index) => {
-          const active = index === state.cursor ? ' class="active"' : '';
-          return `<tr data-index="${index}"${active}><td>${index}</td><td>${escapeHtml(inst.addr)}</td><td>${escapeHtml(inst.asm)}</td><td>${escapeHtml(inst.category)}</td></tr>`;
-        }).join('');
-        refs.disasmBody.querySelectorAll('tr').forEach((tr) => {
-          tr.addEventListener('click', () => {
-            const index = Number(tr.getAttribute('data-index'));
-            if (!Number.isNaN(index)) {
-              state.cursor = index;
-              rebuildToCursor(state.cursor);
-              renderAll();
-            }
-          });
-        });
+        const current = currentEvent();
+        const viewInstructions = visibleInstructions();
+        const currentFn = selectedFunction();
+        refs.disasmSubtitle.textContent = `${viewInstructions.length} rows | ${state.searchText.trim() ? `search=${state.searchText.trim()}` : 'no filter'}`;
+        refs.viewPill.textContent = currentFn
+          ? `${currentFn.name} ${state.currentFunctionOnlyEnabled ? '(scoped)' : '(selected)'}`
+          : 'All instructions';
+        refs.disasmBody.innerHTML = viewInstructions.length > 0
+          ? viewInstructions.map((inst) => {
+              const active = current && current.addr === inst.addr;
+              const focus = state.focusedAddr === inst.addr;
+              return `<tr data-addr="${inst.addr}" class="${active ? 'active' : ''} ${focus && !active ? 'focus' : ''}"><td>${inst.index}</td><td>${escapeHtml(inst.addr)}</td><td>${escapeHtml(inst.category)}</td><td class="code-cell">${escapeHtml(inst.asm)}</td></tr>`;
+            }).join('')
+          : '<tr><td colspan="4" class="empty-panel">当前过滤条件下没有指令</td></tr>';
       }
 
       function renderCfg() {
-        const blocks = data.blocks;
-        const current = state.cursor >= 0 ? state.viewInstructions[state.cursor] : null;
+        const fn = selectedFunction();
+        const scopedBlocks = state.currentFunctionOnlyEnabled && fn
+          ? data.blocks.filter(block => {
+              const range = functionRangeForAddr(fn.addr);
+              if (!range) return true;
+              const start = hexToBigInt(block.start_addr);
+              return start >= range.start && start < range.end;
+            })
+          : data.blocks;
+        const current = currentEvent();
         const currentAddr = current ? hexToBigInt(current.addr) : null;
-        const cards = blocks.slice(0, 180).map(block => {
+        const cards = scopedBlocks.slice(0, 180).map(block => {
           const start = hexToBigInt(block.start_addr);
           const end = hexToBigInt(block.end_addr);
           const active = currentAddr !== null && currentAddr >= start && currentAddr <= end;
-          return `<div class="cfg-block${active ? ' active' : ''}"><div>${escapeHtml(block.start_addr)} - ${escapeHtml(block.end_addr)}</div><div class="sub">inst=${block.instruction_count}, term=${block.is_terminated}</div></div>`;
+          return `<div class="cfg-card${active ? ' active' : ''}"><div class="cfg-card-title">${escapeHtml(block.start_addr)} - ${escapeHtml(block.end_addr)}</div><div class="muted">inst=${block.instruction_count}, term=${block.is_terminated}</div></div>`;
         }).join('');
 
-        const edges = data.edges.slice(0, 220).map(edge => (
-          `<li>${escapeHtml(edge.from_block)} -> ${escapeHtml(edge.to_block)} [${escapeHtml(edge.edge_type)}]</li>`
+        const allowedStarts = new Set(scopedBlocks.map(block => block.start_addr));
+        const edges = data.edges.filter(edge => allowedStarts.size === 0 || allowedStarts.has(edge.from_block) || allowedStarts.has(edge.to_block)).slice(0, 220).map(edge => (
+          `<tr><td>${escapeHtml(edge.from_block)}</td><td>${escapeHtml(edge.to_block)}</td><td>${escapeHtml(edge.edge_type)}</td></tr>`
         )).join('');
 
-        refs.cfgView.innerHTML = `<div class="cfg-grid">${cards}</div><h3>边关系</h3><ul class="edge-list">${edges || '<li>无</li>'}</ul>`;
+        refs.cfgView.innerHTML = `<div class="cfg-grid">${cards || '<div class="empty-panel">无 CFG block</div>'}</div><table class="mono"><thead><tr><th>from</th><th>to</th><th>edge</th></tr></thead><tbody>${edges || '<tr><td colspan="3" class="empty-panel">无边关系</td></tr>'}</tbody></table>`;
       }
 
       function renderRegisters() {
-        refs.registerGrid.innerHTML = REGISTER_ORDER.map(name => {
-          const value = state.registers[name] || '0x0';
-          return `<div class="reg"><div class="name">${escapeHtml(name)}</div><div class="value">${escapeHtml(value)}</div></div>`;
+        const current = currentEvent();
+        const changedMap = new Map((current?.register_writes || []).map(delta => [delta.name, delta]));
+        const sections = REGISTER_GROUPS.map(group => {
+          const regs = group.regs.filter(name => !state.showChangedRegistersOnly || changedMap.has(name));
+          if (regs.length === 0) {
+            return '';
+          }
+          const rows = regs.map(name => {
+            const delta = changedMap.get(name);
+            const badge = delta ? '<span class="badge changed">changed</span>' : '';
+            const detail = delta ? `${escapeHtml(delta.before)} -> ${escapeHtml(delta.after)}` : escapeHtml(state.registers[name] || '0x0');
+            return `<tr><td>${escapeHtml(name)}</td><td>${detail}</td><td>${badge}</td></tr>`;
+          }).join('');
+          return `<div class="register-group"><div class="group-title">${escapeHtml(group.label)}</div><table class="register-table mono"><tbody>${rows}</tbody></table></div>`;
         }).join('');
-      }
-
-      function renderMemoryAndCalls() {
-        refs.memoryEvents.innerHTML = state.memoryEvents.length > 0
-          ? state.memoryEvents.map(item => `<li>${escapeHtml(item)}</li>`).join('')
-          : '<li>暂无访存写事件</li>';
-        refs.callStack.innerHTML = state.callStack.length > 0
-          ? state.callStack.map(item => `<li>${escapeHtml(item)}</li>`).join('')
-          : '<li>暂无调用轨迹</li>';
+        refs.registerGroups.innerHTML = sections || '<div class="empty-panel">当前 step 没有寄存器变化</div>';
       }
 
       function renderTrace() {
-        refs.trace.innerHTML = state.trace.length > 0
-          ? state.trace.map(item => `<div class="trace-item">${escapeHtml(item)}</div>`).join('')
-          : '<div class="trace-item">暂无轨迹</div>';
+        refs.traceBody.innerHTML = (data.events || []).length > 0
+          ? data.events.map((event, index) => {
+              const active = index === state.cursor;
+              const writes = [];
+              if ((event.register_writes || []).length > 0) writes.push((event.register_writes || []).map(item => item.name).join(', '));
+              if ((event.memory_writes || []).length > 0) writes.push(`mem x${event.memory_writes.length}`);
+              const note = [event.syscall, event.stop_reason && event.stop_reason !== 'running' ? event.stop_reason : '', event.stdout_append ? `stdout +${event.stdout_append.length}` : '', event.stderr_append ? `stderr +${event.stderr_append.length}` : ''].filter(Boolean).join(' | ');
+              return `<tr data-event-index="${index}" class="${active ? 'active' : ''}"><td>${event.step}</td><td>${escapeHtml(event.addr)}</td><td class="code-cell">${escapeHtml(event.asm)}</td><td>${escapeHtml(writes.join(' | ') || '-')}</td><td>${escapeHtml(note || '-')}</td></tr>`;
+            }).join('')
+          : '<tr><td colspan="5" class="empty-panel">暂无轨迹</td></tr>';
+      }
+
+      function renderMemoryWrites() {
+        refs.memoryBody.innerHTML = state.memoryHistory.length > 0
+          ? state.memoryHistory.map(item => `<tr><td>${item.step}</td><td>${escapeHtml(item.addr)}</td><td>${item.size}</td><td>${escapeHtml(item.before)}</td><td>${escapeHtml(item.after)}</td></tr>`).join('')
+          : '<tr><td colspan="5" class="empty-panel">暂无访存写入</td></tr>';
+      }
+
+      function renderSyscalls() {
+        refs.syscallBody.innerHTML = state.ioHistory.length > 0
+          ? state.ioHistory.map(item => `<tr><td>${item.step}</td><td>${escapeHtml(item.kind)}</td><td class="code-cell">${escapeHtml(item.detail)}</td></tr>`).join('')
+          : '<tr><td colspan="3" class="empty-panel">暂无 syscall / 输出</td></tr>';
+        refs.stdoutOutput.textContent = state.stdout || '(empty)';
+        refs.stderrOutput.textContent = state.stderr || '(empty)';
+      }
+
+      function renderTabs() {
+        document.querySelectorAll('[data-tab]').forEach((element) => {
+          element.classList.toggle('active', element.getAttribute('data-tab') === state.activeTab);
+        });
+        document.querySelectorAll('[data-tab-panel]').forEach((element) => {
+          element.classList.toggle('active', element.getAttribute('data-tab-panel') === state.activeTab);
+        });
+      }
+
+      function applyLayout() {
+        const root = document.documentElement;
+        root.style.setProperty('--nav-width', state.layout.navCollapsed ? '0px' : `${state.layout.navWidth}px`);
+        root.style.setProperty('--inspector-width', state.layout.inspectorCollapsed ? '0px' : `${state.layout.inspectorWidth}px`);
+        root.style.setProperty('--bottom-height', state.layout.bottomCollapsed ? '0px' : `${state.layout.bottomHeight}px`);
+        root.style.setProperty('--nav-split-size', state.layout.navCollapsed ? '0px' : 'var(--splitter-size)');
+        root.style.setProperty('--inspector-split-size', state.layout.inspectorCollapsed ? '0px' : 'var(--splitter-size)');
+        root.style.setProperty('--bottom-split-size', state.layout.bottomCollapsed ? '0px' : 'var(--splitter-size)');
+        refs.navPane.classList.toggle('collapsed-pane', state.layout.navCollapsed && window.innerWidth > 1100);
+        refs.inspectorPane.classList.toggle('collapsed-pane', state.layout.inspectorCollapsed && window.innerWidth > 1100);
+        refs.resultPane.classList.toggle('collapsed-pane', state.layout.bottomCollapsed && window.innerWidth > 1100);
+        refs.navSplitter.classList.toggle('collapsed-pane', state.layout.navCollapsed && window.innerWidth > 1100);
+        refs.inspectorSplitter.classList.toggle('collapsed-pane', state.layout.inspectorCollapsed && window.innerWidth > 1100);
+        refs.bottomSplitter.classList.toggle('collapsed-pane', state.layout.bottomCollapsed && window.innerWidth > 1100);
+        refs.toggleNavPane.textContent = state.layout.navCollapsed ? '展开' : '折叠';
+        refs.toggleBottomPane.textContent = state.layout.bottomCollapsed ? '展开' : '折叠';
+        refs.toggleInspectorPane.textContent = state.layout.inspectorCollapsed ? '展开' : '折叠';
+      }
+
+      function maybeFollowPc() {
+        if (!state.followPcEnabled) {
+          return;
+        }
+        const current = currentEvent();
+        if (!current) {
+          return;
+        }
+        refs.disasmBody.querySelector(`tr[data-addr="${current.addr}"]`)?.scrollIntoView({ block: 'nearest' });
+        refs.traceBody.querySelector(`tr[data-event-index="${state.cursor}"]`)?.scrollIntoView({ block: 'nearest' });
       }
 
       function renderAll() {
+        renderSummary();
+        renderFunctions();
+        renderSections();
         renderRuntimeSummary();
+        renderExecution();
+        renderToolbarState();
         renderDisasm();
         renderCfg();
         renderRegisters();
-        renderMemoryAndCalls();
         renderTrace();
+        renderMemoryWrites();
+        renderSyscalls();
+        renderTabs();
+        applyLayout();
+        maybeFollowPc();
+      }
+
+      function stopPlay() {
+        if (!state.timer) {
+          return;
+        }
+        clearInterval(state.timer);
+        state.timer = null;
+      }
+
+      function setCursor(next) {
+        const clamped = Math.max(-1, Math.min(data.events.length - 1, next));
+        if (clamped === state.cursor) {
+          return;
+        }
+        state.cursor = clamped;
+        state.focusedAddr = clamped >= 0 ? data.events[clamped].addr : data.runtime.initial_pc;
+        rebuildToCursor(state.cursor);
+        renderAll();
       }
 
       function step(delta) {
-        if (state.viewInstructions.length === 0) return;
-        const next = Math.max(0, Math.min(state.viewInstructions.length - 1, state.cursor + delta));
-        if (next === state.cursor) return;
-        state.cursor = next;
-        rebuildToCursor(state.cursor);
-        renderAll();
+        if (data.events.length === 0) return;
+        setCursor(state.cursor + delta);
       }
 
       function togglePlay() {
         if (state.timer) {
-          clearInterval(state.timer);
-          state.timer = null;
-          refs.playBtn.textContent = '自动播放';
-          renderRuntimeSummary();
+          stopPlay();
+          renderAll();
           return;
         }
-        refs.playBtn.textContent = '暂停';
+        if (state.cursor >= data.events.length - 1) {
+          setCursor(-1);
+        }
         state.timer = setInterval(() => {
-          if (state.cursor >= state.viewInstructions.length - 1) {
-            togglePlay();
+          if (state.cursor >= data.events.length - 1) {
+            stopPlay();
+            renderAll();
             return;
           }
           step(1);
-        }, 400);
+        }, 350);
+        renderAll();
       }
 
+      function selectFunctionByAddr(addr) {
+        state.selectedFunctionAddr = addr || '';
+        saveUiState();
+        renderAll();
+      }
+
+      function bindSplitter(handle, axis, direction, getValue, setValue, getBounds) {
+        handle.addEventListener('mousedown', (downEvent) => {
+          if (window.innerWidth <= 1100) {
+            return;
+          }
+          downEvent.preventDefault();
+          const startPosition = axis === 'x' ? downEvent.clientX : downEvent.clientY;
+          const startValue = getValue();
+          const onMove = (moveEvent) => {
+            const currentPosition = axis === 'x' ? moveEvent.clientX : moveEvent.clientY;
+            const delta = (currentPosition - startPosition) * direction;
+            const [min, max] = getBounds();
+            setValue(clamp(startValue + delta, min, max));
+            applyLayout();
+            saveUiState();
+          };
+          const onUp = () => {
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+          };
+          window.addEventListener('mousemove', onMove);
+          window.addEventListener('mouseup', onUp);
+        });
+      }
+
+      refs.functionList.addEventListener('click', (event) => {
+        const row = event.target.closest('[data-fn-addr]');
+        if (!row) return;
+        selectFunctionByAddr(row.getAttribute('data-fn-addr') || '');
+      });
+      refs.sectionList.addEventListener('click', (event) => {
+        const row = event.target.closest('[data-section-query]');
+        if (!row) return;
+        state.searchText = row.getAttribute('data-section-query') || '';
+        refs.searchInput.value = state.searchText;
+        saveUiState();
+        renderAll();
+      });
+      refs.disasmBody.addEventListener('click', (event) => {
+        const row = event.target.closest('tr[data-addr]');
+        if (!row) return;
+        const addr = row.getAttribute('data-addr') || '';
+        state.focusedAddr = addr;
+        if (EVENT_INDEX_BY_ADDR.has(addr)) {
+          setCursor(EVENT_INDEX_BY_ADDR.get(addr));
+        } else {
+          renderAll();
+        }
+      });
+      refs.traceBody.addEventListener('click', (event) => {
+        const row = event.target.closest('tr[data-event-index]');
+        if (!row) return;
+        setCursor(Number(row.getAttribute('data-event-index')));
+      });
+      refs.paneTabs.addEventListener('click', (event) => {
+        const button = event.target.closest('[data-tab]');
+        if (!button) return;
+        state.activeTab = button.getAttribute('data-tab') || 'trace';
+        saveUiState();
+        renderTabs();
+      });
       refs.functionSelect.addEventListener('change', (event) => {
         const value = event.target.value;
-        if (value === '__all__') {
-          selectFunction(null);
-          return;
-        }
-        const target = data.functions.find(fn => fn.addr === value);
-        selectFunction(target ?? null);
+        selectFunctionByAddr(value === '__all__' ? '' : value);
+      });
+      refs.searchInput.addEventListener('input', (event) => {
+        state.searchText = event.target.value;
+        saveUiState();
+        renderAll();
       });
       refs.resetBtn.addEventListener('click', () => {
-        state.cursor = state.viewInstructions.length > 0 ? 0 : -1;
-        rebuildToCursor(state.cursor);
-        renderAll();
+        stopPlay();
+        setCursor(-1);
       });
       refs.prevBtn.addEventListener('click', () => step(-1));
       refs.nextBtn.addEventListener('click', () => step(1));
       refs.playBtn.addEventListener('click', togglePlay);
+      refs.followPc.addEventListener('click', () => {
+        state.followPcEnabled = !state.followPcEnabled;
+        saveUiState();
+        renderAll();
+      });
+      refs.currentFunctionOnly.addEventListener('click', () => {
+        if (!state.selectedFunctionAddr) {
+          const inferred = functionForAddress(currentEvent() ? currentEvent().addr : data.runtime.initial_pc);
+          state.selectedFunctionAddr = inferred ? inferred.addr : '';
+        }
+        state.currentFunctionOnlyEnabled = !state.currentFunctionOnlyEnabled;
+        saveUiState();
+        renderAll();
+      });
+      refs.changedRegistersToggle.addEventListener('click', () => {
+        state.showChangedRegistersOnly = !state.showChangedRegistersOnly;
+        saveUiState();
+        renderAll();
+      });
+      refs.toggleNavPane.addEventListener('click', () => {
+        state.layout.navCollapsed = !state.layout.navCollapsed;
+        saveUiState();
+        renderAll();
+      });
+      refs.toggleBottomPane.addEventListener('click', () => {
+        state.layout.bottomCollapsed = !state.layout.bottomCollapsed;
+        saveUiState();
+        renderAll();
+      });
+      refs.toggleInspectorPane.addEventListener('click', () => {
+        state.layout.inspectorCollapsed = !state.layout.inspectorCollapsed;
+        saveUiState();
+        renderAll();
+      });
+      bindSplitter(refs.navSplitter, 'x', 1, () => state.layout.navWidth, (value) => { state.layout.navWidth = value; }, () => [180, Math.max(220, Math.floor(window.innerWidth * 0.35))]);
+      bindSplitter(refs.inspectorSplitter, 'x', -1, () => state.layout.inspectorWidth, (value) => { state.layout.inspectorWidth = value; }, () => [240, Math.max(280, Math.floor(window.innerWidth * 0.42))]);
+      bindSplitter(refs.bottomSplitter, 'y', -1, () => state.layout.bottomHeight, (value) => { state.layout.bottomHeight = value; }, () => [180, Math.max(240, Math.floor(window.innerHeight * 0.55))]);
+      window.addEventListener('resize', applyLayout);
 
       refs.title.textContent = data.meta.title;
       refs.source.textContent = `${data.meta.source_file} | ${data.meta.file_class} ${data.meta.architecture}`;
@@ -616,10 +1318,12 @@
         refs.truncatedBanner.textContent = `当前页面仅展示前 ${data.meta.instruction_count} 条指令（总计 ${data.meta.total_instruction_count} 条）。可通过 CLI 参数 --max-inst 调整。`;
       }
 
-      renderSummary();
-      renderSections();
-      renderFunctions();
-      selectFunction(null);
+      resetRuntimeState();
+      if (state.selectedFunctionAddr && !(data.functions || []).some(fn => fn.addr === state.selectedFunctionAddr)) {
+        state.selectedFunctionAddr = '';
+      }
+      rebuildToCursor(state.cursor);
+      renderAll();
     })();
   </script>
 </body>
