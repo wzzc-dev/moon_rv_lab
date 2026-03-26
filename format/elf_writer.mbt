@@ -36,7 +36,7 @@ fn write_u32_le(value : UInt) -> FixedArray[Byte] {
 
 ///|
 /// Create ELF32 header bytes
-fn create_elf32_header(entry : UInt, code_size : UInt) -> FixedArray[Byte] {
+fn create_elf32_header(entry : UInt, shoff : UInt) -> FixedArray[Byte] {
   // ELF32 header is 52 bytes
   let header = FixedArray::make(52, b'\x00')
 
@@ -85,9 +85,7 @@ fn create_elf32_header(entry : UInt, code_size : UInt) -> FixedArray[Byte] {
   header[30] = b'\x00'
   header[31] = b'\x00'
 
-  // e_shoff: section header offset (0 for minimal ELF)
-  // We'll place section headers at 52 + 32 = 84 + code_size
-  let shoff = 84U + code_size
+  // e_shoff: section header offset
   let shoff_bytes = write_u32_le(shoff)
   header[32] = shoff_bytes[0]
   header[33] = shoff_bytes[1]
@@ -333,7 +331,7 @@ pub fn write_elf32_executable(
   let output = FixedArray::make(total_size, b'\x00')
 
   // Write ELF header
-  let header = create_elf32_header(entry, total_code_size.reinterpret_as_uint())
+  let header = create_elf32_header(entry, shdr_offset.reinterpret_as_uint())
   for i = 0; i < header.length(); i = i + 1 {
     output[i] = header[i]
   }
@@ -371,7 +369,7 @@ pub fn write_elf32_executable(
   let text_shdr = create_elf32_section_header(
     1U, // sh_name: offset in shstrtab
     SHT_PROGBITS,
-    SHF_EXECINSTR,
+    SHF_ALLOC | SHF_EXECINSTR,
     base_addr,
     code_offset.reinterpret_as_uint(),
     total_code_size.reinterpret_as_uint(),

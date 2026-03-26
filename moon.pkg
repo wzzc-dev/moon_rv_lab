@@ -5,4 +5,5 @@ import {
   "wzzc-dev/rvkit/analysis" @analysis,
   "wzzc-dev/rvkit/disasm" @disasm,
   "wzzc-dev/rvkit/format" @format,
+  "wzzc-dev/rvkit/simulator" @simulator,
 }

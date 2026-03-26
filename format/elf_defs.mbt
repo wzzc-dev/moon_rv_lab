@@ -76,6 +76,9 @@ pub const SHT_DYNSYM : UInt = 11U
 
 ///|
 /// Section flags
+pub const SHF_ALLOC : UInt = 0x2U
+
+///|
 pub const SHF_EXECINSTR : UInt = 0x4U
 
 ///|

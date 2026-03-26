@@ -259,6 +259,101 @@ pub fn compute_liveness(
 }
 
 ///|
+/// Re-export simulator module types.
+pub type Breakpoint = @simulator.Breakpoint
+
+///|
+pub type RegisterFile = @simulator.RegisterFile
+
+///|
+pub type MemorySegment = @simulator.MemorySegment
+
+///|
+pub type Memory = @simulator.Memory
+
+///|
+pub type ProgramImage = @simulator.ProgramImage
+
+///|
+pub type RegisterDelta = @simulator.RegisterDelta
+
+///|
+pub type MemoryWrite = @simulator.MemoryWrite
+
+///|
+pub type SyscallRecord = @simulator.SyscallRecord
+
+///|
+pub type StopReason = @simulator.StopReason
+
+///|
+pub type TraceEvent = @simulator.TraceEvent
+
+///|
+pub type ExecSnapshot = @simulator.ExecSnapshot
+
+///|
+pub type ExecDiff = @simulator.ExecDiff
+
+///|
+pub type ExecState = @simulator.ExecState
+
+///|
+pub type LoadError = @simulator.LoadError
+
+///|
+pub type LoadResult = @simulator.LoadResult
+
+///|
+/// Re-export simulator functions.
+pub fn breakpoint(addr : UInt) -> Breakpoint {
+  @simulator.breakpoint(addr)
+}
+
+///|
+pub fn load(path : String, entry_override? : UInt = 0U) -> LoadResult {
+  @simulator.load(path, entry_override~)
+}
+
+///|
+pub fn with_breakpoints(
+  state : ExecState,
+  breakpoints : Array[Breakpoint],
+) -> ExecState {
+  @simulator.with_breakpoints(state, breakpoints)
+}
+
+///|
+pub fn with_entry(state : ExecState, entry_addr : UInt) -> ExecState {
+  @simulator.with_entry(state, entry_addr)
+}
+
+///|
+pub fn step_exec(state : ExecState) -> ExecState {
+  @simulator.step(state)
+}
+
+///|
+pub fn run_until_break(state : ExecState, max_steps : Int) -> ExecState {
+  @simulator.run_until_break(state, max_steps)
+}
+
+///|
+pub fn run_with_limit(state : ExecState, max_steps : Int) -> ExecState {
+  @simulator.run_with_limit(state, max_steps)
+}
+
+///|
+pub fn snapshot(state : ExecState) -> ExecSnapshot {
+  @simulator.snapshot(state)
+}
+
+///|
+pub fn diff_exec(before : ExecSnapshot, after : ExecSnapshot) -> ExecDiff {
+  @simulator.diff(before, after)
+}
+
+///|
 pub fn print_live_set(set : LiveSet) -> String {
   @analysis.print_live_set(set)
 }

@@ -48,6 +48,9 @@ pub impl Show for WorkbenchFunction
 type WorkbenchInstruction
 pub impl Show for WorkbenchInstruction
 
+type WorkbenchMemoryEvent
+pub impl Show for WorkbenchMemoryEvent
+
 type WorkbenchMeta
 pub impl Show for WorkbenchMeta
 
@@ -57,8 +60,20 @@ pub struct WorkbenchOptions {
 }
 pub impl Show for WorkbenchOptions
 
+type WorkbenchRegisterValue
+pub impl Show for WorkbenchRegisterValue
+
+type WorkbenchRegisterWrite
+pub impl Show for WorkbenchRegisterWrite
+
+type WorkbenchRuntime
+pub impl Show for WorkbenchRuntime
+
 type WorkbenchSection
 pub impl Show for WorkbenchSection
+
+type WorkbenchTraceEvent
+pub impl Show for WorkbenchTraceEvent
 
 // Type aliases
 

@@ -30,6 +30,7 @@ pub enum Command {
   Symbols(SymbolsOptions)
   Cfg(CfgOptions)
   CallGraph(CallGraphOptions)
+  Run(RunOptions)
   Hex(HexOptions)
   Analyze(AnalyzeOptions)
   Decompile(DecompileOptions)
@@ -115,6 +116,17 @@ pub struct CallGraphOptions {
   file_path : String
   format : OutputFormat
   output : String
+} derive(Show)
+
+///|
+/// Options for run command
+pub struct RunOptions {
+  file_path : String
+  entry : String
+  max_steps : Int
+  breakpoints : Array[String]
+  trace : String
+  format : OutputFormat
 } derive(Show)
 
 ///|
@@ -290,6 +302,7 @@ pub fn parse_args(args : Array[String]) -> Command? {
     "symbols" | "syms" => parse_symbols_args(args)
     "cfg" => parse_cfg_args(args)
     "callgraph" | "cg" => parse_callgraph_args(args)
+    "run" => parse_run_args(args)
     "hex" => parse_hex_args(args)
     "analyze" => parse_analyze_args(args)
     "decompile" | "dec" => parse_decompile_args(args)
@@ -662,6 +675,78 @@ fn parse_callgraph_args(args : Array[String]) -> Command? {
 }
 
 ///|
+/// Parse run command arguments
+fn parse_run_args(args : Array[String]) -> Command? {
+  if args.length() < 2 {
+    return None
+  }
+
+  let mut file_path = ""
+  let mut entry = ""
+  let mut max_steps = 200
+  let breakpoints : Array[String] = []
+  let mut trace = ""
+  let mut format = OutputFormat::Text
+  let mut i = 1
+
+  while i < args.length() {
+    let arg = args[i]
+    if arg == "--entry" {
+      if i + 1 < args.length() {
+        entry = args[i + 1]
+        i = i + 2
+      } else {
+        return None
+      }
+    } else if arg == "--max-steps" {
+      if i + 1 < args.length() {
+        match parse_uint_dec(args[i + 1]) {
+          Some(value) => max_steps = value.reinterpret_as_int()
+          None => return None
+        }
+        i = i + 2
+      } else {
+        return None
+      }
+    } else if arg == "--break" {
+      if i + 1 < args.length() {
+        breakpoints.push(args[i + 1])
+        i = i + 2
+      } else {
+        return None
+      }
+    } else if arg == "--trace" {
+      if i + 1 < args.length() {
+        trace = args[i + 1]
+        i = i + 2
+      } else {
+        return None
+      }
+    } else if arg == "--format" || arg == "-f" {
+      if i + 1 < args.length() {
+        format = parse_format(args[i + 1])
+        i = i + 2
+      } else {
+        return None
+      }
+    } else if arg[0] != '-' {
+      file_path = arg
+      i = i + 1
+    } else {
+      i = i + 1
+    }
+  }
+
+  if file_path == "" {
+    return None
+  }
+
+  Some(
+    Command::Run({ file_path, entry, max_steps, breakpoints, trace, format }),
+  )
+}
+
+///|
 /// Parse hex command arguments
 fn parse_hex_args(args : Array[String]) -> Command? {
   if args.length() < 2 {
@@ -803,6 +888,7 @@ fn print_usage() -> Unit {
   println("  symbols <file>          List symbols in the file")
   println("  cfg <file>              Generate control flow graph")
   println("  callgraph <file>        Generate call graph")
+  println("  run <file>              Execute an ELF file with tracing")
   println("  hex <code>              Decode a hex instruction")
   println("  analyze <file>          Comprehensive binary analysis")
   println("  decompile <file>        Generate pseudo-code from binary")
@@ -831,6 +917,12 @@ fn print_usage() -> Unit {
   println("Analyze Options:")
   println("  --detailed, -d          Show detailed analysis")
   println("")
+  println("Run Options:")
+  println("  --entry <name|addr>     Override entry with symbol or address")
+  println("  --max-steps <n>         Stop after n executed instructions")
+  println("  --break <name|addr>     Stop before executing this address")
+  println("  --trace <file>          Write structured trace JSON to file")
+  println("")
   println("Decompile Options:")
   println("  --function, -n <name>   Function name or address to decompile")
   println(
@@ -858,6 +950,8 @@ fn print_usage() -> Unit {
   println("  rvkit symbols program.elf")
   println("  rvkit cfg program.elf --function main -o cfg.dot")
   println("  rvkit callgraph program.elf -o callgraph.dot")
+  println("  rvkit run program.elf --entry main --max-steps 200")
+  println("  rvkit run program.elf --break main+0x10 --trace out/trace.json")
   println("  rvkit hex 0x123452B7")
   println("  rvkit analyze program.elf --detailed")
   println("  rvkit decompile program.elf --function main")
@@ -1445,6 +1539,162 @@ fn execute_callgraph(opts : CallGraphOptions) -> Unit {
       }
     }
     None => println("Error: Cannot read file: \{opts.file_path}")
+  }
+}
+
+///|
+/// Split a selector like `main+0x10` into symbol and signed offset.
+fn split_selector(selector : String) -> (String, Int)? {
+  for i = 1; i < selector.length(); i = i + 1 {
+    let ch = selector[i]
+    if ch == '+' || ch == '-' {
+      let mut base = ""
+      let mut suffix = ""
+      for j = 0; j < i; j = j + 1 {
+        base = base + selector[j].to_string()
+      }
+      for j = i + 1; j < selector.length(); j = j + 1 {
+        suffix = suffix + selector[j].to_string()
+      }
+      if base == "" || suffix == "" {
+        return None
+      }
+      match parse_number(suffix) {
+        Some(value) =>
+          return Some(
+            (
+              base,
+              if ch == '+' {
+                value.reinterpret_as_int()
+              } else {
+                -value.reinterpret_as_int()
+              },
+            ),
+          )
+        None => return None
+      }
+    }
+  }
+  None
+}
+
+///|
+/// Resolve a symbol-or-address selector against the loaded image.
+fn resolve_run_selector(
+  selector : String,
+  image : @simulator.ProgramImage,
+) -> UInt? {
+  match parse_number(selector) {
+    Some(addr) => Some(addr)
+    None =>
+      match split_selector(selector) {
+        Some((name, offset)) =>
+          match image.resolve_symbol(name) {
+            Some(base) =>
+              Some(
+                if offset >= 0 {
+                  base + offset.reinterpret_as_uint()
+                } else {
+                  base - (-offset).reinterpret_as_uint()
+                },
+              )
+            None => None
+          }
+        None => image.resolve_symbol(selector)
+      }
+  }
+}
+
+///|
+/// Format run output as plain text.
+fn format_run_text(state : @simulator.ExecState) -> String {
+  let snapshot = @simulator.snapshot(state)
+  let mut result = ""
+  result = result + "Execution Summary\n"
+  result = result + "Entry: \{format_hex(state.image.entry_point)}\n"
+  result = result + "PC: \{format_hex(snapshot.pc)}\n"
+  result = result + "XLEN: \{state.image.xlen}\n"
+  result = result + "Steps: \{snapshot.steps}\n"
+  result = result +
+    "Stop Reason: \{@simulator.stop_reason_to_string(snapshot.stop_reason)}\n"
+  if state.stdout != "" {
+    result = result + "\n[stdout]\n" + state.stdout + "\n"
+  }
+  if state.stderr != "" {
+    result = result + "\n[stderr]\n" + state.stderr + "\n"
+  }
+  result = result + "\nRegisters:\n"
+  for i = 0; i < snapshot.registers.length(); i = i + 1 {
+    let value = snapshot.registers[i]
+    if i == 0 || value != 0U {
+      result = result +
+        "  \{@decode.reg_name(i.reinterpret_as_uint())}: \{format_hex(value)}\n"
+    }
+  }
+  result
+}
+
+///|
+/// Format run output as JSON.
+fn format_run_json(state : @simulator.ExecState) -> String {
+  let snapshot = @simulator.snapshot(state)
+  let mut json = "{"
+  json = json +
+    "\"entry\":\"" +
+    escape_json_string(format_hex(state.image.entry_point)) +
+    "\""
+  json = json + ",\"xlen\":" + state.image.xlen.to_string()
+  json = json + ",\"snapshot\":" + @simulator.exec_snapshot_to_json(snapshot)
+  json = json + ",\"trace\":" + @simulator.trace_events_to_json(state.trace)
+  json = json + "}"
+  json
+}
+
+///|
+/// Execute run command.
+fn execute_run(opts : RunOptions) -> Unit {
+  match @simulator.load(opts.file_path) {
+    @simulator.Loaded(initial_state) => {
+      let mut state = initial_state
+      if opts.entry != "" {
+        match resolve_run_selector(opts.entry, state.image) {
+          Some(entry_addr) => state = @simulator.with_entry(state, entry_addr)
+          None => {
+            println("Error: Entry not found: \{opts.entry}")
+            return
+          }
+        }
+      }
+
+      let breakpoints : Array[@simulator.Breakpoint] = []
+      for selector in opts.breakpoints {
+        match resolve_run_selector(selector, state.image) {
+          Some(addr) => breakpoints.push(@simulator.breakpoint(addr))
+          None => {
+            println("Error: Breakpoint not found: \{selector}")
+            return
+          }
+        }
+      }
+
+      state = @simulator.with_breakpoints(state, breakpoints)
+      let finished = @simulator.run_with_limit(state, opts.max_steps)
+
+      if opts.trace != "" &&
+        !write_output_file(
+          opts.trace,
+          @simulator.trace_events_to_json(finished.trace),
+        ) {
+        println("Error: Failed to write trace file: \{opts.trace}")
+        return
+      }
+
+      match opts.format {
+        OutputFormat::Json => println(format_run_json(finished))
+        _ => println(format_run_text(finished))
+      }
+    }
+    @simulator.LoadFailed(err) => println("Error: \{err}")
   }
 }
 
@@ -2067,6 +2317,7 @@ pub fn execute(cmd : Command) -> Unit {
     Command::Symbols(opts) => execute_symbols(opts)
     Command::Cfg(opts) => execute_cfg(opts)
     Command::CallGraph(opts) => execute_callgraph(opts)
+    Command::Run(opts) => execute_run(opts)
     Command::Hex(opts) => execute_hex(opts)
     Command::Analyze(opts) => execute_analyze(opts)
     Command::Decompile(opts) => execute_decompile(opts)

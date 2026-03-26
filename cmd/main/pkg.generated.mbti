@@ -66,6 +66,7 @@ pub enum Command {
   Symbols(SymbolsOptions)
   Cfg(CfgOptions)
   CallGraph(CallGraphOptions)
+  Run(RunOptions)
   Hex(HexOptions)
   Analyze(AnalyzeOptions)
   Decompile(DecompileOptions)
@@ -122,6 +123,16 @@ pub enum OutputFormat {
 }
 pub impl Eq for OutputFormat
 pub impl Show for OutputFormat
+
+pub struct RunOptions {
+  file_path : String
+  entry : String
+  max_steps : Int
+  breakpoints : Array[String]
+  trace : String
+  format : OutputFormat
+}
+pub impl Show for RunOptions
 
 pub struct SymbolsOptions {
   file_path : String

@@ -1,0 +1,198 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "wzzc-dev/rvkit/simulator"
+
+import {
+  "wzzc-dev/rvkit/analysis",
+  "wzzc-dev/rvkit/format",
+}
+
+// Values
+pub fn breakpoint(UInt) -> Breakpoint
+
+pub fn diff(ExecSnapshot, ExecSnapshot) -> ExecDiff
+
+pub fn exec_diff_to_json(ExecDiff) -> String
+
+pub fn exec_snapshot_to_json(ExecSnapshot) -> String
+
+pub fn load(String, entry_override? : UInt) -> LoadResult
+
+pub fn run_until_break(ExecState, Int) -> ExecState
+
+pub fn run_with_limit(ExecState, Int) -> ExecState
+
+pub fn snapshot(ExecState) -> ExecSnapshot
+
+pub fn step(ExecState) -> ExecState
+
+pub fn stop_reason_to_string(StopReason?) -> String
+
+pub fn trace_event_to_json(TraceEvent) -> String
+
+pub fn trace_events_to_json(Array[TraceEvent]) -> String
+
+pub fn with_breakpoints(ExecState, Array[Breakpoint]) -> ExecState
+
+pub fn with_entry(ExecState, UInt) -> ExecState
+
+// Errors
+
+// Types and methods
+pub struct Breakpoint {
+  addr : UInt
+}
+pub impl Show for Breakpoint
+
+pub struct ExecDiff {
+  pc_before : UInt
+  pc_after : UInt
+  register_writes : FixedArray[RegisterDelta]
+}
+pub impl Show for ExecDiff
+
+pub struct ExecSnapshot {
+  pc : UInt
+  steps : Int
+  registers : FixedArray[UInt]
+  stop_reason : StopReason?
+  stdout : String
+  stderr : String
+}
+pub impl Show for ExecSnapshot
+
+pub struct ExecState {
+  image : ProgramImage
+  registers : RegisterFile
+  memory : Memory
+  pc : UInt
+  steps : Int
+  breakpoints : Array[Breakpoint]
+  open_files : Map[Int, OpenFile]
+  next_fd : Int
+  stdin_buffer : Array[Byte]
+  stdin_cursor : Int
+  stdout : String
+  stderr : String
+  trace : Array[TraceEvent]
+  stop_reason : StopReason?
+}
+pub impl Show for ExecState
+
+pub enum LoadError {
+  FileNotFound(String)
+  InvalidElf(String)
+  ParseElfFailed(String)
+  NotRiscV(String)
+  NoLoadableSegments(String)
+  InvalidEntry(UInt)
+}
+pub impl Show for LoadError
+
+pub enum LoadResult {
+  Loaded(ExecState)
+  LoadFailed(LoadError)
+}
+pub impl Show for LoadResult
+
+pub struct Memory {
+  segments : Array[MemorySegment]
+  writes : Map[UInt, Byte]
+  heap_base : UInt
+  heap_end : UInt
+  stack_top : UInt
+}
+pub impl Show for Memory
+
+pub struct MemorySegment {
+  start_addr : UInt
+  data : FixedArray[Byte]
+  writable : Bool
+  executable : Bool
+}
+pub impl Show for MemorySegment
+
+pub struct MemoryWrite {
+  addr : UInt
+  before : Byte
+  after : Byte
+  size : Int
+}
+pub impl Show for MemoryWrite
+
+pub struct OpenFile {
+  fd : Int
+  path : String
+  data : Array[Byte]
+  cursor : Int
+  readable : Bool
+  writable : Bool
+  closed : Bool
+}
+pub impl Show for OpenFile
+
+pub struct ProgramImage {
+  file_path : String
+  entry_point : UInt
+  xlen : Int
+  symbols : Array[@format.Symbol]
+  instructions : FixedArray[@analysis.DecodedInst]
+  instruction_by_addr : Map[UInt, @analysis.DecodedInst]
+  segments : Array[MemorySegment]
+}
+pub fn ProgramImage::resolve_symbol(Self, String) -> UInt?
+pub impl Show for ProgramImage
+
+pub struct RegisterDelta {
+  reg : UInt
+  name : String
+  before : UInt
+  after : UInt
+}
+pub impl Show for RegisterDelta
+
+pub struct RegisterFile {
+  regs : FixedArray[UInt]
+}
+pub fn RegisterFile::get(Self, UInt) -> UInt
+pub fn RegisterFile::new() -> Self
+pub fn RegisterFile::set(Self, UInt, UInt, Int) -> Self
+pub impl Show for RegisterFile
+
+pub enum StopReason {
+  Breakpoint(UInt)
+  Exit(Int)
+  ExitGroup(Int)
+  Ebreak(UInt)
+  MaxSteps(Int)
+  Fault(String)
+  UnsupportedInstruction(String)
+}
+pub impl Show for StopReason
+
+pub struct SyscallRecord {
+  number : UInt
+  name : String
+  args : FixedArray[UInt]
+  result : UInt
+  result_signed : Int
+}
+pub impl Show for SyscallRecord
+
+pub struct TraceEvent {
+  step : Int
+  pc_before : UInt
+  pc_after : UInt
+  inst : @analysis.DecodedInst
+  register_writes : FixedArray[RegisterDelta]
+  memory_writes : FixedArray[MemoryWrite]
+  syscall : SyscallRecord?
+  stdout_append : String
+  stderr_append : String
+  stop_reason : StopReason?
+}
+pub impl Show for TraceEvent
+
+// Type aliases
+
+// Traits
+

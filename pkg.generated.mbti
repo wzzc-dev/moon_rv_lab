@@ -5,12 +5,15 @@ import {
   "wzzc-dev/rvkit/analysis",
   "wzzc-dev/rvkit/decode",
   "wzzc-dev/rvkit/format",
+  "wzzc-dev/rvkit/simulator",
 }
 
 // Values
 pub fn analyze_code(FixedArray[Byte], UInt) -> @analysis.CFG
 
 pub fn analyze_elf(FixedArray[Byte]) -> @analysis.CFG?
+
+pub fn breakpoint(UInt) -> @simulator.Breakpoint
 
 pub fn build_call_graph(FixedArray[@analysis.DecodedInst], @analysis.CFG) -> @analysis.CallGraph
 
@@ -29,6 +32,8 @@ pub fn decode_instructions(FixedArray[Byte], UInt) -> FixedArray[@analysis.Decod
 pub fn decompile(@analysis.CFG, FixedArray[@analysis.DecodedInst], Map[UInt, String], Map[UInt, String]) -> String
 
 pub fn decompile_function(FixedArray[@analysis.DecodedInst], @analysis.CFG, Map[UInt, String], Map[UInt, String]) -> String
+
+pub fn diff_exec(@simulator.ExecSnapshot, @simulator.ExecSnapshot) -> @simulator.ExecDiff
 
 pub fn disassemble(@decode.Instruction) -> String
 
@@ -60,6 +65,8 @@ pub fn is_terminator(@decode.Instruction) -> Bool
 
 pub fn is_unconditional_jump(@decode.Instruction) -> Bool
 
+pub fn load(String, entry_override? : UInt) -> @simulator.LoadResult
+
 pub fn parse_elf(FixedArray[Byte]) -> @format.ElfFile?
 
 pub fn print_def_use_chains(FixedArray[@analysis.DefUseChain]) -> Unit
@@ -70,7 +77,19 @@ pub fn reachable_functions(@analysis.CallGraph) -> FixedArray[UInt]
 
 pub fn reg_name(UInt) -> String
 
+pub fn run_until_break(@simulator.ExecState, Int) -> @simulator.ExecState
+
+pub fn run_with_limit(@simulator.ExecState, Int) -> @simulator.ExecState
+
+pub fn snapshot(@simulator.ExecState) -> @simulator.ExecSnapshot
+
+pub fn step_exec(@simulator.ExecState) -> @simulator.ExecState
+
 pub fn vreg_name(UInt) -> String
+
+pub fn with_breakpoints(@simulator.ExecState, Array[@simulator.Breakpoint]) -> @simulator.ExecState
+
+pub fn with_entry(@simulator.ExecState, UInt) -> @simulator.ExecState
 
 // Errors
 
@@ -80,6 +99,8 @@ pub fn vreg_name(UInt) -> String
 pub using @analysis {type BasicBlock}
 
 pub using @analysis {type BlockLiveness}
+
+pub using @simulator {type Breakpoint}
 
 pub using @analysis {type CFG}
 
@@ -109,6 +130,12 @@ pub using @format {type ElfClass}
 
 pub using @format {type ElfFile}
 
+pub using @simulator {type ExecDiff}
+
+pub using @simulator {type ExecSnapshot}
+
+pub using @simulator {type ExecState}
+
 pub using @analysis {type InstOperands}
 
 pub using @decode {type Instruction}
@@ -117,15 +144,37 @@ pub using @decode {type InstructionCategory}
 
 pub using @analysis {type LiveSet}
 
+pub using @simulator {type LoadError}
+
+pub using @simulator {type LoadResult}
+
+pub using @simulator {type Memory}
+
+pub using @simulator {type MemorySegment}
+
+pub using @simulator {type MemoryWrite}
+
 pub using @analysis {type OperandRole}
 
+pub using @simulator {type ProgramImage}
+
 pub using @analysis {type RegOperand}
+
+pub using @simulator {type RegisterDelta}
+
+pub using @simulator {type RegisterFile}
+
+pub using @simulator {type StopReason}
 
 pub using @format {type Symbol}
 
 pub using @format {type SymbolBinding}
 
 pub using @format {type SymbolType}
+
+pub using @simulator {type SyscallRecord}
+
+pub using @simulator {type TraceEvent}
 
 // Traits
 

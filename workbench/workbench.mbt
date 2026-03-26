@@ -48,6 +48,7 @@ struct WorkbenchMeta {
   total_instruction_count : Int
   basic_block_count : Int
   cfg_edge_count : Int
+  runtime_event_count : Int
   truncated : Bool
 } derive(Show)
 
@@ -90,6 +91,50 @@ struct WorkbenchEdge {
 } derive(Show)
 
 ///|
+struct WorkbenchRegisterValue {
+  name : String
+  value : String
+} derive(Show)
+
+///|
+struct WorkbenchRegisterWrite {
+  name : String
+  before : String
+  after : String
+} derive(Show)
+
+///|
+struct WorkbenchMemoryEvent {
+  addr : String
+  before : String
+  after : String
+  size : Int
+} derive(Show)
+
+///|
+struct WorkbenchTraceEvent {
+  step : Int
+  addr : String
+  next_addr : String
+  asm_text : String
+  category : String
+  block_start : String
+  register_writes : Array[WorkbenchRegisterWrite]
+  memory_writes : Array[WorkbenchMemoryEvent]
+  stdout_append : String
+  stderr_append : String
+  syscall : String
+  stop_reason : String
+} derive(Show)
+
+///|
+struct WorkbenchRuntime {
+  initial_pc : String
+  stop_reason : String
+  initial_registers : Array[WorkbenchRegisterValue]
+} derive(Show)
+
+///|
 struct WorkbenchData {
   meta : WorkbenchMeta
   functions : Array[WorkbenchFunction]
@@ -97,6 +142,8 @@ struct WorkbenchData {
   instructions : Array[WorkbenchInstruction]
   blocks : Array[WorkbenchBlock]
   edges : Array[WorkbenchEdge]
+  runtime : WorkbenchRuntime
+  events : Array[WorkbenchTraceEvent]
 } derive(Show)
 
 ///|
@@ -176,9 +223,7 @@ pub fn stream_event_payloads_from_file(
   let event_limit = normalize_max_events(max_events)
   match load_workbench_data(input_file, options) {
     Ok(data) =>
-      StreamEventsOk(
-        build_stream_event_payloads(data.instructions, data.blocks, event_limit),
-      )
+      StreamEventsOk(build_stream_event_payloads(data.events, event_limit))
     Err(err) => StreamEventsErr(err.to_string())
   }
 }
@@ -229,6 +274,9 @@ fn load_workbench_data(
           let instructions = collect_instructions(all_instructions, shown_count)
           let blocks = collect_blocks(cfg)
           let edges = collect_edges(cfg)
+          let (runtime, events) = load_runtime_trace(
+            input_file, shown_count, blocks,
+          )
 
           let meta = {
             title: page_title,
@@ -251,10 +299,20 @@ fn load_workbench_data(
             total_instruction_count: all_instructions.length(),
             basic_block_count: blocks.length(),
             cfg_edge_count: edges.length(),
+            runtime_event_count: events.length(),
             truncated: shown_count < all_instructions.length(),
           }
 
-          Ok({ meta, functions, sections, instructions, blocks, edges })
+          Ok({
+            meta,
+            functions,
+            sections,
+            instructions,
+            blocks,
+            edges,
+            runtime,
+            events,
+          })
         }
       }
     }
@@ -342,6 +400,111 @@ fn collect_edges(cfg : @analysis.CFG) -> Array[WorkbenchEdge] {
 }
 
 ///|
+fn load_runtime_trace(
+  input_file : String,
+  step_limit : Int,
+  blocks : Array[WorkbenchBlock],
+) -> (WorkbenchRuntime, Array[WorkbenchTraceEvent]) {
+  match @simulator.load(input_file) {
+    @simulator.Loaded(initial_state) => {
+      let initial_snapshot = @simulator.snapshot(initial_state)
+      let finished = @simulator.run_with_limit(initial_state, step_limit)
+      (
+        {
+          initial_pc: format_hex(initial_snapshot.pc),
+          stop_reason: @simulator.stop_reason_to_string(finished.stop_reason),
+          initial_registers: collect_initial_registers(initial_snapshot),
+        },
+        collect_runtime_events(finished.trace, blocks),
+      )
+    }
+    @simulator.LoadFailed(_) =>
+      (
+        { initial_pc: "0x0", stop_reason: "load failed", initial_registers: [] },
+        [],
+      )
+  }
+}
+
+///|
+fn collect_initial_registers(
+  snapshot : @simulator.ExecSnapshot,
+) -> Array[WorkbenchRegisterValue] {
+  let result : Array[WorkbenchRegisterValue] = []
+  for i = 0; i < snapshot.registers.length(); i = i + 1 {
+    result.push({
+      name: @decode.reg_name(i.reinterpret_as_uint()),
+      value: format_hex(snapshot.registers[i]),
+    })
+  }
+  result
+}
+
+///|
+fn collect_runtime_events(
+  trace : Array[@simulator.TraceEvent],
+  blocks : Array[WorkbenchBlock],
+) -> Array[WorkbenchTraceEvent] {
+  let result : Array[WorkbenchTraceEvent] = []
+  for event in trace {
+    let register_writes : Array[WorkbenchRegisterWrite] = []
+    for delta in event.register_writes {
+      register_writes.push({
+        name: delta.name,
+        before: format_hex(delta.before),
+        after: format_hex(delta.after),
+      })
+    }
+
+    let memory_writes : Array[WorkbenchMemoryEvent] = []
+    for write in event.memory_writes {
+      memory_writes.push({
+        addr: format_hex(write.addr),
+        before: format_hex(write.before.to_uint()),
+        after: format_hex(write.after.to_uint()),
+        size: write.size,
+      })
+    }
+
+    let syscall = match event.syscall {
+      Some(record) => format_syscall(record)
+      None => ""
+    }
+    let stop_reason = @simulator.stop_reason_to_string(event.stop_reason)
+    result.push({
+      step: event.step,
+      addr: format_hex(event.inst.addr),
+      next_addr: format_hex(event.pc_after),
+      asm_text: @disasm.disassemble(event.inst.inst),
+      category: category_to_string(event.inst.inst.category()),
+      block_start: find_block_start_for_addr(
+        blocks,
+        format_hex(event.inst.addr),
+      ),
+      register_writes,
+      memory_writes,
+      stdout_append: event.stdout_append,
+      stderr_append: event.stderr_append,
+      syscall,
+      stop_reason,
+    })
+  }
+  result
+}
+
+///|
+fn format_syscall(record : @simulator.SyscallRecord) -> String {
+  let mut args = ""
+  for i = 0; i < record.args.length(); i = i + 1 {
+    if i > 0 {
+      args = args + ", "
+    }
+    args = args + format_hex(record.args[i])
+  }
+  record.name + "(" + args + ") -> " + record.result_signed.to_string()
+}
+
+///|
 fn normalize_max_instructions(value : Int) -> Int {
   if value <= 0 {
     DEFAULT_MAX_INSTRUCTIONS
@@ -387,6 +550,8 @@ fn to_json(data : WorkbenchData) -> String {
   json = json + ",\"instructions\":" + to_json_instructions(data.instructions)
   json = json + ",\"blocks\":" + to_json_blocks(data.blocks)
   json = json + ",\"edges\":" + to_json_edges(data.edges)
+  json = json + ",\"runtime\":" + to_json_runtime(data.runtime)
+  json = json + ",\"events\":" + to_json_runtime_events(data.events)
   json = json + "}"
   json
 }
@@ -408,6 +573,9 @@ fn to_json_meta(meta : WorkbenchMeta) -> String {
     meta.total_instruction_count.to_string()
   json = json + ",\"basic_block_count\":" + meta.basic_block_count.to_string()
   json = json + ",\"cfg_edge_count\":" + meta.cfg_edge_count.to_string()
+  json = json +
+    ",\"runtime_event_count\":" +
+    meta.runtime_event_count.to_string()
   json = json + ",\"truncated\":" + bool_to_json(meta.truncated)
   json = json + "}"
   json
@@ -509,6 +677,109 @@ fn to_json_edges(edges : Array[WorkbenchEdge]) -> String {
 }
 
 ///|
+fn to_json_runtime(runtime : WorkbenchRuntime) -> String {
+  let mut json = "{"
+  json = json + "\"initial_pc\":" + json_string(runtime.initial_pc)
+  json = json + ",\"stop_reason\":" + json_string(runtime.stop_reason)
+  json = json +
+    ",\"initial_registers\":" +
+    to_json_runtime_registers(runtime.initial_registers)
+  json = json + "}"
+  json
+}
+
+///|
+fn to_json_runtime_registers(
+  registers : Array[WorkbenchRegisterValue],
+) -> String {
+  let mut json = "["
+  for i = 0; i < registers.length(); i = i + 1 {
+    if i > 0 {
+      json = json + ","
+    }
+    let reg = registers[i]
+    json = json + "{"
+    json = json + "\"name\":" + json_string(reg.name)
+    json = json + ",\"value\":" + json_string(reg.value)
+    json = json + "}"
+  }
+  json = json + "]"
+  json
+}
+
+///|
+fn to_json_runtime_register_writes(
+  writes : Array[WorkbenchRegisterWrite],
+) -> String {
+  let mut json = "["
+  for i = 0; i < writes.length(); i = i + 1 {
+    if i > 0 {
+      json = json + ","
+    }
+    let write = writes[i]
+    json = json + "{"
+    json = json + "\"name\":" + json_string(write.name)
+    json = json + ",\"before\":" + json_string(write.before)
+    json = json + ",\"after\":" + json_string(write.after)
+    json = json + "}"
+  }
+  json = json + "]"
+  json
+}
+
+///|
+fn to_json_runtime_memory_writes(
+  writes : Array[WorkbenchMemoryEvent],
+) -> String {
+  let mut json = "["
+  for i = 0; i < writes.length(); i = i + 1 {
+    if i > 0 {
+      json = json + ","
+    }
+    let write = writes[i]
+    json = json + "{"
+    json = json + "\"addr\":" + json_string(write.addr)
+    json = json + ",\"before\":" + json_string(write.before)
+    json = json + ",\"after\":" + json_string(write.after)
+    json = json + ",\"size\":" + write.size.to_string()
+    json = json + "}"
+  }
+  json = json + "]"
+  json
+}
+
+///|
+fn to_json_runtime_events(events : Array[WorkbenchTraceEvent]) -> String {
+  let mut json = "["
+  for i = 0; i < events.length(); i = i + 1 {
+    if i > 0 {
+      json = json + ","
+    }
+    let event = events[i]
+    json = json + "{"
+    json = json + "\"step\":" + event.step.to_string()
+    json = json + ",\"addr\":" + json_string(event.addr)
+    json = json + ",\"next_addr\":" + json_string(event.next_addr)
+    json = json + ",\"asm\":" + json_string(event.asm_text)
+    json = json + ",\"category\":" + json_string(event.category)
+    json = json + ",\"block_start\":" + json_string(event.block_start)
+    json = json +
+      ",\"register_writes\":" +
+      to_json_runtime_register_writes(event.register_writes)
+    json = json +
+      ",\"memory_writes\":" +
+      to_json_runtime_memory_writes(event.memory_writes)
+    json = json + ",\"stdout_append\":" + json_string(event.stdout_append)
+    json = json + ",\"stderr_append\":" + json_string(event.stderr_append)
+    json = json + ",\"syscall\":" + json_string(event.syscall)
+    json = json + ",\"stop_reason\":" + json_string(event.stop_reason)
+    json = json + "}"
+  }
+  json = json + "]"
+  json
+}
+
+///|
 fn api_error_json(err : WorkbenchError) -> String {
   "{\"ok\":false,\"error\":" + json_string(err.to_string()) + "}"
 }
@@ -524,27 +795,37 @@ fn normalize_max_events(value : Int) -> Int {
 
 ///|
 fn build_stream_event_payloads(
-  instructions : Array[WorkbenchInstruction],
-  blocks : Array[WorkbenchBlock],
+  events : Array[WorkbenchTraceEvent],
   max_events : Int,
 ) -> Array[String] {
   let payloads : Array[String] = []
-  let limit = if instructions.length() < max_events {
-    instructions.length()
+  let limit = if events.length() < max_events {
+    events.length()
   } else {
     max_events
   }
   for i = 0; i < limit; i = i + 1 {
-    let inst = instructions[i]
-    let block_start = find_block_start_for_addr(blocks, inst.addr)
-    let trace = inst.addr + ": " + inst.asm_text
+    let event = events[i]
     let mut json = "{"
-    json = json + "\"step\":" + i.to_string()
-    json = json + ",\"addr\":" + json_string(inst.addr)
-    json = json + ",\"asm\":" + json_string(inst.asm_text)
-    json = json + ",\"category\":" + json_string(inst.category)
-    json = json + ",\"block_start\":" + json_string(block_start)
-    json = json + ",\"trace\":" + json_string(trace)
+    json = json + "\"step\":" + event.step.to_string()
+    json = json + ",\"addr\":" + json_string(event.addr)
+    json = json + ",\"next_addr\":" + json_string(event.next_addr)
+    json = json + ",\"asm\":" + json_string(event.asm_text)
+    json = json + ",\"category\":" + json_string(event.category)
+    json = json + ",\"block_start\":" + json_string(event.block_start)
+    json = json +
+      ",\"register_writes\":" +
+      to_json_runtime_register_writes(event.register_writes)
+    json = json +
+      ",\"memory_writes\":" +
+      to_json_runtime_memory_writes(event.memory_writes)
+    json = json + ",\"stdout_append\":" + json_string(event.stdout_append)
+    json = json + ",\"stderr_append\":" + json_string(event.stderr_append)
+    json = json + ",\"syscall\":" + json_string(event.syscall)
+    json = json + ",\"stop_reason\":" + json_string(event.stop_reason)
+    json = json +
+      ",\"trace\":" +
+      json_string(event.addr + ": " + event.asm_text)
     json = json + "}"
     payloads.push(json)
   }
@@ -929,12 +1210,12 @@ fn build_html_page(title : String, data_json : String) -> String {
   html = html + "        <div class=\"scroll\">\n"
   html = html +
     "          <div class=\"summary-grid\" id=\"runtime-summary\"></div>\n"
-  html = html + "          <h3>寄存器（教学模拟）</h3>\n"
+  html = html + "          <h3>寄存器</h3>\n"
   html = html +
     "          <div class=\"reg-grid\" id=\"register-grid\"></div>\n"
   html = html + "          <h3>最近访存事件</h3>\n"
   html = html + "          <ul class=\"edge-list\" id=\"memory-events\"></ul>\n"
-  html = html + "          <h3>调用栈摘要</h3>\n"
+  html = html + "          <h3>系统调用 / 输出</h3>\n"
   html = html + "          <ul class=\"edge-list\" id=\"call-stack\"></ul>\n"
   html = html + "        </div>\n"
   html = html + "      </aside>\n"
@@ -989,14 +1270,18 @@ fn build_html_page(title : String, data_json : String) -> String {
     "        's2','s3','s4','s5','s6','s7','s8','s9','s10','s11','t3','t4','t5','t6'\n"
   html = html + "      ];\n"
   html = html + "\n"
+  html = html +
+    "      const INITIAL_REGISTERS = Object.fromEntries((data.runtime.initial_registers || []).map(item => [item.name, item.value]));\n"
   html = html + "      const state = {\n"
   html = html + "        selectedFunction: null,\n"
   html = html + "        viewInstructions: data.instructions.slice(),\n"
-  html = html + "        cursor: data.instructions.length() > 0 ? 0 : -1,\n"
+  html = html + "        cursor: -1,\n"
   html = html + "        registers: {},\n"
   html = html + "        memoryEvents: [],\n"
   html = html + "        trace: [],\n"
   html = html + "        callStack: [],\n"
+  html = html + "        stdout: '',\n"
+  html = html + "        stderr: '',\n"
   html = html + "        timer: null\n"
   html = html + "      };\n"
   html = html + "\n"
@@ -1018,13 +1303,21 @@ fn build_html_page(title : String, data_json : String) -> String {
   html = html + "      }\n"
   html = html + "\n"
   html = html + "      function resetRuntimeState() {\n"
-  html = html + "        state.registers = {};\n"
+  html = html + "        state.registers = { ...INITIAL_REGISTERS };\n"
   html = html + "        for (const r of REGISTER_ORDER) {\n"
-  html = html + "          state.registers[r] = '0x0';\n"
+  html = html +
+    "          if (!(r in state.registers)) state.registers[r] = '0x0';\n"
   html = html + "        }\n"
   html = html + "        state.memoryEvents = [];\n"
   html = html + "        state.trace = [];\n"
   html = html + "        state.callStack = [];\n"
+  html = html + "        state.stdout = '';\n"
+  html = html + "        state.stderr = '';\n"
+  html = html + "      }\n"
+  html = html + "\n"
+  html = html + "      function currentEvent() {\n"
+  html = html +
+    "        return state.cursor >= 0 && state.cursor < data.events.length ? data.events[state.cursor] : null;\n"
   html = html + "      }\n"
   html = html + "\n"
   html = html + "      function summaryItems() {\n"
@@ -1047,15 +1340,19 @@ fn build_html_page(title : String, data_json : String) -> String {
   html = html + "      }\n"
   html = html + "\n"
   html = html + "      function renderRuntimeSummary() {\n"
+  html = html + "        const current = currentEvent();\n"
   html = html +
-    "        const current = state.cursor >= 0 ? state.viewInstructions[state.cursor] : null;\n"
+    "        const stopText = current && current.stop_reason ? current.stop_reason : (state.cursor < 0 ? '未开始' : 'running');\n"
   html = html + "        refs.runtimeSummary.innerHTML = [\n"
-  html = html + "          ['PC', current ? current.addr : 'N/A'],\n"
   html = html +
-    "          ['游标', current ? `${state.cursor + 1}/${state.viewInstructions.length}` : '0/0'],\n"
+    "          ['PC', current ? current.addr : data.runtime.initial_pc],\n"
+  html = html +
+    "          ['步骤', `${Math.max(0, state.cursor + 1)}/${data.events.length}`],\n"
   html = html +
     "          ['模式', state.timer ? '自动播放' : '单步'],\n"
-  html = html + "          ['轨迹事件', state.trace.length]\n"
+  html = html + "          ['停止原因', stopText],\n"
+  html = html + "          ['stdout', String(state.stdout.length)],\n"
+  html = html + "          ['stderr', String(state.stderr.length)]\n"
   html = html +
     "        ].map(([k, v]) => `<div class=\"stat\"><div class=\"k\">${escapeHtml(k)}</div><div class=\"v\">${escapeHtml(v)}</div></div>`).join('');\n"
   html = html + "      }\n"
@@ -1126,8 +1423,6 @@ fn build_html_page(title : String, data_json : String) -> String {
   html = html +
     "        state.viewInstructions = instructionsForFunction(target);\n"
   html = html +
-    "        state.cursor = state.viewInstructions.length > 0 ? 0 : -1;\n"
-  html = html +
     "        refs.functionSelect.value = target ? target.addr : '__all__';\n"
   html = html +
     "        refs.functionList.querySelectorAll('.function-item').forEach((element) => {\n"
@@ -1135,81 +1430,56 @@ fn build_html_page(title : String, data_json : String) -> String {
     "          const selected = target && element.getAttribute('data-addr') === target.addr;\n"
   html = html + "          element.classList.toggle('active', !!selected);\n"
   html = html + "        });\n"
-  html = html + "        rebuildToCursor(state.cursor);\n"
   html = html + "        renderAll();\n"
   html = html + "      }\n"
   html = html + "\n"
-  html = html + "      function parseInstruction(inst) {\n"
-  html = html + "        const parts = inst.asm.trim().split(/\\s+/, 2);\n"
-  html = html + "        const mnemonic = parts[0] || '';\n"
-  html = html + "        const operands = parts.length > 1\n"
+  html = html + "      function applyEvent(event) {\n"
+  html = html + "        for (const delta of event.register_writes || []) {\n"
+  html = html + "          state.registers[delta.name] = delta.after;\n"
+  html = html + "        }\n"
+  html = html + "        for (const mem of event.memory_writes || []) {\n"
   html = html +
-    "          ? parts[1].split(',').map(x => x.trim()).filter(Boolean)\n"
-  html = html + "          : [];\n"
-  html = html + "        return { mnemonic, operands };\n"
-  html = html + "      }\n"
-  html = html + "\n"
-  html = html + "      function inferDestRegister(mnemonic, operands) {\n"
-  html = html + "        if (operands.length === 0) return null;\n"
+    "          state.memoryEvents.unshift(`${mem.addr}: ${mem.before} -> ${mem.after}`);\n"
   html = html +
-    "        const stores = new Set(['sb','sh','sw','sd','fsw','fsd','c.sw','c.sd']);\n"
+    "          if (state.memoryEvents.length > 14) state.memoryEvents.pop();\n"
+  html = html + "        }\n"
+  html = html + "        if (event.syscall) {\n"
+  html = html + "          state.callStack.unshift(event.syscall);\n"
   html = html +
-    "        const noWrite = new Set(['ret','ecall','ebreak','fence','fence.i']);\n"
+    "          if (state.callStack.length > 10) state.callStack.pop();\n"
+  html = html + "        }\n"
+  html = html + "        if (event.stdout_append) {\n"
+  html = html + "          state.stdout += event.stdout_append;\n"
   html = html +
-    "        if (stores.has(mnemonic) || noWrite.has(mnemonic)) return null;\n"
-  html = html + "        if (mnemonic.startsWith('b')) return null;\n"
-  html = html + "        const dest = operands[0].replace(/[()]/g, '');\n"
-  html = html + "        if (!dest) return null;\n"
-  html = html + "        return dest;\n"
-  html = html + "      }\n"
-  html = html + "\n"
-  html = html + "      function applyInstruction(inst) {\n"
+    "          state.callStack.unshift(`stdout: ${event.stdout_append}`);\n"
+  html = html + "        }\n"
+  html = html + "        if (event.stderr_append) {\n"
+  html = html + "          state.stderr += event.stderr_append;\n"
   html = html +
-    "        const { mnemonic, operands } = parseInstruction(inst);\n"
-  html = html + "        const dest = inferDestRegister(mnemonic, operands);\n"
-  html = html + "        if (dest && dest !== 'zero' && dest !== 'x0') {\n"
-  html = html + "          state.registers[dest] = inst.addr;\n"
+    "          state.callStack.unshift(`stderr: ${event.stderr_append}`);\n"
   html = html + "        }\n"
   html = html +
-    "        if (mnemonic.includes('w') || mnemonic.includes('d')) {\n"
+    "        const suffix = event.stop_reason && event.stop_reason !== 'running' ? ` [${event.stop_reason}]` : '';\n"
   html = html +
-    "          if (['sw','sd','sb','sh','c.sw','c.sd','fsw','fsd'].includes(mnemonic)) {\n"
-  html = html +
-    "            state.memoryEvents.unshift(`${inst.addr}: ${inst.asm}`);\n"
-  html = html +
-    "            if (state.memoryEvents.length > 14) state.memoryEvents.pop();\n"
-  html = html + "          }\n"
-  html = html + "        }\n"
-  html = html +
-    "        if (mnemonic === 'jal' || mnemonic === 'call' || mnemonic === 'c.jal') {\n"
-  html = html +
-    "          state.callStack.unshift(`${inst.addr} -> ${operands.length > 1 ? operands[1] : 'target'}`);\n"
-  html = html +
-    "          if (state.callStack.length > 8) state.callStack.pop();\n"
-  html = html + "        }\n"
-  html = html +
-    "        if (mnemonic === 'ret' || (mnemonic === 'jalr' && inst.asm.includes('zero, ra'))) {\n"
-  html = html +
-    "          if (state.callStack.length > 0) state.callStack.shift();\n"
-  html = html + "        }\n"
-  html = html + "        state.trace.unshift(`${inst.addr}: ${inst.asm}`);\n"
-  html = html + "        if (state.trace.length > 60) state.trace.pop();\n"
+    "        state.trace.unshift(`${event.addr}: ${event.asm}${suffix}`);\n"
+  html = html + "        if (state.trace.length > 80) state.trace.pop();\n"
   html = html + "      }\n"
   html = html + "\n"
   html = html + "      function rebuildToCursor(cursor) {\n"
   html = html + "        resetRuntimeState();\n"
   html = html + "        if (cursor < 0) return;\n"
   html = html +
-    "        for (let i = 0; i <= cursor && i < state.viewInstructions.length; i += 1) {\n"
-  html = html + "          applyInstruction(state.viewInstructions[i]);\n"
+    "        for (let i = 0; i <= cursor && i < data.events.length; i += 1) {\n"
+  html = html + "          applyEvent(data.events[i]);\n"
   html = html + "        }\n"
   html = html + "      }\n"
   html = html + "\n"
   html = html + "      function renderDisasm() {\n"
+  html = html + "        const current = currentEvent();\n"
   html = html +
     "        refs.disasmBody.innerHTML = state.viewInstructions.map((inst, index) => {\n"
   html = html +
-    "          const active = index === state.cursor ? ' class=\"active\"' : '';\n"
+    "          const active = current && current.addr === inst.addr ? ' class=\"active\"' : '';\n"
   html = html +
     "          return `<tr data-index=\"${index}\"${active}><td>${index}</td><td>${escapeHtml(inst.addr)}</td><td>${escapeHtml(inst.asm)}</td><td>${escapeHtml(inst.category)}</td></tr>`;\n"
   html = html + "        }).join('');\n"
@@ -1218,8 +1488,11 @@ fn build_html_page(title : String, data_json : String) -> String {
   html = html + "          tr.addEventListener('click', () => {\n"
   html = html +
     "            const index = Number(tr.getAttribute('data-index'));\n"
-  html = html + "            if (!Number.isNaN(index)) {\n"
-  html = html + "              state.cursor = index;\n"
+  html = html + "            const inst = state.viewInstructions[index];\n"
+  html = html +
+    "            const eventIndex = data.events.findIndex(event => event.addr === inst.addr);\n"
+  html = html + "            if (eventIndex >= 0) {\n"
+  html = html + "              state.cursor = eventIndex;\n"
   html = html + "              rebuildToCursor(state.cursor);\n"
   html = html + "              renderAll();\n"
   html = html + "            }\n"
@@ -1229,8 +1502,7 @@ fn build_html_page(title : String, data_json : String) -> String {
   html = html + "\n"
   html = html + "      function renderCfg() {\n"
   html = html + "        const blocks = data.blocks;\n"
-  html = html +
-    "        const current = state.cursor >= 0 ? state.viewInstructions[state.cursor] : null;\n"
+  html = html + "        const current = currentEvent();\n"
   html = html +
     "        const currentAddr = current ? hexToBigInt(current.addr) : null;\n"
   html = html + "        const cards = blocks.slice(0, 180).map(block => {\n"
@@ -1266,11 +1538,16 @@ fn build_html_page(title : String, data_json : String) -> String {
   html = html +
     "          ? state.memoryEvents.map(item => `<li>${escapeHtml(item)}</li>`).join('')\n"
   html = html + "          : '<li>暂无访存写事件</li>';\n"
+  html = html + "        const outputs = [];\n"
   html = html +
-    "        refs.callStack.innerHTML = state.callStack.length > 0\n"
+    "        if (state.stdout) outputs.push(`stdout(${state.stdout.length}): ${state.stdout}`);\n"
   html = html +
-    "          ? state.callStack.map(item => `<li>${escapeHtml(item)}</li>`).join('')\n"
-  html = html + "          : '<li>暂无调用轨迹</li>';\n"
+    "        if (state.stderr) outputs.push(`stderr(${state.stderr.length}): ${state.stderr}`);\n"
+  html = html + "        const side = state.callStack.concat(outputs);\n"
+  html = html + "        refs.callStack.innerHTML = side.length > 0\n"
+  html = html +
+    "          ? side.map(item => `<li>${escapeHtml(item)}</li>`).join('')\n"
+  html = html + "          : '<li>暂无 syscall / 输出</li>';\n"
   html = html + "      }\n"
   html = html + "\n"
   html = html + "      function renderTrace() {\n"
@@ -1290,9 +1567,9 @@ fn build_html_page(title : String, data_json : String) -> String {
   html = html + "      }\n"
   html = html + "\n"
   html = html + "      function step(delta) {\n"
-  html = html + "        if (state.viewInstructions.length === 0) return;\n"
+  html = html + "        if (data.events.length === 0) return;\n"
   html = html +
-    "        const next = Math.max(0, Math.min(state.viewInstructions.length - 1, state.cursor + delta));\n"
+    "        const next = Math.max(-1, Math.min(data.events.length - 1, state.cursor + delta));\n"
   html = html + "        if (next === state.cursor) return;\n"
   html = html + "        state.cursor = next;\n"
   html = html + "        rebuildToCursor(state.cursor);\n"
@@ -1309,8 +1586,7 @@ fn build_html_page(title : String, data_json : String) -> String {
   html = html + "        }\n"
   html = html + "        refs.playBtn.textContent = '暂停';\n"
   html = html + "        state.timer = setInterval(() => {\n"
-  html = html +
-    "          if (state.cursor >= state.viewInstructions.length - 1) {\n"
+  html = html + "          if (state.cursor >= data.events.length - 1) {\n"
   html = html + "            togglePlay();\n"
   html = html + "            return;\n"
   html = html + "          }\n"
@@ -1330,8 +1606,7 @@ fn build_html_page(title : String, data_json : String) -> String {
   html = html + "        selectFunction(target ?? null);\n"
   html = html + "      });\n"
   html = html + "      refs.resetBtn.addEventListener('click', () => {\n"
-  html = html +
-    "        state.cursor = state.viewInstructions.length > 0 ? 0 : -1;\n"
+  html = html + "        state.cursor = -1;\n"
   html = html + "        rebuildToCursor(state.cursor);\n"
   html = html + "        renderAll();\n"
   html = html + "      });\n"
@@ -1349,10 +1624,13 @@ fn build_html_page(title : String, data_json : String) -> String {
     "        refs.truncatedBanner.textContent = `当前页面仅展示前 ${data.meta.instruction_count} 条指令（总计 ${data.meta.total_instruction_count} 条）。可通过 CLI 参数 --max-inst 调整。`;\n"
   html = html + "      }\n"
   html = html + "\n"
+  html = html + "      resetRuntimeState();\n"
   html = html + "      renderSummary();\n"
   html = html + "      renderSections();\n"
   html = html + "      renderFunctions();\n"
   html = html + "      selectFunction(null);\n"
+  html = html + "      rebuildToCursor(state.cursor);\n"
+  html = html + "      renderAll();\n"
   html = html + "    })();\n"
   html = html + "  </script>\n"
   html = html + "</body>\n"

@@ -140,6 +140,8 @@ pub const R_RISCV_TLS_TPREL32 : UInt = 10
 
 pub const R_RISCV_TLS_TPREL64 : UInt = 11
 
+pub const SHF_ALLOC : UInt = 0x2
+
 pub const SHF_EXECINSTR : UInt = 0x4
 
 pub const SHN_ABS : UInt = 0xFFF1

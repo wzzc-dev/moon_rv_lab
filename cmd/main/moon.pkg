@@ -4,6 +4,7 @@ import {
   "wzzc-dev/rvkit/format" @format,
   "wzzc-dev/rvkit/analysis" @analysis,
   "wzzc-dev/rvkit/asm" @asm,
+  "wzzc-dev/rvkit/simulator" @simulator,
   "wzzc-dev/rvkit/workbench" @workbench,
   "moonbitlang/x/fs" @fs,
   "moonbitlang/x/sys" @sys,
