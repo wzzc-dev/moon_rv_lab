@@ -273,3 +273,44 @@ test "simulator supports file-oriented syscalls and brk updates" {
   assert_eq(brk_set.result_signed, requested_brk.reinterpret_as_int())
   assert_eq(state.memory.heap_end, requested_brk)
 }
+
+///|
+test "simulator executes compressed integer arithmetic branch and stack ops" {
+  let source =
+    #|c.li a0, 2
+    #|c.addi a0, 1
+    #|c.mv a1, a0
+    #|c.add a1, a0
+    #|c.sub a1, a0
+    #|c.xor a1, a0
+    #|c.or a1, a0
+    #|c.and a1, a0
+    #|c.andi a1, 1
+    #|c.slli a1, 2
+    #|c.srli a1, 1
+    #|c.addi16sp -16
+    #|c.beqz a1, 4
+    #|c.bnez a1, 4
+    #|c.li a2, 9
+    #|c.j 4
+    #|c.li a3, 7
+    #|c.nop
+    #|c.ebreak
+  let state = load_state_from_source(
+    "compressed_integer",
+    source,
+  )
+  let initial_sp = state.registers.get(2U)
+  let finished = run_with_limit(state, 40)
+  assert_eq(finished.registers.get(10U), 3U)
+  assert_eq(finished.registers.get(11U), 2U)
+  assert_eq(finished.registers.get(12U), 0U)
+  assert_eq(finished.registers.get(13U), 0U)
+  assert_eq(finished.registers.get(2U), initial_sp - 16U)
+  assert_true(finished.trace.length() >= 16)
+  assert_eq(finished.trace[13].pc_after, TEST_BASE + 32U)
+  match finished.stop_reason {
+    Some(StopReason::Ebreak(addr)) => assert_eq(addr, TEST_BASE + 36U)
+    _ => abort("expected compressed ebreak stop")
+  }
+}

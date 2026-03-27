@@ -57,6 +57,9 @@ struct WorkbenchFunction {
   name : String
   addr : String
   size : String
+  instruction_count : Int
+  block_count : Int
+  has_runtime_event : Bool
 } derive(Show)
 
 ///|
@@ -147,9 +150,90 @@ struct WorkbenchData {
 } derive(Show)
 
 ///|
+struct WorkbenchOverview {
+  meta : WorkbenchMeta
+  functions : Array[WorkbenchFunction]
+  sections : Array[WorkbenchSection]
+  runtime : WorkbenchRuntime
+  events : Array[WorkbenchTraceEvent]
+} derive(Show)
+
+///|
+struct WorkbenchFunctionSlice {
+  function : WorkbenchFunction
+  instructions : Array[WorkbenchInstruction]
+  blocks : Array[WorkbenchBlock]
+  edges : Array[WorkbenchEdge]
+  available : Bool
+  reason : String
+} derive(Show)
+
+///|
+priv struct ProgramSectionIndex {
+  index : Int
+  name : String
+  start_addr : UInt
+  end_addr : UInt
+  instructions : FixedArray[@analysis.DecodedInst]
+  blocks : Array[WorkbenchBlock]
+  edges : Array[WorkbenchEdge]
+}
+
+///|
+priv struct FunctionRange {
+  name : String
+  addr : UInt
+  size : UInt
+  end_addr : UInt
+  section_index : Int
+}
+
+///|
+priv struct FunctionSymbolCandidate {
+  name : String
+  addr : UInt
+  size : UInt
+  section_index : Int
+}
+
+///|
+priv struct StaticProgramIndex {
+  title : String
+  source_file : String
+  entry_point : UInt
+  file_class : String
+  architecture : String
+  section_count : Int
+  program_count : Int
+  sections : Array[WorkbenchSection]
+  code_sections : Array[ProgramSectionIndex]
+  all_instructions : FixedArray[@analysis.DecodedInst]
+  blocks : Array[WorkbenchBlock]
+  edges : Array[WorkbenchEdge]
+  function_ranges : Array[FunctionRange]
+}
+
+///|
+priv struct BuiltSliceData {
+  instructions : Array[WorkbenchInstruction]
+  blocks : Array[WorkbenchBlock]
+  edges : Array[WorkbenchEdge]
+  available : Bool
+  reason : String
+  instruction_count : Int
+  block_count : Int
+}
+
+///|
 priv enum LoadWorkbenchResult {
   Ok(WorkbenchData)
   Err(WorkbenchError)
+}
+
+///|
+priv enum LoadStaticProgramResult {
+  StaticProgramOk(StaticProgramIndex)
+  StaticProgramErr(WorkbenchError)
 }
 
 ///|
@@ -160,17 +244,39 @@ pub fn generate_from_file(
   output_file : String,
   options : WorkbenchOptions,
 ) -> WorkbenchError? {
-  match load_workbench_data(input_file, options) {
-    Ok(data) => {
-      let json = to_json(data)
-      let html = build_html_page(data.meta.title, embedded_boot_json(json))
+  let page_title = resolve_page_title(options.title)
+  let max_inst = normalize_max_instructions(options.max_instructions)
+  match load_static_program_index(input_file, page_title) {
+    StaticProgramErr(err) => Some(err)
+    StaticProgramOk(index) => {
+      let (runtime, events) = load_runtime_trace(input_file, max_inst, index.blocks)
+      let functions = build_workbench_functions(index, events)
+      let overview = build_workbench_overview(
+        index,
+        functions,
+        runtime,
+        events,
+        DEFAULT_MAX_INSTRUCTIONS,
+      )
+      let slices = build_embedded_function_slices(
+        index,
+        functions,
+        DEFAULT_MAX_INSTRUCTIONS,
+      )
+      let html = build_html_page(
+        overview.meta.title,
+        embedded_boot_json(
+          to_json_overview(overview),
+          to_json_function_slices_map(slices),
+          max_inst,
+        ),
+      )
       if write_output_file(output_file, html) {
         None
       } else {
         Some(WorkbenchError::WriteFailed(output_file))
       }
     }
-    Err(err) => Some(err)
   }
 }
 
@@ -184,6 +290,53 @@ pub fn snapshot_api_json_from_file(
   match load_workbench_data(input_file, options) {
     Ok(data) => "{\"ok\":true,\"data\":" + to_json(data) + "}"
     Err(err) => api_error_json(err)
+  }
+}
+
+///|
+pub fn overview_api_json_from_file(
+  input_file : String,
+  max_events : Int,
+) -> String {
+  let page_title = resolve_page_title("")
+  let event_limit = normalize_max_events(max_events)
+  match load_static_program_index(input_file, page_title) {
+    StaticProgramErr(err) => api_error_json(err)
+    StaticProgramOk(index) => {
+      let (runtime, events) = load_runtime_trace(
+        input_file,
+        event_limit,
+        index.blocks,
+      )
+      let functions = build_workbench_functions(index, events)
+      let overview = build_workbench_overview(
+        index,
+        functions,
+        runtime,
+        events,
+        DEFAULT_MAX_INSTRUCTIONS,
+      )
+      "{\"ok\":true,\"data\":" + to_json_overview(overview) + "}"
+    }
+  }
+}
+
+///|
+pub fn function_api_json_from_file(
+  input_file : String,
+  function : String,
+) -> String {
+  let page_title = resolve_page_title("")
+  match load_static_program_index(input_file, page_title) {
+    StaticProgramErr(err) => api_error_json(err)
+    StaticProgramOk(index) =>
+      match build_function_slice_response(index, function, true) {
+        Some(slice) => "{\"ok\":true,\"data\":" + to_json_function_slice(slice) + "}"
+        None =>
+          "{\"ok\":false,\"error\":" +
+          json_string("function not found: " + function) +
+          "}"
+      }
   }
 }
 
@@ -219,27 +372,39 @@ pub fn stream_event_payloads_from_file(
   max_instructions : Int,
   max_events : Int,
 ) -> StreamEventsLoadResult {
-  let options = create_options("", max_instructions)
+  let page_title = resolve_page_title("")
   let event_limit = normalize_max_events(max_events)
-  match load_workbench_data(input_file, options) {
-    Ok(data) =>
-      StreamEventsOk(build_stream_event_payloads(data.events, event_limit))
-    Err(err) => StreamEventsErr(err.to_string())
+  let step_limit = normalize_max_instructions(max_instructions)
+  match load_static_program_index(input_file, page_title) {
+    StaticProgramErr(err) => StreamEventsErr(err.to_string())
+    StaticProgramOk(index) => {
+      let (_, events) = load_runtime_trace(input_file, step_limit, index.blocks)
+      StreamEventsOk(build_stream_event_payloads(events, event_limit))
+    }
   }
 }
 
 ///|
-/// Build a standalone online workbench page that loads data from `/api/snapshot`.
+/// Build a standalone online workbench page that loads data from workbench APIs.
 pub fn online_page_html(
   default_file : String,
   initial_file : String,
   max_instructions : Int,
   snapshot_endpoint : String,
 ) -> String {
+  let overview_endpoint = if snapshot_endpoint == "" {
+    "/api/workbench/overview"
+  } else {
+    snapshot_endpoint
+  }
   build_html_page(
     "MoonRV Lab Online Workbench",
     remote_boot_json(
-      default_file, initial_file, max_instructions, snapshot_endpoint,
+      default_file,
+      initial_file,
+      max_instructions,
+      overview_endpoint,
+      "/api/workbench/function",
     ),
   )
 }
@@ -249,85 +414,78 @@ fn load_workbench_data(
   input_file : String,
   options : WorkbenchOptions,
 ) -> LoadWorkbenchResult {
+  let page_title = resolve_page_title(options.title)
+  let max_inst = normalize_max_instructions(options.max_instructions)
+  match load_static_program_index(input_file, page_title) {
+    StaticProgramErr(err) => Err(err)
+    StaticProgramOk(index) => {
+      let (runtime, events) = load_runtime_trace(input_file, max_inst, index.blocks)
+      let functions = build_workbench_functions(index, events)
+      let meta = build_workbench_meta(index, functions, events.length(), max_inst)
+      let shown_count = meta.instruction_count
+      Ok({
+        meta,
+        functions,
+        sections: index.sections,
+        instructions: collect_instructions(index.all_instructions, shown_count),
+        blocks: index.blocks,
+        edges: index.edges,
+        runtime,
+        events,
+      })
+    }
+  }
+}
+
+///|
+fn resolve_page_title(title : String) -> String {
+  if title == "" {
+    "MoonRV Lab Workbench"
+  } else {
+    title
+  }
+}
+
+///|
+fn load_static_program_index(
+  input_file : String,
+  title : String,
+) -> LoadStaticProgramResult {
   match read_file_bytes(input_file) {
-    None => Err(WorkbenchError::FileNotFound(input_file))
+    None => StaticProgramErr(WorkbenchError::FileNotFound(input_file))
     Some(bytes) => {
       if !@format.is_elf(bytes) {
-        return Err(WorkbenchError::InvalidElf(input_file))
+        return StaticProgramErr(WorkbenchError::InvalidElf(input_file))
       }
       match @format.parse_elf(bytes) {
-        None => Err(WorkbenchError::ParseElfFailed(input_file))
+        None => StaticProgramErr(WorkbenchError::ParseElfFailed(input_file))
         Some(elf) => {
           if !elf.is_riscv() {
-            return Err(WorkbenchError::NotRiscV(input_file))
+            return StaticProgramErr(WorkbenchError::NotRiscV(input_file))
           }
-          let code_sections = elf.get_code_sections()
-          if code_sections.length() == 0 {
-            return Err(WorkbenchError::NoCodeSection(input_file))
-          }
-
-          let (code_addr, code_bytes) = code_sections[0]
-          let all_instructions = @analysis.decode_instructions(
-            code_bytes, code_addr,
-          )
-          let cfg = @analysis.build_cfg(all_instructions, code_addr)
-          let max_instructions = normalize_max_instructions(
-            options.max_instructions,
-          )
-          let shown_count = if all_instructions.length() < max_instructions {
-            all_instructions.length()
-          } else {
-            max_instructions
-          }
-
-          let page_title = if options.title == "" {
-            "MoonRV Lab Workbench"
-          } else {
-            options.title
-          }
-          let functions = collect_functions(elf)
           let sections = collect_sections(elf)
-          let instructions = collect_instructions(all_instructions, shown_count)
-          let blocks = collect_blocks(cfg)
-          let edges = collect_edges(cfg)
-          let (runtime, events) = load_runtime_trace(
-            input_file, shown_count, blocks,
-          )
-
-          let meta = {
-            title: page_title,
+          let code_sections = collect_program_code_sections(elf)
+          if code_sections.length() == 0 {
+            return StaticProgramErr(WorkbenchError::NoCodeSection(input_file))
+          }
+          let all_instructions = collect_all_program_instructions(code_sections)
+          let blocks = collect_all_program_blocks(code_sections)
+          let edges = collect_all_program_edges(code_sections)
+          let function_ranges = collect_function_ranges(elf, code_sections)
+          StaticProgramOk({
+            title,
             source_file: input_file,
-            entry_point: format_hex(elf.entry_point()),
-            file_class: if elf.is_64bit {
-              "ELF64"
-            } else {
-              "ELF32"
-            },
-            architecture: if elf.is_riscv() {
-              "RISC-V"
-            } else {
-              "Unknown"
-            },
+            entry_point: elf.entry_point(),
+            file_class: if elf.is_64bit { "ELF64" } else { "ELF32" },
+            architecture: if elf.is_riscv() { "RISC-V" } else { "Unknown" },
             section_count: elf.section_count(),
             program_count: elf.program_count(),
-            function_count: functions.length(),
-            instruction_count: shown_count,
-            total_instruction_count: all_instructions.length(),
-            basic_block_count: blocks.length(),
-            cfg_edge_count: edges.length(),
-            runtime_event_count: events.length(),
-            truncated: shown_count < all_instructions.length(),
-          }
-
-          Ok({
-            meta,
-            functions,
             sections,
-            instructions,
+            code_sections,
+            all_instructions,
             blocks,
             edges,
-            runtime,
-            events,
+            function_ranges,
           })
         }
       }
@@ -336,16 +494,631 @@ fn load_workbench_data(
 }
 
 ///|
-fn collect_functions(elf : @format.ElfFile) -> Array[WorkbenchFunction] {
-  let result : Array[WorkbenchFunction] = []
-  let symbols = elf.get_function_symbols()
-  for sym in symbols {
-    if sym.name != "" {
+fn collect_program_code_sections(
+  elf : @format.ElfFile,
+) -> Array[ProgramSectionIndex] {
+  let result : Array[ProgramSectionIndex] = []
+
+  if elf.is_64bit {
+    for i = 0; i < elf.sections64.length(); i = i + 1 {
+      let sh = elf.sections64[i]
+      if (sh.sh_flags & @format.SHF_EXECINSTR) != 0U && sh.sh_size > 0U {
+        match elf.extract_bytes(sh.sh_offset, sh.sh_size) {
+          Some(code) => {
+            let instructions = @analysis.decode_instructions(code, sh.sh_addr)
+            let cfg = @analysis.build_cfg(instructions, sh.sh_addr)
+            result.push({
+              index: i,
+              name: elf.get_section_name(i),
+              start_addr: sh.sh_addr,
+              end_addr: sh.sh_addr + sh.sh_size,
+              instructions,
+              blocks: collect_blocks(cfg),
+              edges: collect_edges(cfg),
+            })
+          }
+          None => ()
+        }
+      }
+    }
+  } else {
+    for i = 0; i < elf.sections32.length(); i = i + 1 {
+      let sh = elf.sections32[i]
+      if (sh.sh_flags & @format.SHF_EXECINSTR) != 0U && sh.sh_size > 0U {
+        match elf.extract_bytes(sh.sh_offset, sh.sh_size) {
+          Some(code) => {
+            let instructions = @analysis.decode_instructions(code, sh.sh_addr)
+            let cfg = @analysis.build_cfg(instructions, sh.sh_addr)
+            result.push({
+              index: i,
+              name: elf.get_section_name(i),
+              start_addr: sh.sh_addr,
+              end_addr: sh.sh_addr + sh.sh_size,
+              instructions,
+              blocks: collect_blocks(cfg),
+              edges: collect_edges(cfg),
+            })
+          }
+          None => ()
+        }
+      }
+    }
+  }
+
+  if result.length() == 0 {
+    let fallback = elf.get_code_sections()
+    for i = 0; i < fallback.length(); i = i + 1 {
+      let (addr, code) = fallback[i]
+      let instructions = @analysis.decode_instructions(code, addr)
+      let cfg = @analysis.build_cfg(instructions, addr)
       result.push({
-        name: sym.name,
-        addr: format_hex(sym.value),
-        size: format_hex(sym.size),
+        index: i,
+        name: "segment_" + i.to_string(),
+        start_addr: addr,
+        end_addr: addr + code.length().reinterpret_as_uint(),
+        instructions,
+        blocks: collect_blocks(cfg),
+        edges: collect_edges(cfg),
       })
+    }
+  }
+
+  result.sort_by((lhs, rhs) => {
+    let by_addr = lhs.start_addr.compare(rhs.start_addr)
+    if by_addr != 0 {
+      by_addr
+    } else {
+      lhs.index.compare(rhs.index)
+    }
+  })
+  result
+}
+
+///|
+fn collect_all_program_instructions(
+  code_sections : Array[ProgramSectionIndex],
+) -> FixedArray[@analysis.DecodedInst] {
+  let result : Array[@analysis.DecodedInst] = []
+  for section in code_sections {
+    for inst in section.instructions {
+      result.push(inst)
+    }
+  }
+  result.sort_by((lhs, rhs) => lhs.addr.compare(rhs.addr))
+  FixedArray::from_array(result)
+}
+
+///|
+fn collect_all_program_blocks(
+  code_sections : Array[ProgramSectionIndex],
+) -> Array[WorkbenchBlock] {
+  let result : Array[WorkbenchBlock] = []
+  for section in code_sections {
+    for block in section.blocks {
+      result.push(block)
+    }
+  }
+  result.sort_by((lhs, rhs) => {
+    match parse_hex_uint(lhs.start_addr) {
+      Some(lhs_addr) =>
+        match parse_hex_uint(rhs.start_addr) {
+          Some(rhs_addr) => lhs_addr.compare(rhs_addr)
+          None => -1
+        }
+      None =>
+        match parse_hex_uint(rhs.start_addr) {
+          Some(_) => 1
+          None => 0
+        }
+    }
+  })
+  result
+}
+
+///|
+fn collect_all_program_edges(
+  code_sections : Array[ProgramSectionIndex],
+) -> Array[WorkbenchEdge] {
+  let result : Array[WorkbenchEdge] = []
+  for section in code_sections {
+    for edge in section.edges {
+      result.push(edge)
+    }
+  }
+  result.sort_by((lhs, rhs) => {
+    match parse_hex_uint(lhs.from_block) {
+      Some(lhs_addr) =>
+        match parse_hex_uint(rhs.from_block) {
+          Some(rhs_addr) => lhs_addr.compare(rhs_addr)
+          None => -1
+        }
+      None =>
+        match parse_hex_uint(rhs.from_block) {
+          Some(_) => 1
+          None => 0
+        }
+    }
+  })
+  result
+}
+
+///|
+fn find_code_section_index_for_addr(
+  code_sections : Array[ProgramSectionIndex],
+  addr : UInt,
+) -> Int {
+  for i = 0; i < code_sections.length(); i = i + 1 {
+    let section = code_sections[i]
+    if addr >= section.start_addr && addr < section.end_addr {
+      return i
+    }
+  }
+  -1
+}
+
+///|
+fn find_code_section_by_index(
+  code_sections : Array[ProgramSectionIndex],
+  section_index : Int,
+) -> ProgramSectionIndex? {
+  for section in code_sections {
+    if section.index == section_index {
+      return Some(section)
+    }
+  }
+  None
+}
+
+///|
+fn collect_function_ranges(
+  elf : @format.ElfFile,
+  code_sections : Array[ProgramSectionIndex],
+) -> Array[FunctionRange] {
+  let candidates : Array[FunctionSymbolCandidate] = []
+  for sym in elf.get_symbols() {
+    match sym.sym_type {
+      @format.SymbolType::Func =>
+        if sym.name != "" {
+          let section_slot = find_code_section_index_for_addr(
+            code_sections,
+            sym.value,
+          )
+          if section_slot >= 0 {
+            let section = code_sections[section_slot]
+            if sym.section_index.reinterpret_as_int() == section.index {
+              candidates.push({
+                name: sym.name,
+                addr: sym.value,
+                size: sym.size,
+                section_index: section.index,
+              })
+            }
+          }
+        }
+      _ => ()
+    }
+  }
+
+  candidates.sort_by((lhs, rhs) => {
+    let by_section = lhs.section_index.compare(rhs.section_index)
+    if by_section != 0 {
+      by_section
+    } else {
+      let by_addr = lhs.addr.compare(rhs.addr)
+      if by_addr != 0 {
+        by_addr
+      } else {
+        lhs.name.compare(rhs.name)
+      }
+    }
+  })
+
+  let deduped : Array[FunctionSymbolCandidate] = []
+  for candidate in candidates {
+    let mut duplicated = false
+    for existing in deduped {
+      if existing.section_index == candidate.section_index &&
+        existing.addr == candidate.addr {
+        duplicated = true
+        break
+      }
+    }
+    if !duplicated {
+      deduped.push(candidate)
+    }
+  }
+
+  let result : Array[FunctionRange] = []
+  for i = 0; i < deduped.length(); i = i + 1 {
+    let candidate = deduped[i]
+    match find_code_section_by_index(code_sections, candidate.section_index) {
+      Some(section) => {
+        let mut end_addr = if candidate.size > 0U {
+          candidate.addr + candidate.size
+        } else {
+          section.end_addr
+        }
+        if candidate.size == 0U {
+          for j = i + 1; j < deduped.length(); j = j + 1 {
+            let next = deduped[j]
+            if next.section_index == candidate.section_index &&
+              next.addr > candidate.addr {
+              end_addr = next.addr
+              break
+            }
+          }
+        }
+        if end_addr > section.end_addr {
+          end_addr = section.end_addr
+        }
+        if end_addr <= candidate.addr {
+          end_addr = section.end_addr
+        }
+        if end_addr > candidate.addr {
+          result.push({
+            name: candidate.name,
+            addr: candidate.addr,
+            size: end_addr - candidate.addr,
+            end_addr,
+            section_index: candidate.section_index,
+          })
+        }
+      }
+      None => ()
+    }
+  }
+
+  if result.length() == 0 {
+    for i = 0; i < code_sections.length(); i = i + 1 {
+      let section = code_sections[i]
+      let synthetic_name = if elf.entry_point() >= section.start_addr &&
+        elf.entry_point() < section.end_addr {
+        "entry"
+      } else if section.name != "" {
+        section.name
+      } else {
+        "sub_" + uint_to_hex(section.start_addr)
+      }
+      result.push({
+        name: synthetic_name,
+        addr: section.start_addr,
+        size: section.end_addr - section.start_addr,
+        end_addr: section.end_addr,
+        section_index: section.index,
+      })
+    }
+  }
+
+  result.sort_by((lhs, rhs) => lhs.addr.compare(rhs.addr))
+  result
+}
+
+///|
+fn collect_instructions_in_range(
+  all_instructions : FixedArray[@analysis.DecodedInst],
+  start_addr : UInt,
+  end_addr : UInt,
+) -> Array[WorkbenchInstruction] {
+  let result : Array[WorkbenchInstruction] = []
+  let mut next_index = 0
+  for inst in all_instructions {
+    if inst.addr >= start_addr && inst.addr < end_addr {
+      result.push({
+        index: next_index,
+        addr: format_hex(inst.addr),
+        asm_text: @disasm.disassemble(inst.inst),
+        category: category_to_string(inst.inst.category()),
+      })
+      next_index = next_index + 1
+    }
+  }
+  result
+}
+
+///|
+fn collect_blocks_in_range(
+  blocks : Array[WorkbenchBlock],
+  start_addr : UInt,
+  end_addr : UInt,
+) -> Array[WorkbenchBlock] {
+  let result : Array[WorkbenchBlock] = []
+  for block in blocks {
+    match parse_hex_uint(block.start_addr) {
+      Some(block_addr) =>
+        if block_addr >= start_addr && block_addr < end_addr {
+          result.push(block)
+        }
+      None => ()
+    }
+  }
+  result
+}
+
+///|
+fn collect_edges_for_blocks(
+  edges : Array[WorkbenchEdge],
+  blocks : Array[WorkbenchBlock],
+) -> Array[WorkbenchEdge] {
+  let allowed : Array[String] = []
+  for block in blocks {
+    allowed.push(block.start_addr)
+  }
+  let result : Array[WorkbenchEdge] = []
+  for edge in edges {
+    if allowed.contains(edge.from_block) {
+      result.push(edge)
+    }
+  }
+  result
+}
+
+///|
+fn build_slice_data(
+  index : StaticProgramIndex,
+  function_range : FunctionRange,
+) -> BuiltSliceData {
+  let instructions = collect_instructions_in_range(
+    index.all_instructions,
+    function_range.addr,
+    function_range.end_addr,
+  )
+  let blocks = collect_blocks_in_range(
+    index.blocks,
+    function_range.addr,
+    function_range.end_addr,
+  )
+  let edges = collect_edges_for_blocks(index.edges, blocks)
+  if instructions.length() == 0 {
+    {
+      instructions: [],
+      blocks: [],
+      edges: [],
+      available: false,
+      reason: "no instructions indexed for this function",
+      instruction_count: 0,
+      block_count: 0,
+    }
+  } else {
+    {
+      instructions,
+      blocks,
+      edges,
+      available: true,
+      reason: "",
+      instruction_count: instructions.length(),
+      block_count: blocks.length(),
+    }
+  }
+}
+
+///|
+fn has_runtime_event_for_range(
+  function_range : FunctionRange,
+  events : Array[WorkbenchTraceEvent],
+) -> Bool {
+  for event in events {
+    match parse_hex_uint(event.addr) {
+      Some(addr) =>
+        if addr >= function_range.addr && addr < function_range.end_addr {
+          return true
+        }
+      None => ()
+    }
+  }
+  false
+}
+
+///|
+fn make_workbench_function(
+  function_range : FunctionRange,
+  slice : BuiltSliceData,
+  has_runtime_event : Bool,
+) -> WorkbenchFunction {
+  {
+    name: function_range.name,
+    addr: format_hex(function_range.addr),
+    size: format_hex(function_range.size),
+    instruction_count: slice.instruction_count,
+    block_count: slice.block_count,
+    has_runtime_event,
+  }
+}
+
+///|
+fn build_workbench_functions(
+  index : StaticProgramIndex,
+  events : Array[WorkbenchTraceEvent],
+) -> Array[WorkbenchFunction] {
+  let result : Array[WorkbenchFunction] = []
+  for function_range in index.function_ranges {
+    let slice = build_slice_data(index, function_range)
+    result.push(
+      make_workbench_function(
+        function_range,
+        slice,
+        has_runtime_event_for_range(function_range, events),
+      ),
+    )
+  }
+  result
+}
+
+///|
+fn build_workbench_meta(
+  index : StaticProgramIndex,
+  functions : Array[WorkbenchFunction],
+  runtime_event_count : Int,
+  max_instructions : Int,
+) -> WorkbenchMeta {
+  let limit = normalize_max_instructions(max_instructions)
+  let total_instruction_count = index.all_instructions.length()
+  let shown_instruction_count = if total_instruction_count < limit {
+    total_instruction_count
+  } else {
+    limit
+  }
+  {
+    title: index.title,
+    source_file: index.source_file,
+    entry_point: format_hex(index.entry_point),
+    file_class: index.file_class,
+    architecture: index.architecture,
+    section_count: index.section_count,
+    program_count: index.program_count,
+    function_count: functions.length(),
+    instruction_count: shown_instruction_count,
+    total_instruction_count,
+    basic_block_count: index.blocks.length(),
+    cfg_edge_count: index.edges.length(),
+    runtime_event_count,
+    truncated: total_instruction_count > limit,
+  }
+}
+
+///|
+fn build_workbench_overview(
+  index : StaticProgramIndex,
+  functions : Array[WorkbenchFunction],
+  runtime : WorkbenchRuntime,
+  events : Array[WorkbenchTraceEvent],
+  max_instructions : Int,
+) -> WorkbenchOverview {
+  {
+    meta: build_workbench_meta(
+      index,
+      functions,
+      events.length(),
+      max_instructions,
+    ),
+    functions,
+    sections: index.sections,
+    runtime,
+    events,
+  }
+}
+
+///|
+fn find_function_range_by_exact_addr(
+  index : StaticProgramIndex,
+  addr : UInt,
+) -> FunctionRange? {
+  for function_range in index.function_ranges {
+    if function_range.addr == addr {
+      return Some(function_range)
+    }
+  }
+  None
+}
+
+///|
+fn find_function_range_by_addr(
+  index : StaticProgramIndex,
+  addr : UInt,
+) -> FunctionRange? {
+  for function_range in index.function_ranges {
+    if addr >= function_range.addr && addr < function_range.end_addr {
+      return Some(function_range)
+    }
+  }
+  None
+}
+
+///|
+fn find_function_range_by_name(
+  index : StaticProgramIndex,
+  name : String,
+) -> FunctionRange? {
+  for function_range in index.function_ranges {
+    if function_range.name == name {
+      return Some(function_range)
+    }
+  }
+  None
+}
+
+///|
+fn build_function_slice_from_range(
+  index : StaticProgramIndex,
+  function_range : FunctionRange,
+) -> WorkbenchFunctionSlice {
+  let slice = build_slice_data(index, function_range)
+  let function = make_workbench_function(function_range, slice, false)
+  {
+    function,
+    instructions: slice.instructions,
+    blocks: slice.blocks,
+    edges: slice.edges,
+    available: slice.available,
+    reason: slice.reason,
+  }
+}
+
+///|
+fn build_all_instructions_slice(index : StaticProgramIndex) -> WorkbenchFunctionSlice {
+  {
+    function: {
+      name: "All instructions",
+      addr: "__all__",
+      size: format_hex(0U),
+      instruction_count: index.all_instructions.length(),
+      block_count: index.blocks.length(),
+      has_runtime_event: false,
+    },
+    instructions: collect_instructions(
+      index.all_instructions,
+      index.all_instructions.length(),
+    ),
+    blocks: index.blocks,
+    edges: index.edges,
+    available: true,
+    reason: "",
+  }
+}
+
+///|
+fn build_function_slice_response(
+  index : StaticProgramIndex,
+  function : String,
+  allow_all : Bool,
+) -> WorkbenchFunctionSlice? {
+  if allow_all &&
+    function == "__all__" &&
+    index.all_instructions.length() <= DEFAULT_MAX_INSTRUCTIONS {
+    return Some(build_all_instructions_slice(index))
+  }
+
+  match parse_hex_uint(function) {
+    Some(addr) =>
+      match find_function_range_by_exact_addr(index, addr) {
+        Some(range) => Some(build_function_slice_from_range(index, range))
+        None =>
+          match find_function_range_by_addr(index, addr) {
+            Some(range) => Some(build_function_slice_from_range(index, range))
+            None => None
+          }
+      }
+    None =>
+      match find_function_range_by_name(index, function) {
+        Some(range) => Some(build_function_slice_from_range(index, range))
+        None => None
+      }
+  }
+}
+
+///|
+fn build_embedded_function_slices(
+  index : StaticProgramIndex,
+  functions : Array[WorkbenchFunction],
+  _max_instructions : Int,
+) -> Array[WorkbenchFunctionSlice] {
+  let result : Array[WorkbenchFunctionSlice] = []
+  if index.all_instructions.length() <= DEFAULT_MAX_INSTRUCTIONS {
+    result.push(build_all_instructions_slice(index))
+  }
+  for function in functions {
+    match build_function_slice_response(index, function.addr, false) {
+      Some(slice) => result.push(slice)
+      None => ()
     }
   }
   result
@@ -573,6 +1346,18 @@ fn to_json(data : WorkbenchData) -> String {
 }
 
 ///|
+fn to_json_overview(data : WorkbenchOverview) -> String {
+  let mut json = "{"
+  json = json + "\"meta\":" + to_json_meta(data.meta)
+  json = json + ",\"functions\":" + to_json_functions(data.functions)
+  json = json + ",\"sections\":" + to_json_sections(data.sections)
+  json = json + ",\"runtime\":" + to_json_runtime(data.runtime)
+  json = json + ",\"events\":" + to_json_runtime_events(data.events)
+  json = json + "}"
+  json
+}
+
+///|
 fn to_json_meta(meta : WorkbenchMeta) -> String {
   let mut json = "{"
   json = json + "\"title\":" + json_string(meta.title)
@@ -605,13 +1390,26 @@ fn to_json_functions(functions : Array[WorkbenchFunction]) -> String {
     if i > 0 {
       json = json + ","
     }
-    json = json + "{"
-    json = json + "\"name\":" + json_string(function.name)
-    json = json + ",\"addr\":" + json_string(function.addr)
-    json = json + ",\"size\":" + json_string(function.size)
-    json = json + "}"
+    json = json + to_json_function(function)
   }
   json = json + "]"
+  json
+}
+
+///|
+fn to_json_function(function : WorkbenchFunction) -> String {
+  let mut json = "{"
+  json = json + "\"name\":" + json_string(function.name)
+  json = json + ",\"addr\":" + json_string(function.addr)
+  json = json + ",\"size\":" + json_string(function.size)
+  json = json +
+    ",\"instruction_count\":" +
+    function.instruction_count.to_string()
+  json = json + ",\"block_count\":" + function.block_count.to_string()
+  json = json +
+    ",\"has_runtime_event\":" +
+    bool_to_json(function.has_runtime_event)
+  json = json + "}"
   json
 }
 
@@ -796,6 +1594,35 @@ fn to_json_runtime_events(events : Array[WorkbenchTraceEvent]) -> String {
 }
 
 ///|
+fn to_json_function_slice(data : WorkbenchFunctionSlice) -> String {
+  let mut json = "{"
+  json = json + "\"function\":" + to_json_function(data.function)
+  json = json + ",\"instructions\":" + to_json_instructions(data.instructions)
+  json = json + ",\"blocks\":" + to_json_blocks(data.blocks)
+  json = json + ",\"edges\":" + to_json_edges(data.edges)
+  json = json + ",\"available\":" + bool_to_json(data.available)
+  json = json + ",\"reason\":" + json_string(data.reason)
+  json = json + "}"
+  json
+}
+
+///|
+fn to_json_function_slices_map(slices : Array[WorkbenchFunctionSlice]) -> String {
+  let mut json = "{"
+  for i = 0; i < slices.length(); i = i + 1 {
+    if i > 0 {
+      json = json + ","
+    }
+    let slice = slices[i]
+    json = json + json_string(slice.function.addr)
+    json = json + ":"
+    json = json + to_json_function_slice(slice)
+  }
+  json = json + "}"
+  json
+}
+
+///|
 fn api_error_json(err : WorkbenchError) -> String {
   "{\"ok\":false,\"error\":" + json_string(err.to_string()) + "}"
 }
@@ -935,11 +1762,17 @@ fn escape_html(value : String) -> String {
 }
 
 ///|
-fn embedded_boot_json(data_json : String) -> String {
+fn embedded_boot_json(
+  overview_json : String,
+  function_slices_json : String,
+  max_instructions : Int,
+) -> String {
   "{\"mode\":\"embedded\",\"default_file\":\"\",\"initial_file\":\"\",\"max_inst\":" +
-  DEFAULT_MAX_INSTRUCTIONS.to_string() +
-  ",\"snapshot_endpoint\":\"/api/snapshot\",\"embedded_data\":" +
-  data_json +
+  normalize_max_instructions(max_instructions).to_string() +
+  ",\"overview_endpoint\":\"/api/workbench/overview\",\"function_endpoint\":\"/api/workbench/function\",\"embedded_overview\":" +
+  overview_json +
+  ",\"embedded_function_slices\":" +
+  function_slices_json +
   "}"
 }
 
@@ -948,13 +1781,19 @@ fn remote_boot_json(
   default_file : String,
   initial_file : String,
   max_instructions : Int,
-  snapshot_endpoint : String,
+  overview_endpoint : String,
+  function_endpoint : String,
 ) -> String {
   let max_inst = normalize_max_instructions(max_instructions)
-  let endpoint = if snapshot_endpoint == "" {
-    "/api/snapshot"
+  let resolved_overview_endpoint = if overview_endpoint == "" {
+    "/api/workbench/overview"
   } else {
-    snapshot_endpoint
+    overview_endpoint
+  }
+  let resolved_function_endpoint = if function_endpoint == "" {
+    "/api/workbench/function"
+  } else {
+    function_endpoint
   }
   "{\"mode\":\"remote\",\"default_file\":" +
   json_string(default_file) +
@@ -962,9 +1801,11 @@ fn remote_boot_json(
   json_string(initial_file) +
   ",\"max_inst\":" +
   max_inst.to_string() +
-  ",\"snapshot_endpoint\":" +
-  json_string(endpoint) +
-  ",\"embedded_data\":null}"
+  ",\"overview_endpoint\":" +
+  json_string(resolved_overview_endpoint) +
+  ",\"function_endpoint\":" +
+  json_string(resolved_function_endpoint) +
+  ",\"embedded_overview\":null,\"embedded_function_slices\":{}}"
 }
 
 ///|

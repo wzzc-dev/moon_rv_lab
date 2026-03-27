@@ -450,7 +450,12 @@ fn execute_single_step(
     memory_writes.push({ addr, before: before_byte, after: value, size: 1 })
   }
 
-  match decoded.inst {
+  let inst = match expand_supported_compressed(decoded.inst, state.image.xlen) {
+    Some(expanded) => expanded
+    None => decoded.inst
+  }
+
+  match inst {
     @decode.LUI(rd, imm) =>
       write_reg(rd, normalize_xlen(imm.reinterpret_as_uint(), state.image.xlen))
     @decode.AUIPC(rd, imm) =>
@@ -874,6 +879,67 @@ fn execute_single_step(
   })
   next = { ..next, trace, }
   next
+}
+
+///|
+fn expand_supported_compressed(
+  inst : @decode.Instruction,
+  xlen : Int,
+) -> @decode.Instruction? {
+  match inst {
+    @decode.C_NOP => Some(@decode.ADDI(0U, 0U, 0))
+    @decode.C_ADDI4SPN(rd, imm) => Some(@decode.ADDI(rd, 2U, imm.reinterpret_as_int()))
+    @decode.C_LW(rd, rs1, imm) => Some(@decode.LW(rd, rs1, imm.reinterpret_as_int()))
+    @decode.C_SW(rs2, rs1, imm) => Some(@decode.SW(rs1, rs2, imm.reinterpret_as_int()))
+    @decode.C_ADDI(rd, imm) => Some(@decode.ADDI(rd, rd, imm))
+    @decode.C_JAL(imm) => Some(@decode.JAL(1U, imm))
+    @decode.C_LI(rd, imm) => Some(@decode.ADDI(rd, 0U, imm))
+    @decode.C_ADDI16SP(imm) => Some(@decode.ADDI(2U, 2U, imm))
+    @decode.C_LUI(rd, imm) => Some(@decode.LUI(rd, imm))
+    @decode.C_SRLI(rd, shamt) => Some(@decode.SRLI(rd, rd, shamt))
+    @decode.C_SRAI(rd, shamt) => Some(@decode.SRAI(rd, rd, shamt))
+    @decode.C_ANDI(rd, imm) => Some(@decode.ANDI(rd, rd, imm))
+    @decode.C_SUB(rd, rs2) => Some(@decode.SUB(rd, rd, rs2))
+    @decode.C_XOR(rd, rs2) => Some(@decode.XOR(rd, rd, rs2))
+    @decode.C_OR(rd, rs2) => Some(@decode.OR(rd, rd, rs2))
+    @decode.C_AND(rd, rs2) => Some(@decode.AND(rd, rd, rs2))
+    @decode.C_J(imm) => Some(@decode.JAL(0U, imm))
+    @decode.C_BEQZ(rs1, imm) => Some(@decode.BEQ(rs1, 0U, imm))
+    @decode.C_BNEZ(rs1, imm) => Some(@decode.BNE(rs1, 0U, imm))
+    @decode.C_SLLI(rd, shamt) => Some(@decode.SLLI(rd, rd, shamt))
+    @decode.C_LWSP(rd, imm) => Some(@decode.LW(rd, 2U, imm.reinterpret_as_int()))
+    @decode.C_JR(rs1) => Some(@decode.JALR(0U, rs1, 0))
+    @decode.C_MV(rd, rs2) => Some(@decode.ADD(rd, 0U, rs2))
+    @decode.C_EBREAK => Some(@decode.EBREAK)
+    @decode.C_JALR(rs1) => Some(@decode.JALR(1U, rs1, 0))
+    @decode.C_ADD(rd, rs2) => Some(@decode.ADD(rd, rd, rs2))
+    @decode.C_SWSP(rs2, imm) => Some(@decode.SW(2U, rs2, imm.reinterpret_as_int()))
+    @decode.C_FLD(rd, rs1, imm) =>
+      if xlen > 32 {
+        Some(@decode.LD(rd, rs1, imm.reinterpret_as_int()))
+      } else {
+        None
+      }
+    @decode.C_FSD(rs2, rs1, imm) =>
+      if xlen > 32 {
+        Some(@decode.SD(rs1, rs2, imm.reinterpret_as_int()))
+      } else {
+        None
+      }
+    @decode.C_FLDSP(rd, imm) =>
+      if xlen > 32 {
+        Some(@decode.LD(rd, 2U, imm.reinterpret_as_int()))
+      } else {
+        None
+      }
+    @decode.C_FSDSP(rs2, imm) =>
+      if xlen > 32 {
+        Some(@decode.SD(2U, rs2, imm.reinterpret_as_int()))
+      } else {
+        None
+      }
+    _ => None
+  }
 }
 
 ///|
