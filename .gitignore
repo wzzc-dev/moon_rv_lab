@@ -16,3 +16,4 @@ tools/build/*
 example/*.bin
 example/*.elf
 out/*
+tmp_*
