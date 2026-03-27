@@ -96,31 +96,66 @@ test "generated workbench html includes godbolt style panes and controls" {
   assert_true(html.contains("class=\"workbench-shell\""))
   assert_true(html.contains("class=\"splitter splitter-x\""))
   assert_true(html.contains("class=\"pane-tabs\""))
+  assert_true(html.contains("class=\"main-grid\""))
   assert_true(html.contains("id=\"follow-pc\""))
-  assert_true(html.contains("id=\"current-function-only\""))
+  assert_true(html.contains("id=\"cfg-subtitle\""))
+  assert_true(html.contains("id=\"recent-writes\""))
   assert_true(html.contains("class=\"pane result-pane\""))
   assert_true(html.contains("localStorage"))
-  assert_true(html.contains("data.events"))
-  assert_true(html.contains("data.runtime.initial_registers"))
+  assert_true(html.contains("\"embedded_overview\""))
+  assert_true(html.contains("\"embedded_function_slices\""))
+  assert_true(html.contains("overview.events"))
+  assert_true(html.contains("overview.runtime.initial_registers"))
+  assert_false(html.contains("id=\"current-function-only\""))
 }
 
 ///|
-test "online workbench html bootstraps from remote snapshot api" {
+test "overview api json includes hello navigation metadata" {
+  let json = overview_api_json_from_file("example/hello-riscv64", 200)
+  assert_true(json.contains("\"ok\":true"))
+  assert_true(json.contains("\"function_count\":66"))
+  assert_true(json.contains("\"total_instruction_count\":3430"))
+  assert_true(json.contains("\"functions\""))
+  assert_true(json.contains("\"sections\""))
+  assert_true(json.contains("\"runtime\""))
+  assert_true(json.contains("\"events\""))
+}
+
+///|
+test "function api json returns per-function slice payload" {
+  let json = function_api_json_from_file("example/hello-riscv64", "main")
+  assert_true(json.contains("\"ok\":true"))
+  assert_true(json.contains("\"function\":{\"name\":\"main\""))
+  assert_true(json.contains("\"instructions\""))
+  assert_true(json.contains("\"blocks\""))
+  assert_true(json.contains("\"edges\""))
+  assert_true(json.contains("\"available\":true"))
+}
+
+///|
+test "online workbench html bootstraps from overview and function apis" {
   let html = online_page_html(
-    "example/simple.elf", "example/simple.elf", 64, "/api/snapshot",
+    "example/simple.elf", "example/simple.elf", 64, "/api/workbench/overview",
   )
 
   assert_true(html.contains("WORKBENCH_BOOT"))
   assert_true(html.contains("\"mode\":\"remote\""))
-  assert_true(html.contains("/api/snapshot"))
-  assert_true(html.contains("fetch(url)"))
+  assert_true(
+    html.contains("\"overview_endpoint\":\"/api/workbench/overview\""),
+  )
+  assert_true(
+    html.contains("\"function_endpoint\":\"/api/workbench/function\""),
+  )
+  assert_true(html.contains("boot.overview_endpoint"))
+  assert_true(html.contains("boot.function_endpoint"))
   assert_true(html.contains("id=\"file-input\""))
   assert_true(html.contains("id=\"file-load-btn\""))
   assert_true(html.contains("class=\"workbench-shell\""))
   assert_true(html.contains("class=\"pane-tabs\""))
   assert_true(
     html.contains(
-      "loadSnapshot(state.currentFile || boot.default_file || '', false)",
+      "loadOverview(state.currentFile || boot.default_file || \"\", false)",
     ),
   )
+  assert_true(html.contains("id=\"cfg-subtitle\""))
 }

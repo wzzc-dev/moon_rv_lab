@@ -6,9 +6,13 @@ pub fn create_options(String, Int) -> WorkbenchOptions
 
 pub fn default_options() -> WorkbenchOptions
 
+pub fn function_api_json_from_file(String, String) -> String
+
 pub fn generate_from_file(String, String, WorkbenchOptions) -> WorkbenchError?
 
 pub fn online_page_html(String, String, Int, String) -> String
+
+pub fn overview_api_json_from_file(String, Int) -> String
 
 pub fn snapshot_api_json_from_file(String, Int) -> String
 
@@ -47,6 +51,9 @@ pub impl Show for WorkbenchError
 type WorkbenchFunction
 pub impl Show for WorkbenchFunction
 
+type WorkbenchFunctionSlice
+pub impl Show for WorkbenchFunctionSlice
+
 type WorkbenchInstruction
 pub impl Show for WorkbenchInstruction
 
@@ -61,6 +68,9 @@ pub struct WorkbenchOptions {
   max_instructions : Int
 }
 pub impl Show for WorkbenchOptions
+
+type WorkbenchOverview
+pub impl Show for WorkbenchOverview
 
 type WorkbenchRegisterValue
 pub impl Show for WorkbenchRegisterValue

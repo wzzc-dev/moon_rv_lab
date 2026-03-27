@@ -888,9 +888,12 @@ fn expand_supported_compressed(
 ) -> @decode.Instruction? {
   match inst {
     @decode.C_NOP => Some(@decode.ADDI(0U, 0U, 0))
-    @decode.C_ADDI4SPN(rd, imm) => Some(@decode.ADDI(rd, 2U, imm.reinterpret_as_int()))
-    @decode.C_LW(rd, rs1, imm) => Some(@decode.LW(rd, rs1, imm.reinterpret_as_int()))
-    @decode.C_SW(rs2, rs1, imm) => Some(@decode.SW(rs1, rs2, imm.reinterpret_as_int()))
+    @decode.C_ADDI4SPN(rd, imm) =>
+      Some(@decode.ADDI(rd, 2U, imm.reinterpret_as_int()))
+    @decode.C_LW(rd, rs1, imm) =>
+      Some(@decode.LW(rd, rs1, imm.reinterpret_as_int()))
+    @decode.C_SW(rs2, rs1, imm) =>
+      Some(@decode.SW(rs1, rs2, imm.reinterpret_as_int()))
     @decode.C_ADDI(rd, imm) => Some(@decode.ADDI(rd, rd, imm))
     @decode.C_JAL(imm) => Some(@decode.JAL(1U, imm))
     @decode.C_LI(rd, imm) => Some(@decode.ADDI(rd, 0U, imm))
@@ -907,13 +910,15 @@ fn expand_supported_compressed(
     @decode.C_BEQZ(rs1, imm) => Some(@decode.BEQ(rs1, 0U, imm))
     @decode.C_BNEZ(rs1, imm) => Some(@decode.BNE(rs1, 0U, imm))
     @decode.C_SLLI(rd, shamt) => Some(@decode.SLLI(rd, rd, shamt))
-    @decode.C_LWSP(rd, imm) => Some(@decode.LW(rd, 2U, imm.reinterpret_as_int()))
+    @decode.C_LWSP(rd, imm) =>
+      Some(@decode.LW(rd, 2U, imm.reinterpret_as_int()))
     @decode.C_JR(rs1) => Some(@decode.JALR(0U, rs1, 0))
     @decode.C_MV(rd, rs2) => Some(@decode.ADD(rd, 0U, rs2))
     @decode.C_EBREAK => Some(@decode.EBREAK)
     @decode.C_JALR(rs1) => Some(@decode.JALR(1U, rs1, 0))
     @decode.C_ADD(rd, rs2) => Some(@decode.ADD(rd, rd, rs2))
-    @decode.C_SWSP(rs2, imm) => Some(@decode.SW(2U, rs2, imm.reinterpret_as_int()))
+    @decode.C_SWSP(rs2, imm) =>
+      Some(@decode.SW(2U, rs2, imm.reinterpret_as_int()))
     @decode.C_FLD(rd, rs1, imm) =>
       if xlen > 32 {
         Some(@decode.LD(rd, rs1, imm.reinterpret_as_int()))

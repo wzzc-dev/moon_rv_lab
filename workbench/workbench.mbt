@@ -249,7 +249,11 @@ pub fn generate_from_file(
   match load_static_program_index(input_file, page_title) {
     StaticProgramErr(err) => Some(err)
     StaticProgramOk(index) => {
-      let (runtime, events) = load_runtime_trace(input_file, max_inst, index.blocks)
+      let (runtime, events) = load_runtime_trace(
+        input_file,
+        max_inst,
+        index.blocks,
+      )
       let functions = build_workbench_functions(index, events)
       let overview = build_workbench_overview(
         index,
@@ -331,7 +335,8 @@ pub fn function_api_json_from_file(
     StaticProgramErr(err) => api_error_json(err)
     StaticProgramOk(index) =>
       match build_function_slice_response(index, function, true) {
-        Some(slice) => "{\"ok\":true,\"data\":" + to_json_function_slice(slice) + "}"
+        Some(slice) =>
+          "{\"ok\":true,\"data\":" + to_json_function_slice(slice) + "}"
         None =>
           "{\"ok\":false,\"error\":" +
           json_string("function not found: " + function) +
@@ -400,11 +405,7 @@ pub fn online_page_html(
   build_html_page(
     "MoonRV Lab Online Workbench",
     remote_boot_json(
-      default_file,
-      initial_file,
-      max_instructions,
-      overview_endpoint,
-      "/api/workbench/function",
+      default_file, initial_file, max_instructions, overview_endpoint, "/api/workbench/function",
     ),
   )
 }
@@ -419,9 +420,18 @@ fn load_workbench_data(
   match load_static_program_index(input_file, page_title) {
     StaticProgramErr(err) => Err(err)
     StaticProgramOk(index) => {
-      let (runtime, events) = load_runtime_trace(input_file, max_inst, index.blocks)
+      let (runtime, events) = load_runtime_trace(
+        input_file,
+        max_inst,
+        index.blocks,
+      )
       let functions = build_workbench_functions(index, events)
-      let meta = build_workbench_meta(index, functions, events.length(), max_inst)
+      let meta = build_workbench_meta(
+        index,
+        functions,
+        events.length(),
+        max_inst,
+      )
       let shown_count = meta.instruction_count
       Ok({
         meta,
@@ -476,8 +486,16 @@ fn load_static_program_index(
             title,
             source_file: input_file,
             entry_point: elf.entry_point(),
-            file_class: if elf.is_64bit { "ELF64" } else { "ELF32" },
-            architecture: if elf.is_riscv() { "RISC-V" } else { "Unknown" },
+            file_class: if elf.is_64bit {
+              "ELF64"
+            } else {
+              "ELF32"
+            },
+            architecture: if elf.is_riscv() {
+              "RISC-V"
+            } else {
+              "Unknown"
+            },
             section_count: elf.section_count(),
             program_count: elf.program_count(),
             sections,
@@ -678,7 +696,7 @@ fn collect_function_ranges(
   for sym in elf.get_symbols() {
     match sym.sym_type {
       @format.SymbolType::Func =>
-        if sym.name != "" {
+        if sym.name != "" && sym.size > 0U {
           let section_slot = find_code_section_index_for_addr(
             code_sections,
             sym.value,
@@ -1054,7 +1072,9 @@ fn build_function_slice_from_range(
 }
 
 ///|
-fn build_all_instructions_slice(index : StaticProgramIndex) -> WorkbenchFunctionSlice {
+fn build_all_instructions_slice(
+  index : StaticProgramIndex,
+) -> WorkbenchFunctionSlice {
   {
     function: {
       name: "All instructions",
@@ -1607,7 +1627,9 @@ fn to_json_function_slice(data : WorkbenchFunctionSlice) -> String {
 }
 
 ///|
-fn to_json_function_slices_map(slices : Array[WorkbenchFunctionSlice]) -> String {
+fn to_json_function_slices_map(
+  slices : Array[WorkbenchFunctionSlice],
+) -> String {
   let mut json = "{"
   for i = 0; i < slices.length(); i = i + 1 {
     if i > 0 {
@@ -1806,6 +1828,1227 @@ fn remote_boot_json(
   ",\"function_endpoint\":" +
   json_string(resolved_function_endpoint) +
   ",\"embedded_overview\":null,\"embedded_function_slices\":{}}"
+}
+
+///|
+const WORKBENCH_CLIENT_SCRIPT : String =
+  #|(() => {
+  #|  const boot = WORKBENCH_BOOT || {};
+  #|  const REMOTE_MODE = (boot.mode || "embedded") === "remote";
+  #|  const WINDOW_ROWS = 200;
+  #|  const PROGRAM_ROW_LIMIT = 1200;
+  #|  const CFG_BLOCK_LIMIT = 120;
+  #|  const CFG_EDGE_LIMIT = 160;
+  #|  const REGISTER_ORDER = [
+  #|    "zero","ra","sp","gp","tp","t0","t1","t2","s0","s1","a0","a1","a2","a3","a4","a5","a6","a7",
+  #|    "s2","s3","s4","s5","s6","s7","s8","s9","s10","s11","t3","t4","t5","t6"
+  #|  ];
+  #|  const REGISTER_GROUPS = [
+  #|    { label: "基础", regs: ["zero", "ra", "sp", "gp", "tp"] },
+  #|    { label: "参数 / 返回", regs: ["a0", "a1", "a2", "a3", "a4", "a5", "a6", "a7"] },
+  #|    { label: "保存", regs: ["s0", "s1", "s2", "s3", "s4", "s5", "s6", "s7", "s8", "s9", "s10", "s11"] },
+  #|    { label: "临时", regs: ["t0", "t1", "t2", "t3", "t4", "t5", "t6"] }
+  #|  ];
+  #|
+  #|  const refs = {
+  #|    title: document.getElementById("title"),
+  #|    source: document.getElementById("source"),
+  #|    statusPill: document.getElementById("status-pill"),
+  #|    fileToolbarField: document.getElementById("file-toolbar-field"),
+  #|    fileInput: document.getElementById("file-input"),
+  #|    fileLoadBtn: document.getElementById("file-load-btn"),
+  #|    summaryGrid: document.getElementById("summary-grid"),
+  #|    runtimeSummary: document.getElementById("runtime-summary"),
+  #|    executionBody: document.getElementById("execution-body"),
+  #|    functionSelect: document.getElementById("function-select"),
+  #|    functionListCount: document.getElementById("function-list-count"),
+  #|    functionList: document.getElementById("function-list"),
+  #|    sectionListCount: document.getElementById("section-list-count"),
+  #|    sectionList: document.getElementById("section-list"),
+  #|    searchInput: document.getElementById("search-input"),
+  #|    disasmSubtitle: document.getElementById("disasm-subtitle"),
+  #|    cfgSubtitle: document.getElementById("cfg-subtitle"),
+  #|    viewPill: document.getElementById("view-pill"),
+  #|    disasmBody: document.getElementById("disasm-body"),
+  #|    cfgView: document.getElementById("cfg-view"),
+  #|    traceBody: document.getElementById("trace-body"),
+  #|    memoryBody: document.getElementById("memory-body"),
+  #|    syscallBody: document.getElementById("syscall-body"),
+  #|    stdoutOutput: document.getElementById("stdout-output"),
+  #|    stderrOutput: document.getElementById("stderr-output"),
+  #|    registerGroups: document.getElementById("register-groups"),
+  #|    recentWrites: document.getElementById("recent-writes"),
+  #|    truncatedBanner: document.getElementById("truncated-banner"),
+  #|    resetBtn: document.getElementById("reset-btn"),
+  #|    prevBtn: document.getElementById("prev-btn"),
+  #|    nextBtn: document.getElementById("next-btn"),
+  #|    playBtn: document.getElementById("play-btn"),
+  #|    followPc: document.getElementById("follow-pc"),
+  #|    changedRegistersToggle: document.getElementById("changed-registers-toggle"),
+  #|    paneTabs: document.getElementById("pane-tabs"),
+  #|    navPane: document.getElementById("nav-pane"),
+  #|    inspectorPane: document.getElementById("inspector-pane"),
+  #|    resultPane: document.getElementById("result-pane"),
+  #|    navSplitter: document.getElementById("nav-splitter"),
+  #|    inspectorSplitter: document.getElementById("inspector-splitter"),
+  #|    bottomSplitter: document.getElementById("bottom-splitter"),
+  #|    toggleNavPane: document.getElementById("toggle-nav-pane"),
+  #|    toggleBottomPane: document.getElementById("toggle-bottom-pane"),
+  #|    toggleInspectorPane: document.getElementById("toggle-inspector-pane")
+  #|  };
+  #|
+  #|  let overview = createEmptyOverview("");
+  #|  const sliceCache = new Map();
+  #|  let storageKey = storageKeyFor(boot.initial_file || boot.default_file || "default");
+  #|  let initialRegisters = {};
+  #|  let eventIndexByAddr = new Map();
+  #|  let functionRanges = [];
+  #|
+  #|  const state = {
+  #|    selectedFunctionAddr: "",
+  #|    searchText: "",
+  #|    activeTab: "trace",
+  #|    followPcEnabled: true,
+  #|    showChangedRegistersOnly: false,
+  #|    layout: {
+  #|      navWidth: 240,
+  #|      inspectorWidth: 320,
+  #|      bottomHeight: 260,
+  #|      navCollapsed: false,
+  #|      bottomCollapsed: false,
+  #|      inspectorCollapsed: false
+  #|    },
+  #|    cursor: -1,
+  #|    focusedAddr: "0x0",
+  #|    registers: {},
+  #|    memoryHistory: [],
+  #|    ioHistory: [],
+  #|    stdout: "",
+  #|    stderr: "",
+  #|    currentFile: boot.initial_file || boot.default_file || "",
+  #|    loadError: "",
+  #|    loading: false,
+  #|    timer: null
+  #|  };
+  #|
+  #|  applyStoredUi(readUiState());
+  #|  refs.searchInput.value = state.searchText;
+  #|  refs.fileInput.value = state.currentFile;
+  #|
+  #|  function escapeHtml(value) {
+  #|    return String(value || "")
+  #|      .replaceAll("&", "&amp;")
+  #|      .replaceAll("<", "&lt;")
+  #|      .replaceAll(">", "&gt;")
+  #|      .replaceAll("\"", "&quot;")
+  #|      .replaceAll("'", "&#39;");
+  #|  }
+  #|
+  #|  function hexToBigInt(hex) {
+  #|    try {
+  #|      return BigInt(hex);
+  #|    } catch (_) {
+  #|      return 0n;
+  #|    }
+  #|  }
+  #|
+  #|  function compareAddr(lhs, rhs) {
+  #|    const a = hexToBigInt(lhs);
+  #|    const b = hexToBigInt(rhs);
+  #|    return a < b ? -1 : (a > b ? 1 : 0);
+  #|  }
+  #|
+  #|  function clamp(value, min, max) {
+  #|    return Math.max(min, Math.min(max, value));
+  #|  }
+  #|
+  #|  function clampNumber(value, min, max, fallback) {
+  #|    return typeof value === "number" && Number.isFinite(value)
+  #|      ? clamp(value, min, max)
+  #|      : fallback;
+  #|  }
+  #|
+  #|  function lowerText(value) {
+  #|    return String(value || "").toLowerCase();
+  #|  }
+  #|
+  #|  function createEmptyOverview(sourceFile) {
+  #|    return {
+  #|      meta: {
+  #|        title: REMOTE_MODE ? "MoonRV Lab Online Workbench" : "MoonRV Lab Workbench",
+  #|        source_file: sourceFile || boot.initial_file || boot.default_file || "",
+  #|        entry_point: "0x0",
+  #|        file_class: "",
+  #|        architecture: "",
+  #|        section_count: 0,
+  #|        program_count: 0,
+  #|        function_count: 0,
+  #|        instruction_count: 0,
+  #|        total_instruction_count: 0,
+  #|        basic_block_count: 0,
+  #|        cfg_edge_count: 0,
+  #|        runtime_event_count: 0,
+  #|        truncated: false
+  #|      },
+  #|      functions: [],
+  #|      sections: [],
+  #|      runtime: { initial_pc: "0x0", stop_reason: "unloaded", initial_registers: [] },
+  #|      events: []
+  #|    };
+  #|  }
+  #|
+  #|  function createUnavailableSlice(addr, reason) {
+  #|    const fn = (overview.functions || []).find(item => item.addr === addr);
+  #|    const functionMeta = fn || {
+  #|      name: String(addr || "unknown"),
+  #|      addr: String(addr || ""),
+  #|      size: "0x0",
+  #|      instruction_count: 0,
+  #|      block_count: 0,
+  #|      has_runtime_event: false
+  #|    };
+  #|    return {
+  #|      function: functionMeta,
+  #|      instructions: [],
+  #|      blocks: [],
+  #|      edges: [],
+  #|      available: false,
+  #|      reason: reason || "slice unavailable"
+  #|    };
+  #|  }
+  #|
+  #|  function storageKeyFor(file) {
+  #|    return `moonrv-workbench-ui:${file || "default"}`;
+  #|  }
+  #|
+  #|  function readUiState() {
+  #|    try {
+  #|      const parsed = JSON.parse(localStorage.getItem(storageKey) || "{}");
+  #|      return parsed && typeof parsed === "object" ? parsed : {};
+  #|    } catch (_) {
+  #|      return {};
+  #|    }
+  #|  }
+  #|
+  #|  function applyStoredUi(value) {
+  #|    const stored = value && typeof value === "object" ? value : {};
+  #|    state.selectedFunctionAddr = stored.selectedFunctionAddr || "";
+  #|    state.searchText = stored.searchText || "";
+  #|    state.activeTab = ["trace", "memory", "syscalls"].includes(stored.activeTab)
+  #|      ? stored.activeTab
+  #|      : "trace";
+  #|    state.followPcEnabled = stored.followPcEnabled !== false;
+  #|    state.showChangedRegistersOnly = stored.showChangedRegistersOnly === true;
+  #|    state.layout.navWidth = clampNumber(stored.navWidth, 180, 420, 240);
+  #|    state.layout.inspectorWidth = clampNumber(stored.inspectorWidth, 240, 460, 320);
+  #|    state.layout.bottomHeight = clampNumber(stored.bottomHeight, 180, 420, 260);
+  #|    state.layout.navCollapsed = stored.navCollapsed === true;
+  #|    state.layout.bottomCollapsed = stored.bottomCollapsed === true;
+  #|    state.layout.inspectorCollapsed = stored.inspectorCollapsed === true;
+  #|  }
+  #|
+  #|  function saveUiState() {
+  #|    try {
+  #|      localStorage.setItem(storageKey, JSON.stringify({
+  #|        selectedFunctionAddr: state.selectedFunctionAddr,
+  #|        searchText: state.searchText,
+  #|        activeTab: state.activeTab,
+  #|        followPcEnabled: state.followPcEnabled,
+  #|        showChangedRegistersOnly: state.showChangedRegistersOnly,
+  #|        navWidth: state.layout.navWidth,
+  #|        inspectorWidth: state.layout.inspectorWidth,
+  #|        bottomHeight: state.layout.bottomHeight,
+  #|        navCollapsed: state.layout.navCollapsed,
+  #|        bottomCollapsed: state.layout.bottomCollapsed,
+  #|        inspectorCollapsed: state.layout.inspectorCollapsed
+  #|      }));
+  #|    } catch (_) {
+  #|    }
+  #|  }
+  #|
+  #|  function seedEmbeddedSlices(sourceFile) {
+  #|    sliceCache.clear();
+  #|    const embeddedOverview = boot.embedded_overview;
+  #|    const embeddedFile = embeddedOverview && embeddedOverview.meta
+  #|      ? embeddedOverview.meta.source_file || ""
+  #|      : "";
+  #|    if (embeddedFile !== sourceFile) {
+  #|      return;
+  #|    }
+  #|    Object.entries(boot.embedded_function_slices || {}).forEach(([key, value]) => {
+  #|      sliceCache.set(key, value);
+  #|      if (value && value.function && value.function.addr) {
+  #|        sliceCache.set(value.function.addr, value);
+  #|      }
+  #|    });
+  #|  }
+  #|
+  #|  function rebuildDerivedCaches() {
+  #|    initialRegisters = Object.fromEntries(
+  #|      (overview.runtime.initial_registers || []).map(item => [item.name, item.value]),
+  #|    );
+  #|    eventIndexByAddr = new Map();
+  #|    (overview.events || []).forEach((event, index) => {
+  #|      if (!eventIndexByAddr.has(event.addr)) {
+  #|        eventIndexByAddr.set(event.addr, index);
+  #|      }
+  #|    });
+  #|    functionRanges = (overview.functions || [])
+  #|      .slice()
+  #|      .sort((lhs, rhs) => compareAddr(lhs.addr, rhs.addr))
+  #|      .map((fn, index, items) => {
+  #|        const start = hexToBigInt(fn.addr);
+  #|        const size = hexToBigInt(fn.size || "0x0");
+  #|        const nextStart = index + 1 < items.length
+  #|          ? hexToBigInt(items[index + 1].addr)
+  #|          : (size > 0n ? start + size : start + 4n);
+  #|        const end = size > 0n ? start + size : nextStart;
+  #|        return { fn, start, end: end > start ? end : start + 4n };
+  #|      });
+  #|    if (!state.focusedAddr || state.focusedAddr === "0x0") {
+  #|      state.focusedAddr = overview.runtime.initial_pc || overview.meta.entry_point || "0x0";
+  #|    }
+  #|  }
+  #|
+  #|  function resetRuntimeState() {
+  #|    state.registers = { ...initialRegisters };
+  #|    REGISTER_ORDER.forEach((name) => {
+  #|      if (!(name in state.registers)) {
+  #|        state.registers[name] = "0x0";
+  #|      }
+  #|    });
+  #|    state.memoryHistory = [];
+  #|    state.ioHistory = [];
+  #|    state.stdout = "";
+  #|    state.stderr = "";
+  #|  }
+  #|
+  #|  function applyEvent(event) {
+  #|    (event.register_writes || []).forEach((delta) => {
+  #|      state.registers[delta.name] = delta.after;
+  #|    });
+  #|    (event.memory_writes || []).forEach((item) => {
+  #|      state.memoryHistory.unshift({
+  #|        step: event.step,
+  #|        addr: item.addr,
+  #|        size: item.size,
+  #|        before: item.before,
+  #|        after: item.after
+  #|      });
+  #|    });
+  #|    if (state.memoryHistory.length > 160) {
+  #|      state.memoryHistory = state.memoryHistory.slice(0, 160);
+  #|    }
+  #|    if (event.syscall) {
+  #|      state.ioHistory.unshift({ step: event.step, kind: "syscall", detail: event.syscall });
+  #|    }
+  #|    if (event.stdout_append) {
+  #|      state.stdout += event.stdout_append;
+  #|      state.ioHistory.unshift({ step: event.step, kind: "stdout", detail: event.stdout_append });
+  #|    }
+  #|    if (event.stderr_append) {
+  #|      state.stderr += event.stderr_append;
+  #|      state.ioHistory.unshift({ step: event.step, kind: "stderr", detail: event.stderr_append });
+  #|    }
+  #|    if (state.ioHistory.length > 160) {
+  #|      state.ioHistory = state.ioHistory.slice(0, 160);
+  #|    }
+  #|  }
+  #|
+  #|  function rebuildToCursor(cursor) {
+  #|    resetRuntimeState();
+  #|    if (cursor < 0) {
+  #|      return;
+  #|    }
+  #|    for (let i = 0; i <= cursor && i < (overview.events || []).length; i += 1) {
+  #|      applyEvent(overview.events[i]);
+  #|    }
+  #|  }
+  #|
+  #|  function currentEvent() {
+  #|    return state.cursor >= 0 && state.cursor < (overview.events || []).length
+  #|      ? overview.events[state.cursor]
+  #|      : null;
+  #|  }
+  #|
+  #|  function queryText() {
+  #|    return String(state.searchText || "").trim();
+  #|  }
+  #|
+  #|  function isAddressQuery(query) {
+  #|    return /^0x[0-9a-f]+$/i.test(String(query || "").trim());
+  #|  }
+  #|
+  #|  function allInstructionsAllowed() {
+  #|    return Number(overview.meta.total_instruction_count || 0) <= PROGRAM_ROW_LIMIT;
+  #|  }
+  #|
+  #|  function functionRangeForAddress(addr) {
+  #|    const target = hexToBigInt(addr);
+  #|    return functionRanges.find((item) => target >= item.start && target < item.end) || null;
+  #|  }
+  #|
+  #|  function functionForAddress(addr) {
+  #|    const match = functionRangeForAddress(addr);
+  #|    return match ? match.fn : null;
+  #|  }
+  #|
+  #|  function currentFunctionForCursor() {
+  #|    const event = currentEvent();
+  #|    return functionForAddress(
+  #|      event ? event.addr : (overview.runtime.initial_pc || overview.meta.entry_point || "0x0"),
+  #|    );
+  #|  }
+  #|
+  #|  function selectedSlice() {
+  #|    return state.selectedFunctionAddr ? sliceCache.get(state.selectedFunctionAddr) || null : null;
+  #|  }
+  #|
+  #|  function selectedFunction() {
+  #|    const slice = selectedSlice();
+  #|    if (slice && slice.function) {
+  #|      return slice.function;
+  #|    }
+  #|    if (state.selectedFunctionAddr === "__all__") {
+  #|      return {
+  #|        name: "All instructions",
+  #|        addr: "__all__",
+  #|        size: "0x0",
+  #|        instruction_count: Number(overview.meta.total_instruction_count || 0),
+  #|        block_count: Number(overview.meta.basic_block_count || 0),
+  #|        has_runtime_event: false
+  #|      };
+  #|    }
+  #|    return (overview.functions || []).find((item) => item.addr === state.selectedFunctionAddr) || null;
+  #|  }
+  #|
+  #|  function defaultFunctionAddr() {
+  #|    const currentFn = currentFunctionForCursor();
+  #|    if (currentFn) {
+  #|      return currentFn.addr;
+  #|    }
+  #|    const entryFn = functionForAddress(overview.meta.entry_point || "0x0");
+  #|    if (entryFn) {
+  #|      return entryFn.addr;
+  #|    }
+  #|    if ((overview.functions || []).length > 0) {
+  #|      return overview.functions[0].addr;
+  #|    }
+  #|    if (allInstructionsAllowed() && sliceCache.has("__all__")) {
+  #|      return "__all__";
+  #|    }
+  #|    return "";
+  #|  }
+  #|
+  #|  function filteredFunctions() {
+  #|    const query = lowerText(queryText());
+  #|    if (!query || isAddressQuery(query)) {
+  #|      return overview.functions || [];
+  #|    }
+  #|    return (overview.functions || []).filter((fn) => {
+  #|      return lowerText(fn.name).includes(query) || lowerText(fn.addr).includes(query);
+  #|    });
+  #|  }
+  #|
+  #|  function filteredInstructions() {
+  #|    const slice = selectedSlice();
+  #|    if (!slice || slice.available === false) {
+  #|      return [];
+  #|    }
+  #|    const query = lowerText(queryText());
+  #|    if (!query || isAddressQuery(query)) {
+  #|      return slice.instructions || [];
+  #|    }
+  #|    return (slice.instructions || []).filter((inst) => {
+  #|      return lowerText(inst.asm).includes(query) || lowerText(inst.category).includes(query);
+  #|    });
+  #|  }
+  #|
+  #|  function windowedItems(items, centerIndex, windowSize) {
+  #|    if (!items.length || items.length <= windowSize) {
+  #|      return { items, start: 0, end: items.length };
+  #|    }
+  #|    const safeCenter = clamp(centerIndex, 0, items.length - 1);
+  #|    let start = Math.max(0, safeCenter - Math.floor(windowSize / 2));
+  #|    let end = Math.min(items.length, start + windowSize);
+  #|    if (end - start < windowSize) {
+  #|      start = Math.max(0, end - windowSize);
+  #|    }
+  #|    return { items: items.slice(start, end), start, end };
+  #|  }
+  #|
+  #|  function instructionFocusAddr() {
+  #|    const event = currentEvent();
+  #|    return event ? event.addr : state.focusedAddr;
+  #|  }
+  #|
+  #|  function findInstructionIndex(instructions, addr) {
+  #|    if (!addr) {
+  #|      return 0;
+  #|    }
+  #|    const index = instructions.findIndex((inst) => inst.addr === addr);
+  #|    return index >= 0 ? index : 0;
+  #|  }
+  #|
+  #|  function statusLabel() {
+  #|    if (state.loading) {
+  #|      return "loading";
+  #|    }
+  #|    if (state.loadError) {
+  #|      return "error";
+  #|    }
+  #|    const event = currentEvent();
+  #|    if (event && event.stop_reason && event.stop_reason !== "running") {
+  #|      return event.stop_reason;
+  #|    }
+  #|    return overview.runtime.stop_reason || "ready";
+  #|  }
+  #|
+  #|  function runtimeStoppedEarly() {
+  #|    const stop = lowerText(overview.runtime.stop_reason);
+  #|    return stop.includes("unsupported") || stop.includes("fault") || stop.includes("load failed");
+  #|  }
+  #|
+  #|  function renderHeader() {
+  #|    refs.title.textContent = overview.meta.title || (REMOTE_MODE ? "MoonRV Lab Online Workbench" : "MoonRV Lab Workbench");
+  #|    refs.source.textContent = overview.meta.source_file
+  #|      ? `${overview.meta.source_file}${overview.meta.file_class || overview.meta.architecture ? ` | ${overview.meta.file_class} ${overview.meta.architecture}`.trim() : ""}`
+  #|      : (state.currentFile || "未选择文件");
+  #|    refs.statusPill.textContent = statusLabel();
+  #|    refs.fileToolbarField.classList.toggle("hidden", !REMOTE_MODE);
+  #|  }
+  #|
+  #|  function renderSummary() {
+  #|    const entries = [
+  #|      ["入口", overview.meta.entry_point],
+  #|      ["函数", overview.meta.function_count],
+  #|      ["节区", overview.meta.section_count],
+  #|      ["指令", overview.meta.total_instruction_count],
+  #|      ["Basic Blocks", overview.meta.basic_block_count],
+  #|      ["CFG 边", overview.meta.cfg_edge_count]
+  #|    ];
+  #|    refs.summaryGrid.innerHTML = entries
+  #|      .map(([key, value]) => `<div class="stat"><div class="k">${escapeHtml(key)}</div><div class="v">${escapeHtml(value)}</div></div>`)
+  #|      .join("");
+  #|  }
+  #|
+  #|  function renderSections() {
+  #|    refs.sectionListCount.textContent = `${(overview.sections || []).length} items`;
+  #|    refs.sectionList.innerHTML = (overview.sections || []).map((section) => {
+  #|      return `<button class="nav-row" data-section-query="${escapeHtml(section.addr)}"><div class="nav-row-title"><span>#${section.index} ${escapeHtml(section.name)}</span></div><div class="nav-row-meta">${escapeHtml(section.addr)} / ${escapeHtml(section.size)}</div></button>`;
+  #|    }).join("") || '<div class="empty-panel">无节区信息</div>';
+  #|  }
+  #|
+  #|  function renderFunctions() {
+  #|    refs.functionSelect.innerHTML = "";
+  #|    if (allInstructionsAllowed()) {
+  #|      const option = document.createElement("option");
+  #|      option.value = "__all__";
+  #|      option.textContent = "All instructions";
+  #|      refs.functionSelect.appendChild(option);
+  #|    }
+  #|    (overview.functions || []).forEach((fn) => {
+  #|      const option = document.createElement("option");
+  #|      option.value = fn.addr;
+  #|      option.textContent = `${fn.name} @ ${fn.addr}`;
+  #|      refs.functionSelect.appendChild(option);
+  #|    });
+  #|    refs.functionSelect.value = state.selectedFunctionAddr || (allInstructionsAllowed() ? "__all__" : "");
+  #|    const visibleFunctions = filteredFunctions();
+  #|    refs.functionListCount.textContent = `${visibleFunctions.length}/${(overview.functions || []).length}`;
+  #|    const currentFn = currentFunctionForCursor();
+  #|    refs.functionList.innerHTML = visibleFunctions.map((fn) => {
+  #|      const active = state.selectedFunctionAddr === fn.addr;
+  #|      const current = currentFn && currentFn.addr === fn.addr;
+  #|      const runtimeBadge = fn.has_runtime_event ? '<span class="badge">trace</span>' : "";
+  #|      const currentBadge = current ? '<span class="badge current">PC</span>' : "";
+  #|      return `<button class="nav-row${active ? " active" : ""}${current ? " current" : ""}" data-fn-addr="${fn.addr}"><div class="nav-row-title"><span>${escapeHtml(fn.name)}</span>${currentBadge}${runtimeBadge}</div><div class="nav-row-meta">${escapeHtml(fn.addr)} | inst ${fn.instruction_count} | blocks ${fn.block_count}</div></button>`;
+  #|    }).join("") || '<div class="empty-panel">无函数符号</div>';
+  #|  }
+  #|
+  #|  function renderBanner() {
+  #|    if (state.loadError) {
+  #|      refs.truncatedBanner.style.display = "block";
+  #|      refs.truncatedBanner.textContent = state.loadError;
+  #|      return;
+  #|    }
+  #|    const messages = [];
+  #|    if (Number(overview.meta.total_instruction_count || 0) > PROGRAM_ROW_LIMIT) {
+  #|      messages.push(`program truncated: total ${overview.meta.total_instruction_count}, overview only`);
+  #|    }
+  #|    if (runtimeStoppedEarly()) {
+  #|      messages.push(`runtime stopped early: ${overview.runtime.stop_reason}`);
+  #|    }
+  #|    const slice = selectedSlice();
+  #|    if (state.selectedFunctionAddr && slice && slice.available === false) {
+  #|      messages.push(`slice unavailable: ${slice.reason || state.selectedFunctionAddr}`);
+  #|    }
+  #|    refs.truncatedBanner.style.display = messages.length > 0 ? "block" : "none";
+  #|    refs.truncatedBanner.textContent = messages.join(" | ");
+  #|  }
+  #|
+  #|  function renderRuntimeSummary() {
+  #|    const event = currentEvent();
+  #|    const currentFn = currentFunctionForCursor();
+  #|    const entries = [
+  #|      ["PC", event ? event.addr : overview.runtime.initial_pc],
+  #|      ["步骤", `${Math.max(0, state.cursor + 1)}/${(overview.events || []).length}`],
+  #|      ["当前函数", currentFn ? currentFn.name : "N/A"],
+  #|      ["停止", event && event.stop_reason ? event.stop_reason : overview.runtime.stop_reason],
+  #|      ["stdout", String(state.stdout.length)],
+  #|      ["stderr", String(state.stderr.length)]
+  #|    ];
+  #|    refs.runtimeSummary.innerHTML = entries
+  #|      .map(([key, value]) => `<div class="stat"><div class="k">${escapeHtml(key)}</div><div class="v">${escapeHtml(value)}</div></div>`)
+  #|      .join("");
+  #|  }
+  #|
+  #|  function renderExecution() {
+  #|    const event = currentEvent();
+  #|    const currentFn = currentFunctionForCursor();
+  #|    const row = event || {
+  #|      step: "-",
+  #|      addr: overview.runtime.initial_pc || overview.meta.entry_point,
+  #|      next_addr: "-",
+  #|      block_start: "-",
+  #|      category: "-",
+  #|      asm: "未执行",
+  #|      stop_reason: overview.runtime.stop_reason
+  #|    };
+  #|    refs.executionBody.innerHTML = [
+  #|      ["step", row.step],
+  #|      ["pc", row.addr],
+  #|      ["next", row.next_addr || "-"],
+  #|      ["block", row.block_start || "-"],
+  #|      ["function", currentFn ? currentFn.name : "-"],
+  #|      ["category", row.category || "-"],
+  #|      ["stop", row.stop_reason || overview.runtime.stop_reason || "-"],
+  #|      ["asm", row.asm || "-"]
+  #|    ].map(([key, value]) => `<tr><td>${escapeHtml(key)}</td><td>${escapeHtml(value)}</td></tr>`).join("");
+  #|  }
+  #|
+  #|  function renderToolbarState() {
+  #|    refs.prevBtn.disabled = state.cursor < 0;
+  #|    refs.resetBtn.disabled = state.cursor < 0;
+  #|    refs.nextBtn.disabled = state.cursor >= (overview.events || []).length - 1;
+  #|    refs.playBtn.disabled = state.loading || !!state.loadError || (overview.events || []).length === 0;
+  #|    refs.playBtn.textContent = state.timer ? "Pause" : "Play";
+  #|    refs.followPc.classList.toggle("active", state.followPcEnabled);
+  #|    refs.changedRegistersToggle.classList.toggle("active", state.showChangedRegistersOnly);
+  #|    refs.fileLoadBtn.classList.toggle("hidden", !REMOTE_MODE);
+  #|    refs.fileLoadBtn.disabled = state.loading || refs.fileInput.value.trim() === "";
+  #|    refs.fileLoadBtn.textContent = state.loading ? "Loading..." : "Load";
+  #|    refs.fileInput.disabled = !REMOTE_MODE || state.loading;
+  #|  }
+  #|
+  #|  function renderDisasm() {
+  #|    const slice = selectedSlice();
+  #|    const fn = selectedFunction();
+  #|    refs.viewPill.textContent = fn ? fn.name : "No function";
+  #|    if (!slice) {
+  #|      refs.disasmSubtitle.textContent = "no slice selected";
+  #|      refs.disasmBody.innerHTML = '<tr><td colspan="4" class="empty-panel">请选择函数</td></tr>';
+  #|      return;
+  #|    }
+  #|    if (slice.available === false) {
+  #|      refs.disasmSubtitle.textContent = "slice unavailable";
+  #|      refs.disasmBody.innerHTML = `<tr><td colspan="4" class="empty-panel">${escapeHtml(slice.reason || "slice unavailable")}</td></tr>`;
+  #|      return;
+  #|    }
+  #|    const instructions = filteredInstructions();
+  #|    const focusAddr = instructionFocusAddr();
+  #|    const focusIndex = findInstructionIndex(instructions, focusAddr);
+  #|    const win = windowedItems(instructions, focusIndex, WINDOW_ROWS);
+  #|    refs.disasmSubtitle.textContent = `${instructions.length} rows | window ${win.start + 1}-${win.end}`;
+  #|    refs.disasmBody.innerHTML = win.items.length > 0
+  #|      ? win.items.map((inst) => {
+  #|          const event = currentEvent();
+  #|          const active = event && event.addr === inst.addr;
+  #|          const focus = state.focusedAddr === inst.addr;
+  #|          return `<tr data-addr="${inst.addr}" class="${active ? "active" : ""}${focus && !active ? " focus" : ""}"><td>${inst.index}</td><td>${escapeHtml(inst.addr)}</td><td>${escapeHtml(inst.category)}</td><td class="code-cell">${escapeHtml(inst.asm)}</td></tr>`;
+  #|        }).join("")
+  #|      : '<tr><td colspan="4" class="empty-panel">当前函数下没有匹配指令</td></tr>';
+  #|  }
+  #|
+  #|  function renderCfg() {
+  #|    const slice = selectedSlice();
+  #|    if (!slice) {
+  #|      refs.cfgSubtitle.textContent = "no slice selected";
+  #|      refs.cfgView.innerHTML = '<div class="empty-panel">请选择函数</div>';
+  #|      return;
+  #|    }
+  #|    if (slice.available === false) {
+  #|      refs.cfgSubtitle.textContent = "slice unavailable";
+  #|      refs.cfgView.innerHTML = `<div class="empty-panel">${escapeHtml(slice.reason || "slice unavailable")}</div>`;
+  #|      return;
+  #|    }
+  #|    const blocks = slice.blocks || [];
+  #|    const edges = slice.edges || [];
+  #|    refs.cfgSubtitle.textContent = `${blocks.length} blocks | ${edges.length} edges`;
+  #|    const event = currentEvent();
+  #|    const currentAddr = event ? hexToBigInt(event.addr) : null;
+  #|    const note = [];
+  #|    if (blocks.length > CFG_BLOCK_LIMIT || edges.length > CFG_EDGE_LIMIT) {
+  #|      note.push(`已截断: blocks ${Math.min(blocks.length, CFG_BLOCK_LIMIT)}/${blocks.length}, edges ${Math.min(edges.length, CFG_EDGE_LIMIT)}/${edges.length}`);
+  #|    }
+  #|    const cards = blocks.slice(0, CFG_BLOCK_LIMIT).map((block) => {
+  #|      const start = hexToBigInt(block.start_addr);
+  #|      const end = hexToBigInt(block.end_addr);
+  #|      const active = currentAddr !== null && currentAddr >= start && currentAddr <= end;
+  #|      return `<div class="cfg-card${active ? " active" : ""}"><div class="cfg-card-title">${escapeHtml(block.start_addr)} - ${escapeHtml(block.end_addr)}</div><div class="muted">inst=${block.instruction_count}, term=${block.is_terminated}</div></div>`;
+  #|    }).join("");
+  #|    const edgeRows = edges.slice(0, CFG_EDGE_LIMIT).map((edge) => {
+  #|      return `<tr><td>${escapeHtml(edge.from_block)}</td><td>${escapeHtml(edge.to_block)}</td><td>${escapeHtml(edge.edge_type)}</td></tr>`;
+  #|    }).join("");
+  #|    refs.cfgView.innerHTML = `
+  #|      ${note.length ? `<div class="empty-panel" style="padding-top:0">${escapeHtml(note.join(" | "))}</div>` : ""}
+  #|      <div class="cfg-grid">${cards || '<div class="empty-panel">无 CFG block</div>'}</div>
+  #|      <table class="mono">
+  #|        <thead><tr><th>from</th><th>to</th><th>edge</th></tr></thead>
+  #|        <tbody>${edgeRows || '<tr><td colspan="3" class="empty-panel">无边关系</td></tr>'}</tbody>
+  #|      </table>
+  #|    `;
+  #|  }
+  #|
+  #|  function renderRegisters() {
+  #|    const event = currentEvent();
+  #|    const changedMap = new Map((event && event.register_writes ? event.register_writes : []).map((item) => [item.name, item]));
+  #|    refs.registerGroups.innerHTML = REGISTER_GROUPS.map((group) => {
+  #|      const regs = group.regs.filter((name) => !state.showChangedRegistersOnly || changedMap.has(name));
+  #|      if (!regs.length) {
+  #|        return "";
+  #|      }
+  #|      const rows = regs.map((name) => {
+  #|        const delta = changedMap.get(name);
+  #|        const badge = delta ? '<span class="badge changed">changed</span>' : "";
+  #|        const detail = delta
+  #|          ? `${escapeHtml(delta.before)} -> ${escapeHtml(delta.after)}`
+  #|          : escapeHtml(state.registers[name] || "0x0");
+  #|        return `<tr><td>${escapeHtml(name)}</td><td>${detail}</td><td>${badge}</td></tr>`;
+  #|      }).join("");
+  #|      return `<div class="register-group"><div class="group-title">${escapeHtml(group.label)}</div><table class="register-table mono"><tbody>${rows}</tbody></table></div>`;
+  #|    }).join("") || '<div class="empty-panel">当前 step 没有寄存器变化</div>';
+  #|  }
+  #|
+  #|  function renderRecentWrites() {
+  #|    refs.recentWrites.innerHTML = state.memoryHistory.slice(0, 8).map((item) => {
+  #|      return `<tr><td>${item.step}</td><td>${escapeHtml(item.addr)}</td><td>${item.size}</td><td>${escapeHtml(item.after)}</td></tr>`;
+  #|    }).join("") || '<tr><td colspan="4" class="empty-panel">暂无最近写入</td></tr>';
+  #|  }
+  #|
+  #|  function renderTrace() {
+  #|    const events = overview.events || [];
+  #|    const center = state.cursor >= 0 ? state.cursor : 0;
+  #|    const win = windowedItems(events, center, WINDOW_ROWS);
+  #|    refs.traceBody.innerHTML = win.items.length > 0
+  #|      ? win.items.map((event) => {
+  #|          const active = event.step - 1 === state.cursor;
+  #|          const writes = [];
+  #|          if ((event.register_writes || []).length > 0) {
+  #|            writes.push((event.register_writes || []).map((item) => item.name).join(", "));
+  #|          }
+  #|          if ((event.memory_writes || []).length > 0) {
+  #|            writes.push(`mem x${event.memory_writes.length}`);
+  #|          }
+  #|          const note = [event.syscall, event.stop_reason && event.stop_reason !== "running" ? event.stop_reason : "", event.stdout_append ? `stdout +${event.stdout_append.length}` : "", event.stderr_append ? `stderr +${event.stderr_append.length}` : ""].filter(Boolean).join(" | ");
+  #|          return `<tr data-event-index="${event.step - 1}" class="${active ? "active" : ""}"><td>${event.step}</td><td>${escapeHtml(event.addr)}</td><td class="code-cell">${escapeHtml(event.asm)}</td><td>${escapeHtml(writes.join(" | ") || "-")}</td><td>${escapeHtml(note || "-")}</td></tr>`;
+  #|        }).join("")
+  #|      : '<tr><td colspan="5" class="empty-panel">暂无轨迹</td></tr>';
+  #|  }
+  #|
+  #|  function renderMemoryWrites() {
+  #|    refs.memoryBody.innerHTML = state.memoryHistory.length > 0
+  #|      ? state.memoryHistory.map((item) => `<tr><td>${item.step}</td><td>${escapeHtml(item.addr)}</td><td>${item.size}</td><td>${escapeHtml(item.before)}</td><td>${escapeHtml(item.after)}</td></tr>`).join("")
+  #|      : '<tr><td colspan="5" class="empty-panel">暂无访存写入</td></tr>';
+  #|  }
+  #|
+  #|  function renderSyscalls() {
+  #|    refs.syscallBody.innerHTML = state.ioHistory.length > 0
+  #|      ? state.ioHistory.map((item) => `<tr><td>${item.step}</td><td>${escapeHtml(item.kind)}</td><td class="code-cell">${escapeHtml(item.detail)}</td></tr>`).join("")
+  #|      : '<tr><td colspan="3" class="empty-panel">暂无 syscall / 输出</td></tr>';
+  #|    refs.stdoutOutput.textContent = state.stdout || "(empty)";
+  #|    refs.stderrOutput.textContent = state.stderr || "(empty)";
+  #|  }
+  #|
+  #|  function renderTabs() {
+  #|    document.querySelectorAll("[data-tab]").forEach((element) => {
+  #|      element.classList.toggle("active", element.getAttribute("data-tab") === state.activeTab);
+  #|    });
+  #|    document.querySelectorAll("[data-tab-panel]").forEach((element) => {
+  #|      element.classList.toggle("active", element.getAttribute("data-tab-panel") === state.activeTab);
+  #|    });
+  #|  }
+  #|
+  #|  function applyLayout() {
+  #|    const root = document.documentElement;
+  #|    root.style.setProperty("--nav-width", state.layout.navCollapsed ? "0px" : `${state.layout.navWidth}px`);
+  #|    root.style.setProperty("--inspector-width", state.layout.inspectorCollapsed ? "0px" : `${state.layout.inspectorWidth}px`);
+  #|    root.style.setProperty("--bottom-height", state.layout.bottomCollapsed ? "0px" : `${state.layout.bottomHeight}px`);
+  #|    root.style.setProperty("--nav-split-size", state.layout.navCollapsed ? "0px" : "var(--splitter-size)");
+  #|    root.style.setProperty("--inspector-split-size", state.layout.inspectorCollapsed ? "0px" : "var(--splitter-size)");
+  #|    root.style.setProperty("--bottom-split-size", state.layout.bottomCollapsed ? "0px" : "var(--splitter-size)");
+  #|    refs.navPane.classList.toggle("collapsed-pane", state.layout.navCollapsed && window.innerWidth > 1100);
+  #|    refs.inspectorPane.classList.toggle("collapsed-pane", state.layout.inspectorCollapsed && window.innerWidth > 1100);
+  #|    refs.resultPane.classList.toggle("collapsed-pane", state.layout.bottomCollapsed && window.innerWidth > 1100);
+  #|    refs.navSplitter.classList.toggle("collapsed-pane", state.layout.navCollapsed && window.innerWidth > 1100);
+  #|    refs.inspectorSplitter.classList.toggle("collapsed-pane", state.layout.inspectorCollapsed && window.innerWidth > 1100);
+  #|    refs.bottomSplitter.classList.toggle("collapsed-pane", state.layout.bottomCollapsed && window.innerWidth > 1100);
+  #|    refs.toggleNavPane.textContent = state.layout.navCollapsed ? "展开" : "折叠";
+  #|    refs.toggleBottomPane.textContent = state.layout.bottomCollapsed ? "展开" : "折叠";
+  #|    refs.toggleInspectorPane.textContent = state.layout.inspectorCollapsed ? "展开" : "折叠";
+  #|  }
+  #|
+  #|  function maybeFollowPc() {
+  #|    if (!state.followPcEnabled) {
+  #|      return;
+  #|    }
+  #|    const event = currentEvent();
+  #|    if (!event) {
+  #|      return;
+  #|    }
+  #|    const disasmRow = refs.disasmBody.querySelector(`tr[data-addr="${event.addr}"]`);
+  #|    const traceRow = refs.traceBody.querySelector(`tr[data-event-index="${state.cursor}"]`);
+  #|    if (disasmRow) {
+  #|      disasmRow.scrollIntoView({ block: "nearest" });
+  #|    }
+  #|    if (traceRow) {
+  #|      traceRow.scrollIntoView({ block: "nearest" });
+  #|    }
+  #|  }
+  #|
+  #|  function renderOverviewPanels() {
+  #|    renderHeader();
+  #|    renderSummary();
+  #|    renderSections();
+  #|    renderFunctions();
+  #|    renderBanner();
+  #|  }
+  #|
+  #|  function renderRuntimePanels() {
+  #|    renderHeader();
+  #|    renderFunctions();
+  #|    renderBanner();
+  #|    renderRuntimeSummary();
+  #|    renderExecution();
+  #|    renderRegisters();
+  #|    renderRecentWrites();
+  #|    renderDisasm();
+  #|    renderCfg();
+  #|    renderTrace();
+  #|    renderMemoryWrites();
+  #|    renderSyscalls();
+  #|    renderToolbarState();
+  #|    renderTabs();
+  #|    applyLayout();
+  #|    maybeFollowPc();
+  #|  }
+  #|
+  #|  function renderAll() {
+  #|    renderOverviewPanels();
+  #|    renderRuntimePanels();
+  #|  }
+  #|
+  #|  function syncUrl(file) {
+  #|    if (!REMOTE_MODE || !window.history || !window.history.replaceState) {
+  #|      return;
+  #|    }
+  #|    const next = file ? `${window.location.pathname}?file=${encodeURIComponent(file)}` : window.location.pathname;
+  #|    window.history.replaceState(null, "", next);
+  #|  }
+  #|
+  #|  function applyOverviewData(nextOverview, file, restoreUi) {
+  #|    overview = nextOverview || createEmptyOverview(file);
+  #|    state.currentFile = overview.meta.source_file || file || state.currentFile;
+  #|    storageKey = storageKeyFor(state.currentFile || file || "default");
+  #|    if (restoreUi) {
+  #|      applyStoredUi(readUiState());
+  #|    }
+  #|    refs.searchInput.value = state.searchText;
+  #|    refs.fileInput.value = state.currentFile;
+  #|    seedEmbeddedSlices(state.currentFile);
+  #|    rebuildDerivedCaches();
+  #|    stopPlay();
+  #|    state.cursor = -1;
+  #|    resetRuntimeState();
+  #|    if (
+  #|      state.selectedFunctionAddr &&
+  #|      state.selectedFunctionAddr !== "__all__" &&
+  #|      !(overview.functions || []).some((fn) => fn.addr === state.selectedFunctionAddr)
+  #|    ) {
+  #|      state.selectedFunctionAddr = "";
+  #|    }
+  #|  }
+  #|
+  #|  async function loadFunctionSlice(selector) {
+  #|    const key = String(selector || "").trim();
+  #|    if (!key) {
+  #|      return null;
+  #|    }
+  #|    if (sliceCache.has(key)) {
+  #|      return sliceCache.get(key);
+  #|    }
+  #|    const endpoint = boot.function_endpoint || "/api/workbench/function";
+  #|    const url = `${endpoint}?file=${encodeURIComponent(state.currentFile || boot.default_file || "")}&addr=${encodeURIComponent(key)}`;
+  #|    try {
+  #|      const resp = await fetch(url);
+  #|      const payload = await resp.json();
+  #|      if (!payload.ok || !payload.data) {
+  #|        throw new Error(payload.error || "function request failed");
+  #|      }
+  #|      const slice = payload.data;
+  #|      sliceCache.set(key, slice);
+  #|      if (slice.function && slice.function.addr) {
+  #|        sliceCache.set(slice.function.addr, slice);
+  #|      }
+  #|      return slice;
+  #|    } catch (err) {
+  #|      const unavailable = createUnavailableSlice(key, `failed to load slice: ${String(err)}`);
+  #|      sliceCache.set(key, unavailable);
+  #|      return unavailable;
+  #|    }
+  #|  }
+  #|
+  #|  async function ensureDefaultSelection() {
+  #|    let target = state.selectedFunctionAddr;
+  #|    if (target === "__all__" && !allInstructionsAllowed()) {
+  #|      target = "";
+  #|    }
+  #|    if (!target || (target !== "__all__" && !(overview.functions || []).some((fn) => fn.addr === target))) {
+  #|      target = defaultFunctionAddr();
+  #|    }
+  #|    state.selectedFunctionAddr = target || "";
+  #|    if (state.selectedFunctionAddr) {
+  #|      const slice = await loadFunctionSlice(state.selectedFunctionAddr);
+  #|      if (slice && slice.instructions && slice.instructions.length > 0) {
+  #|        const event = currentEvent();
+  #|        const candidate = event && slice.instructions.some((inst) => inst.addr === event.addr)
+  #|          ? event.addr
+  #|          : slice.instructions[0].addr;
+  #|        state.focusedAddr = candidate;
+  #|      }
+  #|    }
+  #|    saveUiState();
+  #|  }
+  #|
+  #|  async function selectFunctionByAddr(addr, focusAddr) {
+  #|    state.selectedFunctionAddr = String(addr || "").trim();
+  #|    if (state.selectedFunctionAddr) {
+  #|      await loadFunctionSlice(state.selectedFunctionAddr);
+  #|    }
+  #|    if (focusAddr) {
+  #|      state.focusedAddr = focusAddr;
+  #|    } else {
+  #|      const slice = selectedSlice();
+  #|      if (slice && slice.instructions && slice.instructions.length > 0) {
+  #|        state.focusedAddr = slice.instructions[0].addr;
+  #|      }
+  #|    }
+  #|    saveUiState();
+  #|    renderAll();
+  #|  }
+  #|
+  #|  async function jumpToAddress(addrText) {
+  #|    const addr = String(addrText || "").trim();
+  #|    if (!isAddressQuery(addr)) {
+  #|      return;
+  #|    }
+  #|    const fn = functionForAddress(addr);
+  #|    if (!fn) {
+  #|      return;
+  #|    }
+  #|    await selectFunctionByAddr(fn.addr, addr);
+  #|    if (eventIndexByAddr.has(addr)) {
+  #|      await setCursor(eventIndexByAddr.get(addr));
+  #|    } else {
+  #|      state.focusedAddr = addr;
+  #|      renderRuntimePanels();
+  #|    }
+  #|  }
+  #|
+  #|  async function loadOverview(file, syncHistory) {
+  #|    const targetFile = String(file || "").trim();
+  #|    if (!targetFile) {
+  #|      state.loadError = "file path is required";
+  #|      applyOverviewData(createEmptyOverview(""), "", false);
+  #|      renderAll();
+  #|      return;
+  #|    }
+  #|    state.loading = true;
+  #|    state.loadError = "";
+  #|    state.currentFile = targetFile;
+  #|    refs.fileInput.value = targetFile;
+  #|    if (syncHistory !== false) {
+  #|      syncUrl(targetFile);
+  #|    }
+  #|    renderAll();
+  #|    const endpoint = boot.overview_endpoint || "/api/workbench/overview";
+  #|    const url = `${endpoint}?file=${encodeURIComponent(targetFile)}&max_events=${String(boot.max_inst || 400)}`;
+  #|    try {
+  #|      const resp = await fetch(url);
+  #|      const payload = await resp.json();
+  #|      if (!payload.ok || !payload.data) {
+  #|        throw new Error(payload.error || "overview request failed");
+  #|      }
+  #|      state.loading = false;
+  #|      state.loadError = "";
+  #|      applyOverviewData(payload.data, targetFile, true);
+  #|      await ensureDefaultSelection();
+  #|    } catch (err) {
+  #|      state.loading = false;
+  #|      state.loadError = `overview failed: ${String(err)}`;
+  #|      applyOverviewData(createEmptyOverview(targetFile), targetFile, false);
+  #|    }
+  #|    renderAll();
+  #|  }
+  #|
+  #|  function stopPlay() {
+  #|    if (!state.timer) {
+  #|      return;
+  #|    }
+  #|    clearInterval(state.timer);
+  #|    state.timer = null;
+  #|  }
+  #|
+  #|  async function setCursor(next) {
+  #|    const maxIndex = (overview.events || []).length - 1;
+  #|    const clamped = Math.max(-1, Math.min(maxIndex, next));
+  #|    if (clamped === state.cursor) {
+  #|      return;
+  #|    }
+  #|    state.cursor = clamped;
+  #|    state.focusedAddr = clamped >= 0
+  #|      ? overview.events[clamped].addr
+  #|      : (overview.runtime.initial_pc || overview.meta.entry_point || "0x0");
+  #|    rebuildToCursor(state.cursor);
+  #|    if (state.followPcEnabled) {
+  #|      const currentFn = currentFunctionForCursor();
+  #|      if (currentFn && currentFn.addr !== state.selectedFunctionAddr) {
+  #|        state.selectedFunctionAddr = currentFn.addr;
+  #|        await loadFunctionSlice(currentFn.addr);
+  #|        saveUiState();
+  #|      }
+  #|    }
+  #|    renderRuntimePanels();
+  #|  }
+  #|
+  #|  async function step(delta) {
+  #|    if ((overview.events || []).length === 0) {
+  #|      return;
+  #|    }
+  #|    await setCursor(state.cursor + delta);
+  #|  }
+  #|
+  #|  function togglePlay() {
+  #|    if (state.timer) {
+  #|      stopPlay();
+  #|      renderToolbarState();
+  #|      return;
+  #|    }
+  #|    if (state.cursor >= (overview.events || []).length - 1) {
+  #|      setCursor(-1);
+  #|    }
+  #|    let busy = false;
+  #|    state.timer = setInterval(async () => {
+  #|      if (busy) {
+  #|        return;
+  #|      }
+  #|      busy = true;
+  #|      try {
+  #|        if (state.cursor >= (overview.events || []).length - 1) {
+  #|          stopPlay();
+  #|          renderToolbarState();
+  #|          return;
+  #|        }
+  #|        await step(1);
+  #|      } finally {
+  #|        busy = false;
+  #|      }
+  #|    }, 350);
+  #|    renderToolbarState();
+  #|  }
+  #|
+  #|  function bindSplitter(handle, axis, direction, getValue, setValue, getBounds) {
+  #|    handle.addEventListener("mousedown", (downEvent) => {
+  #|      if (window.innerWidth <= 1100) {
+  #|        return;
+  #|      }
+  #|      downEvent.preventDefault();
+  #|      const startPosition = axis === "x" ? downEvent.clientX : downEvent.clientY;
+  #|      const startValue = getValue();
+  #|      const onMove = (moveEvent) => {
+  #|        const currentPosition = axis === "x" ? moveEvent.clientX : moveEvent.clientY;
+  #|        const delta = (currentPosition - startPosition) * direction;
+  #|        const [min, max] = getBounds();
+  #|        setValue(clamp(startValue + delta, min, max));
+  #|        applyLayout();
+  #|        saveUiState();
+  #|      };
+  #|      const onUp = () => {
+  #|        window.removeEventListener("mousemove", onMove);
+  #|        window.removeEventListener("mouseup", onUp);
+  #|      };
+  #|      window.addEventListener("mousemove", onMove);
+  #|      window.addEventListener("mouseup", onUp);
+  #|    });
+  #|  }
+  #|
+  #|  refs.functionList.addEventListener("click", async (event) => {
+  #|    const row = event.target.closest("[data-fn-addr]");
+  #|    if (!row) {
+  #|      return;
+  #|    }
+  #|    await selectFunctionByAddr(row.getAttribute("data-fn-addr") || "", "");
+  #|  });
+  #|
+  #|  refs.sectionList.addEventListener("click", async (event) => {
+  #|    const row = event.target.closest("[data-section-query]");
+  #|    if (!row) {
+  #|      return;
+  #|    }
+  #|    state.searchText = row.getAttribute("data-section-query") || "";
+  #|    refs.searchInput.value = state.searchText;
+  #|    saveUiState();
+  #|    await jumpToAddress(state.searchText);
+  #|    renderAll();
+  #|  });
+  #|
+  #|  refs.disasmBody.addEventListener("click", async (event) => {
+  #|    const row = event.target.closest("tr[data-addr]");
+  #|    if (!row) {
+  #|      return;
+  #|    }
+  #|    const addr = row.getAttribute("data-addr") || "";
+  #|    state.focusedAddr = addr;
+  #|    if (eventIndexByAddr.has(addr)) {
+  #|      await setCursor(eventIndexByAddr.get(addr));
+  #|    } else {
+  #|      await jumpToAddress(addr);
+  #|    }
+  #|  });
+  #|
+  #|  refs.traceBody.addEventListener("click", async (event) => {
+  #|    const row = event.target.closest("tr[data-event-index]");
+  #|    if (!row) {
+  #|      return;
+  #|    }
+  #|    await setCursor(Number(row.getAttribute("data-event-index")));
+  #|  });
+  #|
+  #|  refs.paneTabs.addEventListener("click", (event) => {
+  #|    const button = event.target.closest("[data-tab]");
+  #|    if (!button) {
+  #|      return;
+  #|    }
+  #|    state.activeTab = button.getAttribute("data-tab") || "trace";
+  #|    saveUiState();
+  #|    renderTabs();
+  #|  });
+  #|
+  #|  refs.fileLoadBtn.addEventListener("click", async () => {
+  #|    if (!REMOTE_MODE) {
+  #|      return;
+  #|    }
+  #|    await loadOverview(refs.fileInput.value, true);
+  #|  });
+  #|
+  #|  refs.fileInput.addEventListener("keydown", async (event) => {
+  #|    if (!REMOTE_MODE || event.key !== "Enter") {
+  #|      return;
+  #|    }
+  #|    event.preventDefault();
+  #|    await loadOverview(refs.fileInput.value, true);
+  #|  });
+  #|
+  #|  refs.functionSelect.addEventListener("change", async (event) => {
+  #|    await selectFunctionByAddr(event.target.value || "", "");
+  #|  });
+  #|
+  #|  refs.searchInput.addEventListener("input", () => {
+  #|    state.searchText = refs.searchInput.value;
+  #|    saveUiState();
+  #|    renderOverviewPanels();
+  #|    renderDisasm();
+  #|    renderCfg();
+  #|  });
+  #|
+  #|  refs.searchInput.addEventListener("keydown", async (event) => {
+  #|    if (event.key !== "Enter") {
+  #|      return;
+  #|    }
+  #|    const query = queryText();
+  #|    if (isAddressQuery(query)) {
+  #|      event.preventDefault();
+  #|      await jumpToAddress(query);
+  #|    }
+  #|  });
+  #|
+  #|  refs.resetBtn.addEventListener("click", async () => {
+  #|    stopPlay();
+  #|    await setCursor(-1);
+  #|  });
+  #|
+  #|  refs.prevBtn.addEventListener("click", async () => { await step(-1); });
+  #|  refs.nextBtn.addEventListener("click", async () => { await step(1); });
+  #|  refs.playBtn.addEventListener("click", togglePlay);
+  #|
+  #|  refs.followPc.addEventListener("click", () => {
+  #|    state.followPcEnabled = !state.followPcEnabled;
+  #|    saveUiState();
+  #|    renderToolbarState();
+  #|  });
+  #|
+  #|  refs.changedRegistersToggle.addEventListener("click", () => {
+  #|    state.showChangedRegistersOnly = !state.showChangedRegistersOnly;
+  #|    saveUiState();
+  #|    renderRegisters();
+  #|    renderToolbarState();
+  #|  });
+  #|
+  #|  refs.toggleNavPane.addEventListener("click", () => {
+  #|    state.layout.navCollapsed = !state.layout.navCollapsed;
+  #|    saveUiState();
+  #|    applyLayout();
+  #|  });
+  #|
+  #|  refs.toggleBottomPane.addEventListener("click", () => {
+  #|    state.layout.bottomCollapsed = !state.layout.bottomCollapsed;
+  #|    saveUiState();
+  #|    applyLayout();
+  #|  });
+  #|
+  #|  refs.toggleInspectorPane.addEventListener("click", () => {
+  #|    state.layout.inspectorCollapsed = !state.layout.inspectorCollapsed;
+  #|    saveUiState();
+  #|    applyLayout();
+  #|  });
+  #|
+  #|  bindSplitter(refs.navSplitter, "x", 1, () => state.layout.navWidth, (value) => { state.layout.navWidth = value; }, () => [180, Math.max(220, Math.floor(window.innerWidth * 0.35))]);
+  #|  bindSplitter(refs.inspectorSplitter, "x", -1, () => state.layout.inspectorWidth, (value) => { state.layout.inspectorWidth = value; }, () => [240, Math.max(280, Math.floor(window.innerWidth * 0.42))]);
+  #|  bindSplitter(refs.bottomSplitter, "y", -1, () => state.layout.bottomHeight, (value) => { state.layout.bottomHeight = value; }, () => [180, Math.max(240, Math.floor(window.innerHeight * 0.55))]);
+  #|  window.addEventListener("resize", () => {
+  #|    applyLayout();
+  #|    maybeFollowPc();
+  #|  });
+  #|
+  #|  if (boot.embedded_overview) {
+  #|    applyOverviewData(
+  #|      boot.embedded_overview,
+  #|      boot.embedded_overview.meta ? boot.embedded_overview.meta.source_file || "" : "",
+  #|      false,
+  #|    );
+  #|    ensureDefaultSelection().then(renderAll);
+  #|  } else if (REMOTE_MODE) {
+  #|    renderAll();
+  #|    loadOverview(state.currentFile || boot.default_file || "", false);
+  #|  } else {
+  #|    applyOverviewData(createEmptyOverview(""), "", false);
+  #|    renderAll();
+  #|  }
+  #|})();
+
+///|
+fn use_new_workbench_client() -> Bool {
+  true
 }
 
 ///|
@@ -2065,6 +3308,17 @@ fn build_html_page(title : String, boot_json : String) -> String {
     "      grid-template-rows: minmax(260px, 1fr) var(--bottom-split-size) var(--bottom-height);\n"
   html = html + "      border-left: 1px solid var(--line);\n"
   html = html + "      border-right: 1px solid var(--line);\n"
+  html = html + "    }\n"
+  html = html + "    .main-grid {\n"
+  html = html + "      display: grid;\n"
+  html = html + "      min-height: 0;\n"
+  html = html +
+    "      grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.95fr);\n"
+  html = html + "      gap: 0;\n"
+  html = html + "    }\n"
+  html = html + "    .cfg-pane {\n"
+  html = html + "      border-left: 1px solid var(--line);\n"
+  html = html + "      background: var(--panel);\n"
   html = html + "    }\n"
   html = html + "    .nav-pane,\n"
   html = html + "    .inspector-pane {\n"
@@ -2342,9 +3596,17 @@ fn build_html_page(title : String, boot_json : String) -> String {
   html = html + "        border-left: 0;\n"
   html = html + "        border-right: 0;\n"
   html = html + "      }\n"
+  html = html + "      .main-grid {\n"
+  html = html + "        grid-template-columns: 1fr;\n"
+  html = html + "      }\n"
+  html = html + "      .cfg-pane {\n"
+  html = html + "        border-left: 0;\n"
+  html = html + "        border-top: 1px solid var(--line);\n"
+  html = html + "      }\n"
   html = html + "      .nav-pane,\n"
   html = html + "      .inspector-pane,\n"
   html = html + "      .main-pane,\n"
+  html = html + "      .cfg-pane,\n"
   html = html + "      .result-pane {\n"
   html = html + "        border-bottom: 1px solid var(--line);\n"
   html = html + "      }\n"
@@ -2403,8 +3665,6 @@ fn build_html_page(title : String, boot_json : String) -> String {
   html = html + "        <div class=\"toolbar-toggles\">\n"
   html = html +
     "          <button id=\"follow-pc\" class=\"toggle-btn\">Follow PC</button>\n"
-  html = html +
-    "          <button id=\"current-function-only\" class=\"toggle-btn\">Show Only Current Function</button>\n"
   html = html + "        </div>\n"
   html = html + "      </div>\n"
   html = html + "    </header>\n"
@@ -2438,26 +3698,40 @@ fn build_html_page(title : String, boot_json : String) -> String {
   html = html +
     "      <div class=\"splitter splitter-x\" id=\"nav-splitter\"></div>\n"
   html = html + "      <section class=\"center-shell\">\n"
-  html = html + "        <section class=\"pane main-pane\">\n"
-  html = html + "          <div class=\"pane-head\">\n"
-  html = html + "            <div>\n"
-  html = html + "              <div class=\"pane-title\">Disassembly</div>\n"
+  html = html + "        <section class=\"main-grid\">\n"
+  html = html + "          <section class=\"pane main-pane\">\n"
+  html = html + "            <div class=\"pane-head\">\n"
+  html = html + "              <div>\n"
+  html = html + "                <div class=\"pane-title\">Disassembly</div>\n"
   html = html +
-    "              <div class=\"pane-subtitle\" id=\"disasm-subtitle\"></div>\n"
-  html = html + "            </div>\n"
-  html = html + "            <div class=\"pane-actions\">\n"
-  html = html + "              <span class=\"pill\" id=\"view-pill\"></span>\n"
-  html = html + "            </div>\n"
-  html = html + "          </div>\n"
-  html = html + "          <div class=\"pane-scroll\">\n"
-  html = html + "            <table class=\"interactive mono\">\n"
-  html = html + "              <thead>\n"
+    "                <div class=\"pane-subtitle\" id=\"disasm-subtitle\"></div>\n"
+  html = html + "              </div>\n"
+  html = html + "              <div class=\"pane-actions\">\n"
   html = html +
-    "                <tr><th class=\"column-index\">#</th><th class=\"column-addr\">地址</th><th class=\"column-category\">分类</th><th>指令</th></tr>\n"
-  html = html + "              </thead>\n"
-  html = html + "              <tbody id=\"disasm-body\"></tbody>\n"
-  html = html + "            </table>\n"
-  html = html + "          </div>\n"
+    "                <span class=\"pill\" id=\"view-pill\"></span>\n"
+  html = html + "              </div>\n"
+  html = html + "            </div>\n"
+  html = html + "            <div class=\"pane-scroll\">\n"
+  html = html + "              <table class=\"interactive mono\">\n"
+  html = html + "                <thead>\n"
+  html = html +
+    "                  <tr><th class=\"column-index\">#</th><th class=\"column-addr\">地址</th><th class=\"column-category\">分类</th><th>指令</th></tr>\n"
+  html = html + "                </thead>\n"
+  html = html + "                <tbody id=\"disasm-body\"></tbody>\n"
+  html = html + "              </table>\n"
+  html = html + "            </div>\n"
+  html = html + "          </section>\n"
+  html = html + "          <section class=\"pane cfg-pane\">\n"
+  html = html + "            <div class=\"pane-head\">\n"
+  html = html + "              <div>\n"
+  html = html + "                <div class=\"pane-title\">CFG</div>\n"
+  html = html +
+    "                <div class=\"pane-subtitle\" id=\"cfg-subtitle\"></div>\n"
+  html = html + "              </div>\n"
+  html = html + "            </div>\n"
+  html = html +
+    "            <div class=\"pane-scroll pane-body\" id=\"cfg-view\"></div>\n"
+  html = html + "          </section>\n"
   html = html + "        </section>\n"
   html = html +
     "        <div class=\"splitter splitter-y\" id=\"bottom-splitter\"></div>\n"
@@ -2467,7 +3741,7 @@ fn build_html_page(title : String, boot_json : String) -> String {
   html = html + "            <div>\n"
   html = html + "              <div class=\"pane-title\">Results</div>\n"
   html = html +
-    "              <div class=\"pane-subtitle\">CFG / Trace / Memory Writes / Syscalls</div>\n"
+    "              <div class=\"pane-subtitle\">Trace / Memory Writes / Syscalls</div>\n"
   html = html + "            </div>\n"
   html = html + "            <div class=\"pane-actions\">\n"
   html = html +
@@ -2476,16 +3750,12 @@ fn build_html_page(title : String, boot_json : String) -> String {
   html = html + "          </div>\n"
   html = html + "          <div class=\"pane-tabs\" id=\"pane-tabs\">\n"
   html = html +
-    "            <button class=\"pane-tab\" data-tab=\"cfg\">CFG</button>\n"
-  html = html +
     "            <button class=\"pane-tab\" data-tab=\"trace\">Trace</button>\n"
   html = html +
     "            <button class=\"pane-tab\" data-tab=\"memory\">Memory Writes</button>\n"
   html = html +
     "            <button class=\"pane-tab\" data-tab=\"syscalls\">Syscalls/Output</button>\n"
   html = html + "          </div>\n"
-  html = html +
-    "          <div class=\"tab-panel\" data-tab-panel=\"cfg\"><div class=\"tab-scroll\" id=\"cfg-view\"></div></div>\n"
   html = html +
     "          <div class=\"tab-panel\" data-tab-panel=\"trace\"><div class=\"tab-scroll\"><table class=\"interactive trace-table mono\"><thead><tr><th class=\"column-index\">step</th><th class=\"column-addr\">pc</th><th>instruction</th><th>writes</th><th>syscall/stop</th></tr></thead><tbody id=\"trace-body\"></tbody></table></div></div>\n"
   html = html +
@@ -2528,6 +3798,11 @@ fn build_html_page(title : String, boot_json : String) -> String {
   html = html + "            </div>\n"
   html = html + "            <div id=\"register-groups\"></div>\n"
   html = html + "          </div>\n"
+  html = html + "          <div class=\"section-block\">\n"
+  html = html + "            <h3>Recent Writes</h3>\n"
+  html = html +
+    "            <table class=\"memory-table mono\"><thead><tr><th class=\"column-index\">step</th><th class=\"column-addr\">addr</th><th class=\"column-index\">size</th><th>after</th></tr></thead><tbody id=\"recent-writes\"></tbody></table>\n"
+  html = html + "          </div>\n"
   html = html + "        </div>\n"
   html = html + "      </aside>\n"
   html = html + "    </main>\n"
@@ -2537,6 +3812,14 @@ fn build_html_page(title : String, boot_json : String) -> String {
   html = html + boot_json
   html = html + ";\n"
   html = html + "  </script>\n"
+  if use_new_workbench_client() {
+    html = html + "  <script>\n"
+    html = html + WORKBENCH_CLIENT_SCRIPT
+    html = html + "\n  </script>\n"
+    html = html + "</body>\n"
+    html = html + "</html>\n"
+    return html
+  }
   html = html + "  <script>\n"
   html = html + "    (() => {\n"
   html = html + "      const boot = WORKBENCH_BOOT || {};\n"

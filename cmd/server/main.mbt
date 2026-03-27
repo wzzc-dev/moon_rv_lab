@@ -231,6 +231,8 @@ fn print_usage() -> Unit {
   println("API:")
   println("  GET /workbench?file=<path>")
   println("  GET /api/health")
+  println("  GET /api/workbench/overview?file=<path>&max_events=<n>")
+  println("  GET /api/workbench/function?file=<path>&addr=<hex-or-name>")
   println("  GET /api/snapshot?file=<path>&max_inst=<n>")
   println(
     "  GET /api/stream?file=<path>&max_inst=<n>&max_events=<n>&interval_ms=<ms>",
@@ -259,6 +261,14 @@ fn render_page_body(opts : ServeOptions) -> String {
       @luna.h("ul", [], [
         @luna.h("li", [], [@luna.text("GET /workbench?file=<path>")]),
         @luna.h("li", [], [@luna.text("GET /api/health")]),
+        @luna.h("li", [], [
+          @luna.text("GET /api/workbench/overview?file=<path>&max_events=<n>"),
+        ]),
+        @luna.h("li", [], [
+          @luna.text(
+            "GET /api/workbench/function?file=<path>&addr=<hex-or-name>",
+          ),
+        ]),
         @luna.h("li", [], [
           @luna.text("GET /api/snapshot?file=<path>&max_inst=<n>"),
         ]),
@@ -456,7 +466,7 @@ fn build_workbench_route_html(opts : ServeOptions, file : String) -> String {
     opts.default_file,
     file,
     opts.max_inst,
-    "/api/snapshot",
+    "/api/workbench/overview",
   )
 }
 
@@ -587,6 +597,31 @@ async fn run_server(opts : ServeOptions) -> Unit {
   app.get(
     "/api/health",
     @mars.handler(async fn(ctx) { ctx.json({ "ok": true }) }),
+  )
+
+  app.get(
+    "/api/workbench/overview",
+    @mars.handler(async fn(ctx) {
+      let file = choose_file(ctx.query("file"), opts.default_file)
+      let max_events = choose_positive_int(
+        ctx.query("max_events"),
+        opts.max_events,
+      )
+      let payload_text = @workbench.overview_api_json_from_file(
+        file, max_events,
+      )
+      respond_payload_json(ctx, payload_text)
+    }),
+  )
+
+  app.get(
+    "/api/workbench/function",
+    @mars.handler(async fn(ctx) {
+      let file = choose_file(ctx.query("file"), opts.default_file)
+      let addr = choose_file(ctx.query("addr"), "")
+      let payload_text = @workbench.function_api_json_from_file(file, addr)
+      respond_payload_json(ctx, payload_text)
+    }),
   )
 
   app.get(

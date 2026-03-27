@@ -296,10 +296,7 @@ test "simulator executes compressed integer arithmetic branch and stack ops" {
     #|c.li a3, 7
     #|c.nop
     #|c.ebreak
-  let state = load_state_from_source(
-    "compressed_integer",
-    source,
-  )
+  let state = load_state_from_source("compressed_integer", source)
   let initial_sp = state.registers.get(2U)
   let finished = run_with_limit(state, 40)
   assert_eq(finished.registers.get(10U), 3U)
