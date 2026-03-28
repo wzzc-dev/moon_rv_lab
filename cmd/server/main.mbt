@@ -102,7 +102,7 @@ fn default_options() -> ServeOptions {
   {
     host: DEFAULT_HOST,
     port: DEFAULT_PORT,
-    default_file: "example/simple.elf",
+    default_file: "out/simple.elf",
     max_inst: DEFAULT_MAX_INST,
     max_events: DEFAULT_MAX_EVENTS,
     interval_ms: DEFAULT_INTERVAL_MS,
@@ -222,7 +222,7 @@ fn print_usage() -> Unit {
   println("  --host <host>           Bind host (default: 127.0.0.1)")
   println("  --port <port>           Bind port (default: 18080)")
   println(
-    "  --file <path>           Default ELF path (default: example/simple.elf)",
+    "  --file <path>           Default ELF path (default: out/simple.elf)",
   )
   println("  --max-inst <n>          Default snapshot instruction limit")
   println("  --max-events <n>        Default stream event limit")
@@ -256,6 +256,16 @@ fn render_page_body(opts : ServeOptions) -> String {
         @luna.h("a", [("href", @luna.attr_static(workbench_href))], [
           @luna.text("Open Online Workbench"),
         ]),
+      ]),
+      @luna.h("p", [], [
+        @luna.text(
+          "Primary APIs: /api/workbench/overview for overview data, /api/workbench/function for per-function slices.",
+        ),
+      ]),
+      @luna.h("p", [], [
+        @luna.text(
+          "Compatibility APIs: /api/snapshot and /api/stream remain available for existing integrations.",
+        ),
       ]),
       @luna.h("p", [], [@luna.text("默认文件: " + opts.default_file)]),
       @luna.h("ul", [], [

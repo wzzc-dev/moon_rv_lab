@@ -111,11 +111,14 @@ test "generated workbench html includes godbolt style panes and controls" {
 
 ///|
 test "overview api json includes hello navigation metadata" {
-  let json = overview_api_json_from_file("example/hello-riscv64", 200)
+  let path = write_test_elf("overview_api", branch_trace_program())
+  let json = overview_api_json_from_file(path, 200)
   assert_true(json.contains("\"ok\":true"))
-  assert_true(json.contains("\"function_count\":66"))
-  assert_true(json.contains("\"total_instruction_count\":3430"))
+  assert_true(json.contains("\"function_count\":1"))
+  assert_true(json.contains("\"instruction_count\":5"))
+  assert_true(json.contains("\"total_instruction_count\":5"))
   assert_true(json.contains("\"functions\""))
+  assert_true(json.contains("\"name\":\"entry\""))
   assert_true(json.contains("\"sections\""))
   assert_true(json.contains("\"runtime\""))
   assert_true(json.contains("\"events\""))
@@ -123,9 +126,11 @@ test "overview api json includes hello navigation metadata" {
 
 ///|
 test "function api json returns per-function slice payload" {
-  let json = function_api_json_from_file("example/hello-riscv64", "main")
+  let path = write_test_elf("function_api", branch_trace_program())
+  let json = function_api_json_from_file(path, "0x10000")
   assert_true(json.contains("\"ok\":true"))
-  assert_true(json.contains("\"function\":{\"name\":\"main\""))
+  assert_true(json.contains("\"function\":{\"name\":\"entry\""))
+  assert_true(json.contains("\"addr\":\"0x10000\""))
   assert_true(json.contains("\"instructions\""))
   assert_true(json.contains("\"blocks\""))
   assert_true(json.contains("\"edges\""))
@@ -135,7 +140,7 @@ test "function api json returns per-function slice payload" {
 ///|
 test "online workbench html bootstraps from overview and function apis" {
   let html = online_page_html(
-    "example/simple.elf", "example/simple.elf", 64, "/api/workbench/overview",
+    "out/simple.elf", "out/simple.elf", 64, "/api/workbench/overview",
   )
 
   assert_true(html.contains("WORKBENCH_BOOT"))

@@ -395,17 +395,17 @@ pub fn online_page_html(
   default_file : String,
   initial_file : String,
   max_instructions : Int,
-  snapshot_endpoint : String,
+  overview_endpoint : String,
 ) -> String {
-  let overview_endpoint = if snapshot_endpoint == "" {
+  let resolved_overview_endpoint = if overview_endpoint == "" {
     "/api/workbench/overview"
   } else {
-    snapshot_endpoint
+    overview_endpoint
   }
   build_html_page(
     "MoonRV Lab Online Workbench",
     remote_boot_json(
-      default_file, initial_file, max_instructions, overview_endpoint, "/api/workbench/function",
+      default_file, initial_file, max_instructions, resolved_overview_endpoint, "/api/workbench/function",
     ),
   )
 }
