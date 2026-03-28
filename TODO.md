@@ -11,4 +11,4 @@
 | TODO-07 | 已完成 | 在 workbench API 暴露 xlen 并覆盖双位宽回归 | `moon test workbench --target native`<br>`moon test cmd/server --target native` | `feat: 在 workbench API 暴露 xlen 并覆盖双位宽回归` |
 | TODO-08 | 已完成 | 加固 dataflow 与 decompile 回归样例 | `moon test analysis` | `test: 加固 dataflow 与 decompile 回归样例` |
 | TODO-09 | 已完成 | 增加 Windows MSVC 原生校验工作流 | 新增 Windows workflow 并补使用说明 | `ci: 增加 Windows MSVC 原生校验工作流` |
-| TODO-10 | 待办 | 清理稳定性主线的低风险编译告警 | `moon test analysis`<br>`moon test decode`<br>`moon test format` | `chore: 清理稳定性主线的低风险编译告警` |
+| TODO-10 | 已完成 | 清理稳定性主线的低风险编译告警 | `moon test analysis`<br>`moon test decode`<br>`moon test format` | `chore: 清理稳定性主线的低风险编译告警` |

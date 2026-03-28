@@ -1164,7 +1164,6 @@ pub fn detect_jump_table_pattern(
   // Look backwards for table load pattern
   let mut table_base_addr : UInt? = None
   let mut scale = 4 // Default scale for 32-bit addresses
-  let mut index_reg : UInt? = None
   let mut table_base_reg = jump_reg
 
   // Scan backwards from jump instruction
@@ -1199,7 +1198,7 @@ pub fn detect_jump_table_pattern(
       @decode.SLLI(rd, rs1, shamt) =>
         if rd == jump_reg || rd == table_base_reg {
           scale = 1 << shamt.reinterpret_as_int()
-          index_reg = Some(rs1)
+          ignore(rs1)
         }
       // LUI + ADDI or AUIPC for address loading
       @decode.LUI(rd, imm) =>

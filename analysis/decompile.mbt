@@ -244,7 +244,7 @@ fn DecompileContext::new(
 ///|
 /// Get register value
 fn get_reg_value(ctx : DecompileContext, reg : UInt) -> RegValue {
-  ctx.reg_values.get(reg).or(Unknown)
+  ctx.reg_values.get(reg).unwrap_or(Unknown)
 }
 
 ///|
@@ -257,18 +257,6 @@ fn set_reg_value(ctx : DecompileContext, reg : UInt, value : RegValue) -> Unit {
 
 ///|
 /// Format register value for display
-fn format_reg_value(value : RegValue) -> String {
-  match value {
-    Unknown => "?"
-    Constant(c) => c.to_string()
-    StringAddr(s) => "\"" + s + "\""
-    Address(a) => "0x" + uint_to_hex(a)
-    Expression(e) => e
-  }
-}
-
-///|
-/// Decompile a function to pseudo-code
 pub fn decompile(
   cfg : CFG,
   instructions : FixedArray[DecodedInst],
@@ -861,7 +849,7 @@ pub fn build_dominator_tree(cfg : CFG) -> DominatorTree {
         continue
       }
       // Get predecessors
-      let pred_list = preds.get(block_addr).or([])
+      let pred_list = preds.get(block_addr).unwrap_or([])
       if pred_list.length() == 0 {
         continue
       }
@@ -926,7 +914,7 @@ pub fn build_dominator_tree(cfg : CFG) -> DominatorTree {
   }
   for block in cfg.blocks {
     let addr = block.start_addr
-    let pred_list = preds.get(addr).or([])
+    let pred_list = preds.get(addr).unwrap_or([])
     if pred_list.length() >= 2 {
       for p in pred_list {
         let mut runner = p
@@ -1542,7 +1530,7 @@ fn extract_for_loop_parts(stmts : Array[Statement]) -> (ForInit, ForUpdate) {
         } else {
           update = ForUpdate::Expr(stmt)
         }
-      BinOp(dest, left, _, right) => update = ForUpdate::Expr(stmt)
+      BinOp(_, _, _, _) => update = ForUpdate::Expr(stmt)
       _ => ()
     }
   }
@@ -1866,7 +1854,7 @@ pub fn decompile_structured(
   cfg : CFG,
   instructions : FixedArray[DecodedInst],
   symbol_map : Map[UInt, String],
-  string_map : Map[UInt, String],
+  _string_map : Map[UInt, String],
 ) -> String {
   if cfg.blocks.length() == 0 {
     return "// No code blocks found\n"
@@ -1977,14 +1965,13 @@ pub fn StackFrame::empty() -> StackFrame {
 /// Analyze stack frame for a function
 pub fn analyze_stack_frame(
   instructions : FixedArray[DecodedInst],
-  cfg : CFG,
+  _cfg : CFG,
 ) -> StackFrame {
   if instructions.length() == 0 {
     return StackFrame::empty()
   }
 
   let mut frame_size = 0
-  let mut stack_adjust : Int? = None
   let saved_regs : Array[UInt] = []
   let local_vars : Array[LocalVar] = []
   let params : Array[Param] = []
@@ -2014,7 +2001,6 @@ pub fn analyze_stack_frame(
       @decode.ADDI(rd, rs1, imm) =>
         if rd == 2U && rs1 == 2U && imm < 0 {
           // Stack allocation
-          stack_adjust = Some(-imm)
           frame_size = -imm
         }
       // Save return address: sw ra, offset(sp) or sd ra, offset(sp)
@@ -2052,17 +2038,13 @@ pub fn analyze_stack_frame(
         }
       }
       // Frame pointer setup: addi s0/fp, sp, N or addi s0, sp, 0
-      @decode.ADDI(rd, rs1, imm) =>
+      @decode.ADDI(rd, rs1, _) =>
         if rd == 8U && rs1 == 2U {
           // s0/fp = sp + imm
           has_frame_pointer = true
         }
       // Compressed stack operations
-      @decode.C_ADDI16SP(imm) =>
-        if imm < 0 {
-          stack_adjust = Some(-imm)
-          frame_size = -imm
-        }
+      @decode.C_ADDI16SP(imm) => if imm < 0 { frame_size = -imm }
       @decode.C_SWSP(rs2, imm) =>
         if rs2 == 1U {
           ra_save_offset = Some(imm.reinterpret_as_int())
@@ -2609,9 +2591,9 @@ pub fn infer_type_from_inst(
         source: TypeSource::InstructionOp,
       }
     }
-    @decode.SLLIW(rd, rs1, _)
-    | @decode.SRLIW(rd, rs1, _)
-    | @decode.SRAIW(rd, rs1, _) =>
+    @decode.SLLIW(rd, _, _)
+    | @decode.SRLIW(rd, _, _)
+    | @decode.SRAIW(rd, _, _) =>
       // 32-bit shift operations on RV64
       new_ctx.reg_types[rd] = {
         typ: VarType::Int(32),
@@ -2643,17 +2625,15 @@ pub fn infer_type_from_inst(
         confidence: 75,
         source: TypeSource::InstructionOp,
       }
-    @decode.MULW(rd, rs1, rs2) => {
-      let typ = merge_types(get_reg_type(rs1, ctx), get_reg_type(rs2, ctx))
+    @decode.MULW(rd, _, _) =>
       new_ctx.reg_types[rd] = {
         typ: VarType::Int(32),
         confidence: 85,
         source: TypeSource::InstructionOp,
       }
-    }
 
     // Additional division/remainder operations
-    @decode.DIVU(rd, rs1, _) =>
+    @decode.DIVU(rd, _, _) =>
       new_ctx.reg_types[rd] = {
         typ: VarType::UInt(64),
         confidence: 65,
@@ -2857,9 +2837,9 @@ pub fn infer_type_from_inst(
       }
 
     // Address generation (Zba extension)
-    @decode.SH1ADD(rd, rs1, rs2)
-    | @decode.SH2ADD(rd, rs1, rs2)
-    | @decode.SH3ADD(rd, rs1, rs2) =>
+    @decode.SH1ADD(rd, _, _)
+    | @decode.SH2ADD(rd, _, _)
+    | @decode.SH3ADD(rd, _, _) =>
       // Address calculation - likely pointer
       new_ctx.reg_types[rd] = {
         typ: VarType::Pointer(VarType::Unknown),
@@ -3267,10 +3247,10 @@ pub fn build_enhanced_dom_tree(cfg : CFG) -> EnhancedDomTree {
   while worklist.length() > 0 {
     match worklist.pop() {
       Some(node) => {
-        let node_depth = dom_depth.get(node).or(0)
-        let node_dom_set = dom_sets.get(node).or([])
+        let node_depth = dom_depth.get(node).unwrap_or(0)
+        let node_dom_set = dom_sets.get(node).unwrap_or([])
         // Get children from dominator tree
-        let children = dom_tree.dom_children.get(node).or([])
+        let children = dom_tree.dom_children.get(node).unwrap_or([])
         for child in children {
           dom_depth[child] = node_depth + 1
           // Compute dominator set: doms(child) = {child} ∪ doms(parent)
@@ -3317,7 +3297,7 @@ pub fn build_post_dominator_tree(cfg : CFG) -> DominatorTree {
     }
   }
   for block in cfg.blocks {
-    let succs = succs_map.get(block.start_addr).or([])
+    let succs = succs_map.get(block.start_addr).unwrap_or([])
     // Exit if no successors or ends with return
     if succs.length() == 0 {
       exits.push(block.start_addr)
@@ -3370,7 +3350,7 @@ pub fn build_post_dominator_tree(cfg : CFG) -> DominatorTree {
         continue
       }
       // In post-dominator computation, we look at successors
-      let succs = succs_map.get(block_addr).or([])
+      let succs = succs_map.get(block_addr).unwrap_or([])
       if succs.length() == 0 {
         // Block with no successors post-dominates itself relative to exit
         continue
@@ -3476,7 +3456,7 @@ pub fn detect_unreachable_blocks(cfg : CFG) -> FixedArray[UInt] {
         if !already_visited {
           visited.push(block)
           // Add successors to worklist
-          let block_succs = succs.get(block).or([])
+          let block_succs = succs.get(block).unwrap_or([])
           for s in block_succs {
             worklist.push(s)
           }
@@ -3664,7 +3644,7 @@ pub fn detect_loops_enhanced(cfg : CFG, dom_tree : DominatorTree) -> LoopInfo {
     let depth = compute_loop_depth(nesting, i)
     // Convert Int? to UInt? for parent field
     let parent : UInt? = match parent_int {
-      Some(p) => Some(p.to_uint())
+      Some(p) => Some(p.reinterpret_as_uint())
       None => None
     }
 
@@ -3839,7 +3819,7 @@ pub fn format_enhanced_dom_tree(enhanced : EnhancedDomTree) -> String {
 
   result = result + "\nDominator Depths:\n"
   for addr in enhanced.dom_depth.keys() {
-    let depth = enhanced.dom_depth.get(addr).or(0)
+    let depth = enhanced.dom_depth.get(addr).unwrap_or(0)
     result = result +
       "  0x" +
       uint_to_hex(addr) +
@@ -3850,7 +3830,7 @@ pub fn format_enhanced_dom_tree(enhanced : EnhancedDomTree) -> String {
 
   result = result + "\nDominators Sets:\n"
   for addr in enhanced.dom_sets.keys() {
-    let doms = enhanced.dom_sets.get(addr).or([])
+    let doms = enhanced.dom_sets.get(addr).unwrap_or([])
     result = result + "  0x" + uint_to_hex(addr) + " : "
     for i = 0; i < doms.length(); i = i + 1 {
       if i > 0 {

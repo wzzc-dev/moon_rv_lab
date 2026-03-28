@@ -27,15 +27,6 @@ pub fn elf64_config(entry : UInt) -> ElfWriterConfig {
 }
 
 ///|
-/// Write a 16-bit value in little-endian
-fn write_u16_le(value : UInt) -> FixedArray[Byte] {
-  let arr = FixedArray::make(2, b'\x00')
-  arr[0] = (value & 0xFFU).to_byte()
-  arr[1] = ((value >> 8) & 0xFFU).to_byte()
-  arr
-}
-
-///|
 /// Write a 32-bit value in little-endian
 fn write_u32_le(value : UInt) -> FixedArray[Byte] {
   let arr = FixedArray::make(4, b'\x00')

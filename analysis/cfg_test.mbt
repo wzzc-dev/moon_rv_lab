@@ -592,7 +592,7 @@ test "detect_indirect_call_jalr" {
 }
 
 ///|
-test "analyze_indirect_jumps_empty" {
+test "analyze_indirect_jumps_empty_duplicate_case" {
   let instructions : FixedArray[DecodedInst] = []
   let memory : FixedArray[Byte] = []
 
@@ -713,9 +713,9 @@ test "detect_unreachable_blocks_empty" {
   let instructions = decode_instructions(bytes, 0U)
   let cfg = build_cfg(instructions, 0U)
 
-  let unreachable = @analysis.detect_unreachable_blocks(cfg)
+  let dead_blocks = @analysis.detect_unreachable_blocks(cfg)
 
-  inspect(unreachable.length(), content="0")
+  inspect(dead_blocks.length(), content="0")
 }
 
 ///|
@@ -728,10 +728,10 @@ test "detect_unreachable_blocks_all_reachable" {
   let instructions = decode_instructions(bytes, 0U)
   let cfg = build_cfg(instructions, 0U)
 
-  let unreachable = @analysis.detect_unreachable_blocks(cfg)
+  let dead_blocks = @analysis.detect_unreachable_blocks(cfg)
 
   // All blocks should be reachable
-  inspect(unreachable.length(), content="0")
+  inspect(dead_blocks.length(), content="0")
 }
 
 ///|

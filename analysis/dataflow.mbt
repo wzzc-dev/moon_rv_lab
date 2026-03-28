@@ -4005,9 +4005,9 @@ pub fn propagate_instruction(
           _ => new_state = new_state.set_int(rd, ConstValue::NotConstant)
         }
       }
-    @decode.MULH(rd, rs1, rs2)
-    | @decode.MULHSU(rd, rs1, rs2)
-    | @decode.MULHU(rd, rs1, rs2) =>
+    @decode.MULH(rd, _, _)
+    | @decode.MULHSU(rd, _, _)
+    | @decode.MULHU(rd, _, _) =>
       if rd != 0U {
         // High multiply results are complex, mark as not constant
         new_state = new_state.set_int(rd, ConstValue::NotConstant)
@@ -4097,10 +4097,10 @@ pub fn propagate_instruction(
           _ => new_state = new_state.set_int(rd, ConstValue::NotConstant)
         }
       }
-    @decode.DIVW(rd, rs1, rs2)
-    | @decode.DIVUW(rd, rs1, rs2)
-    | @decode.REMW(rd, rs1, rs2)
-    | @decode.REMUW(rd, rs1, rs2) =>
+    @decode.DIVW(rd, _, _)
+    | @decode.DIVUW(rd, _, _)
+    | @decode.REMW(rd, _, _)
+    | @decode.REMUW(rd, _, _) =>
       if rd != 0U {
         // 32-bit division is complex, mark as not constant for now
         new_state = new_state.set_int(rd, ConstValue::NotConstant)
@@ -4905,7 +4905,6 @@ pub fn compute_conditional_constant_propagation(
     // Propagate through block
     let mut current_state = new_in
     let mut last_branch_inst : @decode.Instruction? = None
-    let mut last_branch_addr : UInt = 0U
 
     let mut addr = block.start_addr
     while addr <= block.end_addr {
@@ -4920,10 +4919,7 @@ pub fn compute_conditional_constant_propagation(
             | @decode.BLTU(_, _, _)
             | @decode.BGEU(_, _, _)
             | @decode.C_BEQZ(_, _)
-            | @decode.C_BNEZ(_, _) => {
-              last_branch_inst = Some(inst.inst)
-              last_branch_addr = addr
-            }
+            | @decode.C_BNEZ(_, _) => last_branch_inst = Some(inst.inst)
             _ => ()
           }
           current_state = propagate_instruction(current_state, inst.inst, addr)
@@ -5849,11 +5845,11 @@ pub fn propagate_interval(
       }
 
     // SLT/SLTU: Set less than
-    @decode.SLT(rd, rs1, rs2) =>
+    @decode.SLT(rd, _, _) =>
       if rd != 0U {
         new_state = new_state.set_int(rd, Interval::range(0, 1))
       }
-    @decode.SLTU(rd, rs1, rs2) =>
+    @decode.SLTU(rd, _, _) =>
       if rd != 0U {
         new_state = new_state.set_int(rd, Interval::range(0, 1))
       }
@@ -6253,7 +6249,7 @@ pub fn FunctionSummary::empty(addr : UInt) -> FunctionSummary {
 /// Analyze a function to build its summary
 pub fn analyze_function_summary(
   instructions : FixedArray[DecodedInst],
-  cfg : CFG,
+  _cfg : CFG,
   func_addr : UInt,
   func_name : String?,
 ) -> FunctionSummary {
@@ -6272,10 +6268,6 @@ pub fn analyze_function_summary(
   ignore(ra_saved) // Will be used in future enhancements
   let frame_setup_detected = false
   ignore(frame_setup_detected) // Will be used in future enhancements
-
-  // Track which argument registers are used
-  let arg_regs_used : Array[Bool] = []
-  // Note: We'll track arg usage through operand analysis below
 
   // Analyze each instruction
   for inst_info in instructions {
