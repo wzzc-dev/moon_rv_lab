@@ -30,5 +30,7 @@ jobs:
           moon test workbench --target native
           moon test cmd/server --target native
           moon run cmd/main -- asm example/simple.s -o out/simple.elf
+          moon run cmd/main -- run out/simple.elf --format json > out/simple.run.json
+          grep '"xlen":64' out/simple.run.json
           moon run cmd/main -- run out/simple.elf --max-steps 20
           moon run cmd/main -- workbench out/simple.elf -o out/workbench.html

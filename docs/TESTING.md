@@ -18,6 +18,8 @@ mkdir -p out
 ~/.moon/bin/moon test workbench --target native
 ~/.moon/bin/moon test cmd/server --target native
 ~/.moon/bin/moon run cmd/main -- asm example/simple.s -o out/simple.elf
+~/.moon/bin/moon run cmd/main -- run out/simple.elf --format json > out/simple.run.json
+grep '"xlen":64' out/simple.run.json
 ~/.moon/bin/moon run cmd/main -- run out/simple.elf --max-steps 20
 ~/.moon/bin/moon run cmd/main -- workbench out/simple.elf -o out/workbench.html
 ```
@@ -25,7 +27,8 @@ mkdir -p out
 预期结果：
 
 - `cmd/main`、`workbench`、`cmd/server` 的 native 测试通过。
-- `out/simple.elf` 可以由 `example/simple.s` 稳定生成。
+- `out/simple.elf` 可以由 `example/simple.s` 稳定生成，且默认产物是 RV64 ELF。
+- `out/simple.run.json` 中的 `xlen` 固定为 `64`。
 - `run out/simple.elf --max-steps 20` 能在给定步数内完成。
 - `out/workbench.html` 成功生成。
 
@@ -56,6 +59,9 @@ Windows 本地说明：
 ### 样例驱动回归
 
 ```bash
+~/.moon/bin/moon run cmd/main -- asm example/simple.s -o out/simple32.elf --xlen 32
+~/.moon/bin/moon run cmd/main -- run out/simple32.elf --max-steps 20
+
 ~/.moon/bin/moon run cmd/main -- asm example/branch_loop.s -o out/branch_loop.elf
 ~/.moon/bin/moon run cmd/main -- run out/branch_loop.elf --max-steps 20
 
@@ -96,6 +102,12 @@ Windows 本地说明：
 5. 检查寄存器、Trace、Memory Writes、Syscalls/Output 联动
 6. 切换 `?file=` 后确认页面重载并同步更新 URL
 7. 刷新后确认 pane 尺寸、tab、过滤器和 `Follow PC` 状态恢复
+
+## RV32 兼容说明
+
+- 默认 smoke 继续以 RV64 `out/simple.elf` 为主基线。
+- 如需验证兼容入口，请显式使用 `--xlen 32` 生成 `out/simple32.elf`。
+- `cmd/server`、`workbench` 和 `run` 都应接受这类显式生成的 RV32 ELF。
 
 ## 当前不作为门禁的检查
 

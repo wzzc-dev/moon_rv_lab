@@ -1,13 +1,13 @@
 # MoonRV Lab / rvkit
 
-MoonBit 编写的 RISC-V 二进制分析与执行实验项目。当前仓库已经具备静态分析、RV64I 执行主干、8 项 syscall、离线 workbench 和在线 `/workbench` 工作台，可直接用于演示、回归和项目验收。
+MoonBit 编写的 RISC-V 二进制分析与执行实验项目。当前仓库已经具备静态分析、默认 RV64 演示链路、显式 RV32 兼容装配入口、8 项 syscall、离线 workbench 和在线 `/workbench` 工作台，可直接用于演示、回归和项目验收。
 
 ## 当前范围
 
 - 静态分析:
   `asm`、`disasm`、`info`、`symbols`、`cfg`、`callgraph`、`analyze`、`decompile`
 - 执行能力:
-  `run`、断点、trace JSON、RV64I 主干执行、`exit/read/write/openat/close/lseek/fstat/brk/ioctl`
+  `run`、断点、trace JSON、按 ELF 位宽装载执行（默认 RV64，显式兼容 RV32）、`exit/read/write/openat/close/lseek/fstat/brk/ioctl`
 - 展示能力:
   离线单文件 `workbench`，在线 `/workbench`，以及 `/api/snapshot` / `/api/stream`
 
@@ -20,7 +20,7 @@ MoonBit 编写的 RISC-V 二进制分析与执行实验项目。当前仓库已�
 # 先汇编默认演示源码
 ~/.moon/bin/moon run cmd/main -- asm example/simple.s -o out/simple.elf
 
-# 运行默认演示 ELF
+# 运行默认 RV64 演示 ELF
 ~/.moon/bin/moon run cmd/main -- run out/simple.elf --max-steps 20
 
 # 断点执行
@@ -31,6 +31,10 @@ MoonBit 编写的 RISC-V 二进制分析与执行实验项目。当前仓库已�
 
 # 生成离线 workbench
 ~/.moon/bin/moon run cmd/main -- workbench out/simple.elf -o out/workbench.html
+
+# 显式生成 RV32 兼容 ELF
+~/.moon/bin/moon run cmd/main -- asm example/simple.s -o out/simple32.elf --xlen 32
+~/.moon/bin/moon run cmd/main -- run out/simple32.elf --max-steps 20
 ```
 
 ## 在线访问
@@ -71,6 +75,9 @@ MoonBit 编写的 RISC-V 二进制分析与执行实验项目。当前仓库已�
 ## 样例说明
 
 `example/simple.s` 是默认演示源码入口。运行 `run` / `workbench` / `cmd/server` 前，请先在 `out/` 下生成临时 `simple.elf`。文件 I/O 和 syscall 演示请优先使用以下源码样例并在 `out/` 下生成临时 ELF:
+
+- 默认 `asm example/simple.s -o out/simple.elf` 会生成 RV64 ELF。
+- 如需兼容 RV32 样例或旧基线，请显式传 `--xlen 32`，例如 `asm example/simple.s -o out/simple32.elf --xlen 32`。
 
 - `example/file_open_read_close.s`
 - `example/file_lseek_read.s`

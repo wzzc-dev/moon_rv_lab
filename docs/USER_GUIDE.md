@@ -19,6 +19,8 @@ mkdir -p out
 ~/.moon/bin/moon run cmd/main -- run out/simple.elf --max-steps 20
 ```
 
+默认 `asm` 会生成 RV64 ELF，因此 `run out/simple.elf` 的摘要里会显示 `XLEN: 64`。
+
 你会看到:
 
 - `Entry`
@@ -66,6 +68,18 @@ JSON 顶层包含:
 ~/.moon/bin/moon run cmd/main -- asm example/branch_loop.s -o out/branch_loop.elf
 ~/.moon/bin/moon run cmd/main -- run out/branch_loop.elf --max-steps 20
 ```
+
+### 6. 显式生成 RV32 兼容 ELF
+
+```bash
+~/.moon/bin/moon run cmd/main -- asm example/simple.s -o out/simple32.elf --xlen 32
+~/.moon/bin/moon run cmd/main -- run out/simple32.elf --max-steps 20
+```
+
+预期现象:
+
+- `out/simple32.elf` 仍可被 `run`、`workbench`、`cmd/server` 使用
+- 执行摘要中的 `XLEN` 变为 `32`
 
 ## 路径二: 离线 Workbench
 

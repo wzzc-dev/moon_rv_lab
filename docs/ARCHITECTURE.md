@@ -27,6 +27,7 @@ format / asm / decode / disasm / analysis   cmd/server
 ### `asm/`
 
 - 把最小 RISC-V 汇编源码转成内部指令和 ELF/hex/raw 输出。
+- 默认 `asm` 产出 RV64 ELF，显式 `--xlen 32` 保留 RV32 兼容入口。
 - 样例和测试中的 `.s` 文件主要通过这一层进入系统。
 
 ### `format/`
@@ -49,7 +50,8 @@ format / asm / decode / disasm / analysis   cmd/server
 
 - 当前唯一执行后端。
 - 负责 ELF 装载后的初始状态建立、`step`、`run_with_limit`、断点、寄存器/内存 diff、trace 记录。
-- 当前执行目标是 RV64I 主干，syscall 覆盖 `exit/read/write/openat/close/lseek/fstat/brk/ioctl`。
+- 按输入 ELF 的位宽建立执行状态；当前默认演示链路走 RV64，显式 `--xlen 32` 仍可生成并执行 RV32 ELF。
+- syscall 覆盖 `exit/read/write/openat/close/lseek/fstat/brk/ioctl`。
 
 ### `workbench/`
 

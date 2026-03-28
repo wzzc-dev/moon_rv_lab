@@ -5,6 +5,7 @@
 ## 使用约定
 
 - 汇编源码默认先转 ELF，再交给 `run` 或 `workbench`。
+- 默认 `asm` 产出 RV64 ELF；如需兼容 RV32，请显式传 `--xlen 32`。
 - 推荐把临时产物写到 `out/`，避免把生成物混入样例目录。
 - 默认命令统一使用 `~/.moon/bin/moon ...`。
 
@@ -38,16 +39,19 @@
 
 1. `example/simple.s`
    命令: `~/.moon/bin/moon run cmd/main -- asm example/simple.s -o out/simple.elf`
-   作用: 先生成默认演示 ELF，作为后续 `run` / `workbench` / `cmd/server` 的统一输入。
-2. `out/simple.elf`
+   作用: 先生成默认 RV64 演示 ELF，作为后续 `run` / `workbench` / `cmd/server` 的统一输入。
+2. `example/simple.s`
+   命令: `~/.moon/bin/moon run cmd/main -- asm example/simple.s -o out/simple32.elf --xlen 32`
+   作用: 需要兼容旧 RV32 基线时，显式生成备用 ELF。
+3. `out/simple.elf`
    命令: `~/.moon/bin/moon run cmd/main -- run out/simple.elf --max-steps 20`
    作用: 先展示执行引擎、寄存器变化和 stop reason。
-3. `out/simple.elf`
+4. `out/simple.elf`
    命令: `~/.moon/bin/moon run cmd/main -- workbench out/simple.elf -o out/workbench.html`
    作用: 展示离线 Godbolt 风格工作台。
-4. `example/file_open_read_close.s`
+5. `example/file_open_read_close.s`
    命令: `~/.moon/bin/moon run cmd/main -- asm example/file_open_read_close.s -o out/file_open_read_close.elf`
    作用: 进入 syscall + 文件 I/O 演示。
-5. 在线工作台
+6. 在线工作台
    命令: `~/.moon/bin/moon run cmd/server --target native -- --file out/simple.elf --port 18080`
    作用: 浏览器中展示 `/workbench`、文件切换、单步和播放。

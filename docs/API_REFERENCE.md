@@ -2,6 +2,16 @@
 
 ## CLI 命令
 
+### `asm`
+
+```bash
+~/.moon/bin/moon run cmd/main -- asm <file> [-o <output>] [--format elf|hex|raw] [--base <addr>] [--xlen 32|64]
+```
+
+- `--xlen` 仅影响 ELF 输出。
+- 默认值为 `64`，因此 `asm example/simple.s -o out/simple.elf` 会生成 RV64 ELF。
+- 显式传 `--xlen 32` 可保留 RV32 兼容产物，例如 `out/simple32.elf`。
+
 ### `run`
 
 ```bash
@@ -75,6 +85,8 @@
 - runtime 初始状态
 - 完整执行事件
 - Godbolt 风格 UI 壳
+
+输入可以是默认生成的 RV64 ELF，也可以是显式 `--xlen 32` 生成的 RV32 ELF。
 
 ## `workbench/` 包
 
