@@ -1,10 +1,17 @@
 ///|
 test "index html exposes online workbench entry" {
   let html = build_index_html(default_options())
+  assert_true(html.contains("MoonRV Lab Online Workbench"))
+  assert_true(
+    html.contains("面向演示、回归和课堂实验的在线入口"),
+  )
   assert_true(html.contains("/workbench?file=out/simple.elf"))
   assert_true(html.contains("Open Online Workbench"))
+  assert_true(html.contains("查看 Quick Start"))
   assert_true(html.contains("Quick Start"))
   assert_true(html.contains("默认文件"))
+  assert_true(html.contains("在线工作台"))
+  assert_true(html.contains("离线工作台"))
   assert_true(
     html.contains(
       "moon run cmd/main -- workbench out/simple.elf -o out/workbench.html",
@@ -15,6 +22,14 @@ test "index html exposes online workbench entry" {
   )
   assert_true(html.contains("Primary APIs"))
   assert_true(html.contains("Compatibility APIs"))
+  assert_true(
+    html.contains(
+      "overview/function 为主接口，snapshot/stream 为兼容接口",
+    ),
+  )
+  assert_true(
+    html.contains("Windows 上的 server 原生回归依赖 MSVC 工具链"),
+  )
   assert_true(html.contains("GET /workbench?file=&lt;path&gt;"))
   assert_true(html.contains("/api/workbench/overview"))
   assert_true(html.contains("/api/workbench/function"))
@@ -40,5 +55,10 @@ test "workbench route html embeds online bootstrap config" {
   )
   assert_true(html.contains("class=\"workbench-shell\""))
   assert_true(html.contains("id=\"file-input\""))
+  assert_true(html.contains("id=\"file-load-btn\""))
+  assert_true(html.contains("\"default_file\":\"out/simple.elf\""))
+  assert_true(html.contains("boot.default_file"))
+  assert_true(html.contains("id=\"help-panel\""))
+  assert_true(html.contains("How to use"))
   assert_true(html.contains("id=\"cfg-subtitle\""))
 }

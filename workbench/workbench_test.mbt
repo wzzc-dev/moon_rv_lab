@@ -147,6 +147,27 @@ test "generated workbench html includes godbolt style panes and controls" {
 }
 
 ///|
+test "generated workbench html keeps navigation and actionable hint hooks" {
+  let path = write_test_elf("workbench_copy", branch_trace_program())
+  let output = TEST_DIR + "/workbench_copy.html"
+  match
+    generate_from_file(path, output, create_options("Guided Workbench", 20)) {
+    None => ()
+    Some(err) => abort(err.to_string())
+  }
+
+  let html = read_text_file(output)
+  assert_true(html.contains("6. Trace / Memory / Syscalls"))
+  assert_true(html.contains("click to focus"))
+  assert_true(html.contains("selected"))
+  assert_true(html.contains("current pc"))
+  assert_true(html.contains("--max-inst"))
+  assert_true(html.contains("focus="))
+  assert_true(html.contains("step=0 pc=initial"))
+  assert_true(html.contains("filter="))
+}
+
+///|
 test "overview api json includes hello navigation metadata" {
   let path = write_test_elf("overview_api", branch_trace_program())
   let json = overview_api_json_from_file(path, 200)
@@ -210,8 +231,21 @@ test "online workbench html bootstraps from overview and function apis" {
   assert_true(html.contains("xlen: 0"))
   assert_true(html.contains("id=\"file-input\""))
   assert_true(html.contains("id=\"file-load-btn\""))
+  assert_true(html.contains("\"default_file\":\"out/simple.elf\""))
+  assert_true(html.contains("boot.default_file"))
   assert_true(html.contains("id=\"help-panel\""))
   assert_true(html.contains("id=\"help-toggle\""))
+  assert_true(html.contains("How to use"))
+  assert_true(html.contains("1. 载入文件"))
+  assert_true(html.contains("3. 搜索 / 跳转"))
+  assert_true(html.contains("6. Trace / Memory / Syscalls"))
+  assert_true(html.contains("点击地址同步搜索"))
+  assert_true(html.contains("当前过滤条件下没有匹配函数。"))
+  assert_true(
+    html.contains(
+      "可清空搜索，或输入精确地址后按 Enter 跳转。",
+    ),
+  )
   assert_true(html.contains("class=\"workbench-shell\""))
   assert_true(html.contains("class=\"pane-tabs\""))
   assert_true(

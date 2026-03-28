@@ -17,4 +17,13 @@
 | TODO-13 | 已完成 | 改进 workbench 空态、错误态和截断提示，让每种状态都给出下一步操作 | `moon test workbench --target native` | `feat: 改进 workbench 的空态与错误提示` |
 | TODO-14 | 已完成 | 增强函数导航、节区联动、搜索过滤和当前执行位置的可发现性 | `moon test workbench --target native` | `feat: 增强 workbench 导航与过滤可发现性` |
 | TODO-15 | 已完成 | 同步 README、用户文档和 API 参考中的前端使用说明，消除页面与文档偏差 | `moon test workbench --target native`<br>`moon test cmd/main --target native` | `docs: 同步前端页面使用说明与接口文档` |
-| TODO-16 | 待处理 | 加固前端入口页与 workbench 使用层回归，并在收尾时写回实际提交记录 | `moon test workbench --target native`<br>`moon test cmd/server --target native`<br>`moon run cmd/main -- asm example/simple.s -o out/simple.elf`<br>`moon run cmd/main -- workbench out/simple.elf -o out/workbench.html` | `test: 加固前端入口与 workbench 使用回归` |
+| TODO-16 | 已完成 | 加固前端入口页与 workbench 使用层回归，并在收尾时写回实际提交记录 | `moon test workbench --target native`<br>`moon test cmd/server --target native`<br>`moon run cmd/main -- asm example/simple.s -o out/simple.elf`<br>`moon run cmd/main -- workbench out/simple.elf -o out/workbench.html` | `test: 加固前端入口与 workbench 使用回归` |
+
+## 本轮提交记录
+
+- `feat: 强化在线入口页与新一轮 TODO 基线`
+- `feat: 为 workbench 增加首屏使用引导`
+- `feat: 改进 workbench 的空态与错误提示`
+- `feat: 增强 workbench 导航与过滤可发现性`
+- `docs: 同步前端页面使用说明与接口文档`
+- `test: 加固前端入口与 workbench 使用回归`
