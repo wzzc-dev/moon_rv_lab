@@ -1,0 +1,36 @@
+name: Windows MSVC Native Check
+
+on:
+  workflow_dispatch:
+  push:
+  pull_request:
+
+jobs:
+  native-msvc:
+    runs-on: windows-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up MoonBit
+        shell: bash
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+
+      - name: Run Windows MSVC supplemental regression
+        shell: cmd
+        run: |
+          if not exist out mkdir out
+          for /f "usebackq delims=" %%i in (`"%ProgramFiles(x86)%\Microsoft Visual Studio\Installer\vswhere.exe" -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath`) do set "VSINSTALL=%%i"
+          if not defined VSINSTALL exit /b 1
+          call "%VSINSTALL%\VC\Auxiliary\Build\vcvars64.bat"
+          moon update
+          moon test cmd/server --target native
+          moon test cmd/main --target native
+          moon run cmd/main -- asm example/simple.s -o out/simple.elf
+          moon run cmd/main -- run out/simple.elf --max-steps 20

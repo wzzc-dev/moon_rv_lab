@@ -3,6 +3,7 @@
 ## 稳定 Smoke 回归
 
 稳定 smoke 回归是当前发布门禁，对应 workflow 为 `.github/workflows/stable-smoke.yml`。
+Linux smoke 继续作为主门禁；Windows/MSVC 仅作为补充校验，对应 `.github/workflows/windows-msvc-native.yml`，不替代现有 Linux 主线。
 
 如果本地没有 `out/` 目录，先创建一次：
 
@@ -36,6 +37,27 @@ Windows 本地说明：
 
 - `moon test cmd/server --target native` 依赖 `moonbitlang/async` 的 MSVC 工具链支持。
 - 在 Windows 上请优先使用 Visual Studio Developer Command Prompt，或先执行 `vcvars64.bat` 再跑该命令。
+
+## Windows MSVC 补充校验
+
+Windows 原生补充校验对应 workflow `.github/workflows/windows-msvc-native.yml`。
+它的目标是验证 `cmd/server` 的 MSVC 原生测试链路，同时补一条最小 CLI smoke；Linux `.github/workflows/stable-smoke.yml` 仍然是主门禁。
+
+GitHub Actions 中的命令顺序：
+
+```cmd
+moon update
+moon test cmd/server --target native
+moon test cmd/main --target native
+moon run cmd/main -- asm example/simple.s -o out/simple.elf
+moon run cmd/main -- run out/simple.elf --max-steps 20
+```
+
+Windows 本地执行要求：
+
+- 优先使用 Visual Studio Developer Command Prompt for VS 2022。
+- 如果当前终端不是该环境，先执行 `vcvars64.bat`，再运行上面的命令。
+- 该补充校验主要用于确认 MSVC 原生编译链路可用，不改变 Linux smoke 的发布优先级。
 
 ## 重型 / 完整回归
 
