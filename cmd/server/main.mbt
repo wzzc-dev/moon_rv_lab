@@ -19,72 +19,241 @@ const DEFAULT_INTERVAL_MS : Int = 350
 ///|
 const INDEX_STYLE : String =
   #|:root {
-  #|  --bg: #f7fafc;
-  #|  --ink: #0f172a;
-  #|  --muted: #475569;
-  #|  --line: #dbe3ee;
-  #|  --panel: #ffffff;
+  #|  --bg: #eef5f4;
+  #|  --bg-strong: #dce9e6;
+  #|  --ink: #13232f;
+  #|  --muted: #49606d;
+  #|  --line: #c7d8d5;
+  #|  --panel: rgba(255, 255, 255, 0.88);
+  #|  --panel-strong: #ffffff;
   #|  --accent: #0f766e;
+  #|  --accent-2: #164e63;
+  #|  --accent-soft: #d7f0ea;
+  #|  --shadow: 0 18px 48px rgba(19, 35, 47, 0.10);
   #|}
   #|* { box-sizing: border-box; }
   #|body {
   #|  margin: 0;
-  #|  background: linear-gradient(180deg, #f8fbff 0%, #eef4fb 100%);
+  #|  min-height: 100vh;
+  #|  background:
+  #|    radial-gradient(circle at top left, rgba(15, 118, 110, 0.14), transparent 32%),
+  #|    radial-gradient(circle at top right, rgba(22, 78, 99, 0.12), transparent 28%),
+  #|    linear-gradient(180deg, var(--bg) 0%, #f8fbfa 100%);
   #|  color: var(--ink);
   #|  font-family: "SFMono-Regular", "Iosevka", "JetBrains Mono", monospace;
   #|}
-  #|#root { padding: 12px; }
-  #|#app {
-  #|  margin-top: 12px;
+  #|a {
+  #|  color: inherit;
+  #|}
+  #|#root {
+  #|  max-width: 1120px;
+  #|  margin: 0 auto;
+  #|  padding: 24px 16px 40px;
+  #|}
+  #|.hero {
+  #|  position: relative;
+  #|  overflow: hidden;
+  #|  border: 1px solid rgba(19, 35, 47, 0.08);
+  #|  border-radius: 28px;
+  #|  padding: 28px;
+  #|  background:
+  #|    linear-gradient(145deg, rgba(255, 255, 255, 0.92) 0%, rgba(231, 245, 242, 0.96) 100%);
+  #|  box-shadow: var(--shadow);
+  #|}
+  #|.hero::after {
+  #|  content: "";
+  #|  position: absolute;
+  #|  inset: auto -12% -34% auto;
+  #|  width: 280px;
+  #|  height: 280px;
+  #|  border-radius: 50%;
+  #|  background: radial-gradient(circle, rgba(15, 118, 110, 0.16), transparent 68%);
+  #|  pointer-events: none;
+  #|}
+  #|.eyebrow {
+  #|  display: inline-flex;
+  #|  align-items: center;
+  #|  gap: 8px;
+  #|  padding: 6px 10px;
+  #|  border-radius: 999px;
+  #|  background: var(--accent-soft);
+  #|  color: var(--accent);
+  #|  font-size: 12px;
+  #|  font-weight: 700;
+  #|  letter-spacing: 0.02em;
+  #|  text-transform: uppercase;
+  #|}
+  #|.hero h1 {
+  #|  margin: 14px 0 10px;
+  #|  font-size: clamp(30px, 5vw, 46px);
+  #|  line-height: 1.08;
+  #|}
+  #|.subtitle {
+  #|  max-width: 760px;
+  #|  margin: 0;
+  #|  color: var(--muted);
+  #|  font-size: 14px;
+  #|  line-height: 1.7;
+  #|}
+  #|.hero-strip {
+  #|  display: grid;
+  #|  grid-template-columns: repeat(3, minmax(0, 1fr));
+  #|  gap: 12px;
+  #|  align-items: center;
+  #|  margin: 18px 0 0;
+  #|}
+  #|.stat {
+  #|  border: 1px solid rgba(19, 35, 47, 0.08);
+  #|  border-radius: 16px;
+  #|  padding: 12px 14px;
+  #|  background: rgba(255, 255, 255, 0.72);
+  #|}
+  #|.stat-label {
+  #|  display: block;
+  #|  color: var(--muted);
+  #|  font-size: 11px;
+  #|  margin-bottom: 6px;
+  #|  text-transform: uppercase;
+  #|  letter-spacing: 0.06em;
+  #|}
+  #|.stat-value {
+  #|  font-size: 14px;
+  #|  line-height: 1.5;
+  #|  word-break: break-word;
+  #|}
+  #|.cta-row {
+  #|  display: flex;
+  #|  flex-wrap: wrap;
+  #|  gap: 10px;
+  #|  margin-top: 18px;
+  #|}
+  #|.button,
+  #|button,
+  #|input {
   #|  border: 1px solid var(--line);
   #|  border-radius: 12px;
-  #|  background: var(--panel);
-  #|  padding: 12px;
-  #|}
-  #|.toolbar {
-  #|  display: grid;
-  #|  grid-template-columns: minmax(220px, 1fr) repeat(3, auto);
-  #|  gap: 8px;
-  #|  align-items: center;
-  #|  margin-bottom: 10px;
-  #|}
-  #|input, button {
-  #|  border: 1px solid var(--line);
-  #|  border-radius: 8px;
-  #|  padding: 8px 10px;
-  #|  background: white;
+  #|  padding: 10px 14px;
+  #|  background: var(--panel-strong);
   #|  color: var(--ink);
   #|  font-family: inherit;
   #|  font-size: 12px;
   #|}
+  #|.button {
+  #|  display: inline-flex;
+  #|  align-items: center;
+  #|  justify-content: center;
+  #|  text-decoration: none;
+  #|}
   #|button { cursor: pointer; }
+  #|.button.primary,
   #|button.primary {
   #|  background: var(--accent);
   #|  color: #fff;
   #|  border-color: var(--accent);
   #|}
-  #|.split {
-  #|  display: grid;
-  #|  grid-template-columns: 1fr 1fr;
-  #|  gap: 10px;
+  #|.button.secondary {
+  #|  background: rgba(255, 255, 255, 0.66);
   #|}
-  #|pre, .trace {
-  #|  border: 1px solid var(--line);
-  #|  border-radius: 10px;
-  #|  background: #fff;
-  #|  padding: 8px;
+  #|.section {
+  #|  margin-top: 18px;
+  #|  border: 1px solid rgba(19, 35, 47, 0.08);
+  #|  border-radius: 22px;
+  #|  background: var(--panel);
+  #|  box-shadow: var(--shadow);
+  #|  backdrop-filter: blur(8px);
+  #|}
+  #|.section-body {
+  #|  padding: 22px;
+  #|}
+  #|.section-head {
+  #|  display: flex;
+  #|  justify-content: space-between;
+  #|  gap: 12px;
+  #|  align-items: end;
+  #|  margin-bottom: 16px;
+  #|}
+  #|.section-head h2 {
   #|  margin: 0;
-  #|  overflow: auto;
-  #|  max-height: 260px;
-  #|  font-size: 12px;
+  #|  font-size: 18px;
   #|}
-  #|table { width: 100%; border-collapse: collapse; font-size: 12px; }
-  #|th, td { border-bottom: 1px solid var(--line); padding: 4px 6px; text-align: left; }
-  #|tr.active td { background: #e6fff6; }
-  #|.hint { color: var(--muted); font-size: 12px; margin: 8px 0; }
+  #|.section-head p {
+  #|  margin: 0;
+  #|  color: var(--muted);
+  #|  font-size: 12px;
+  #|  line-height: 1.6;
+  #|}
+  #|.grid-3,
+  #|.grid-2 {
+  #|  display: grid;
+  #|  gap: 12px;
+  #|}
+  #|.grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  #|.grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #|.card {
+  #|  border: 1px solid rgba(19, 35, 47, 0.08);
+  #|  border-radius: 18px;
+  #|  padding: 16px;
+  #|  background: var(--panel-strong);
+  #|}
+  #|.card h3 {
+  #|  margin: 0 0 10px;
+  #|  font-size: 15px;
+  #|}
+  #|.card p {
+  #|  margin: 0;
+  #|  color: var(--muted);
+  #|  font-size: 12px;
+  #|  line-height: 1.65;
+  #|}
+  #|.code-block {
+  #|  margin-top: 12px;
+  #|  border-radius: 14px;
+  #|  background: #0f1d26;
+  #|  color: #e9fbf8;
+  #|  padding: 12px;
+  #|  white-space: pre-wrap;
+  #|  word-break: break-word;
+  #|  font-size: 12px;
+  #|  line-height: 1.7;
+  #|}
+  #|.route-list,
+  #|.steps {
+  #|  margin: 0;
+  #|  padding-left: 18px;
+  #|}
+  #|.route-list li,
+  #|.steps li {
+  #|  margin: 8px 0;
+  #|  color: var(--muted);
+  #|  font-size: 12px;
+  #|  line-height: 1.6;
+  #|}
+  #|code {
+  #|  padding: 2px 6px;
+  #|  border-radius: 999px;
+  #|  background: var(--bg-strong);
+  #|  color: var(--accent-2);
+  #|}
+  #|.small-note {
+  #|  color: var(--muted);
+  #|  font-size: 12px;
+  #|  line-height: 1.6;
+  #|}
   #|@media (max-width: 1024px) {
-  #|  .toolbar { grid-template-columns: 1fr 1fr; }
-  #|  .split { grid-template-columns: 1fr; }
+  #|  .hero-strip,
+  #|  .grid-3,
+  #|  .grid-2 {
+  #|    grid-template-columns: 1fr;
+  #|  }
+  #|  .section-head {
+  #|    align-items: start;
+  #|    flex-direction: column;
+  #|  }
+  #|}
+  #|@media (max-width: 720px) {
+  #|  #root { padding: 16px 12px 28px; }
+  #|  .hero,
+  #|  .section-body { padding: 18px; }
   #|}
 
 ///|
@@ -246,48 +415,187 @@ fn render_page_body(opts : ServeOptions) -> String {
     "div",
     [("id", @luna.attr_static("root"))],
     [
-      @luna.h("h1", [], [@luna.text("MoonRV Lab Online Workbench")]),
-      @luna.h("p", [], [
-        @luna.text(
-          "在线入口页。完整 Godbolt 风格工作台请使用 /workbench。",
-        ),
-      ]),
-      @luna.h("p", [], [
-        @luna.h("a", [("href", @luna.attr_static(workbench_href))], [
-          @luna.text("Open Online Workbench"),
+      @luna.h("section", [("class", @luna.attr_static("hero"))], [
+        @luna.h("div", [("class", @luna.attr_static("eyebrow"))], [
+          @luna.text("Quick Start"),
         ]),
-      ]),
-      @luna.h("p", [], [
-        @luna.text(
-          "Primary APIs: /api/workbench/overview for overview data, /api/workbench/function for per-function slices.",
-        ),
-      ]),
-      @luna.h("p", [], [
-        @luna.text(
-          "Compatibility APIs: /api/snapshot and /api/stream remain available for existing integrations.",
-        ),
-      ]),
-      @luna.h("p", [], [@luna.text("默认文件: " + opts.default_file)]),
-      @luna.h("ul", [], [
-        @luna.h("li", [], [@luna.text("GET /workbench?file=<path>")]),
-        @luna.h("li", [], [@luna.text("GET /api/health")]),
-        @luna.h("li", [], [
-          @luna.text("GET /api/workbench/overview?file=<path>&max_events=<n>"),
-        ]),
-        @luna.h("li", [], [
+        @luna.h("h1", [], [@luna.text("MoonRV Lab Online Workbench")]),
+        @luna.h("p", [("class", @luna.attr_static("subtitle"))], [
           @luna.text(
-            "GET /api/workbench/function?file=<path>&addr=<hex-or-name>",
+            "面向演示、回归和课堂实验的在线入口。推荐先打开在线 workbench，再按需切换 ELF；离线路径和 API 契约也在这里给出。",
           ),
         ]),
-        @luna.h("li", [], [
-          @luna.text("GET /api/snapshot?file=<path>&max_inst=<n>"),
-        ]),
-        @luna.h("li", [], [
-          @luna.text(
-            "GET /api/stream?file=<path>&max_inst=<n>&max_events=<n>&interval_ms=<ms>",
+        @luna.h("div", [("class", @luna.attr_static("cta-row"))], [
+          @luna.h(
+            "a",
+            [
+              ("class", @luna.attr_static("button primary")),
+              ("href", @luna.attr_static(workbench_href)),
+            ],
+            [@luna.text("Open Online Workbench")],
+          ),
+          @luna.h(
+            "a",
+            [
+              ("class", @luna.attr_static("button secondary")),
+              ("href", @luna.attr_static("#quick-start")),
+            ],
+            [@luna.text("查看 Quick Start")],
           ),
         ]),
+        @luna.h("div", [("class", @luna.attr_static("hero-strip"))], [
+          @luna.h("div", [("class", @luna.attr_static("stat"))], [
+            @luna.h("span", [("class", @luna.attr_static("stat-label"))], [
+              @luna.text("默认文件"),
+            ]),
+            @luna.h("span", [("class", @luna.attr_static("stat-value"))], [
+              @luna.text(opts.default_file),
+            ]),
+          ]),
+          @luna.h("div", [("class", @luna.attr_static("stat"))], [
+            @luna.h("span", [("class", @luna.attr_static("stat-label"))], [
+              @luna.text("推荐入口"),
+            ]),
+            @luna.h("span", [("class", @luna.attr_static("stat-value"))], [
+              @luna.text("/workbench?file=<path>"),
+            ]),
+          ]),
+          @luna.h("div", [("class", @luna.attr_static("stat"))], [
+            @luna.h("span", [("class", @luna.attr_static("stat-label"))], [
+              @luna.text("接口定位"),
+            ]),
+            @luna.h("span", [("class", @luna.attr_static("stat-value"))], [
+              @luna.text(
+                "overview/function 为主接口，snapshot/stream 为兼容接口",
+              ),
+            ]),
+          ]),
+        ]),
       ]),
+      @luna.h(
+        "section",
+        [
+          ("class", @luna.attr_static("section")),
+          ("id", @luna.attr_static("quick-start")),
+        ],
+        [
+          @luna.h("div", [("class", @luna.attr_static("section-body"))], [
+            @luna.h("div", [("class", @luna.attr_static("section-head"))], [
+              @luna.h("div", [], [
+                @luna.h("h2", [], [@luna.text("Quick Start")]),
+                @luna.h("p", [], [
+                  @luna.text(
+                    "首页优先解决“先做什么”。在线与离线两条路径都给出最短闭环。",
+                  ),
+                ]),
+              ]),
+            ]),
+            @luna.h("div", [("class", @luna.attr_static("grid-3"))], [
+              @luna.h("article", [("class", @luna.attr_static("card"))], [
+                @luna.h("h3", [], [@luna.text("在线工作台")]),
+                @luna.h("p", [], [
+                  @luna.text(
+                    "直接打开浏览器工作台，适合演示、调试和多 ELF 切换。默认文件会自动带入查询参数。",
+                  ),
+                ]),
+                @luna.h("div", [("class", @luna.attr_static("code-block"))], [
+                  @luna.text("/workbench?file=out/simple.elf"),
+                ]),
+              ]),
+              @luna.h("article", [("class", @luna.attr_static("card"))], [
+                @luna.h("h3", [], [@luna.text("离线工作台")]),
+                @luna.h("p", [], [
+                  @luna.text(
+                    "生成单文件 HTML，适合录屏、分享和不依赖 server 的场景。",
+                  ),
+                ]),
+                @luna.h("div", [("class", @luna.attr_static("code-block"))], [
+                  @luna.text(
+                    "moon run cmd/main -- workbench out/simple.elf -o out/workbench.html",
+                  ),
+                ]),
+              ]),
+              @luna.h("article", [("class", @luna.attr_static("card"))], [
+                @luna.h("h3", [], [@luna.text("CLI 运行")]),
+                @luna.h("p", [], [
+                  @luna.text(
+                    "先汇编，再执行，确认样例和默认 RV64 链路可用。",
+                  ),
+                ]),
+                @luna.h("div", [("class", @luna.attr_static("code-block"))], [
+                  @luna.text(
+                    "moon run cmd/main -- asm example/simple.s -o out/simple.elf\nmoon run cmd/main -- run out/simple.elf --max-steps 20",
+                  ),
+                ]),
+              ]),
+            ]),
+            @luna.h("div", [("class", @luna.attr_static("grid-2"))], [
+              @luna.h("article", [("class", @luna.attr_static("card"))], [
+                @luna.h("h3", [], [@luna.text("在线使用步骤")]),
+                @luna.h("ol", [("class", @luna.attr_static("steps"))], [
+                  @luna.h("li", [], [
+                    @luna.text(
+                      "启动 server，并确认默认文件已经生成。",
+                    ),
+                  ]),
+                  @luna.h("li", [], [
+                    @luna.text(
+                      "打开 online workbench，先看 overview，再选择函数。",
+                    ),
+                  ]),
+                  @luna.h("li", [], [
+                    @luna.text(
+                      "使用搜索框按地址、函数名、指令文本或 category 过滤。",
+                    ),
+                  ]),
+                  @luna.h("li", [], [
+                    @luna.text(
+                      "通过 Reset / Prev / Next / Play 和 Follow PC 浏览执行轨迹。",
+                    ),
+                  ]),
+                ]),
+              ]),
+              @luna.h("article", [("class", @luna.attr_static("card"))], [
+                @luna.h("h3", [], [
+                  @luna.text("Primary APIs 与 Compatibility APIs"),
+                ]),
+                @luna.h("p", [], [
+                  @luna.text(
+                    "Primary APIs: /api/workbench/overview 提供首屏概要，/api/workbench/function 提供函数切片；Compatibility APIs: /api/snapshot 与 /api/stream 继续服务现有集成。",
+                  ),
+                ]),
+                @luna.h("ul", [("class", @luna.attr_static("route-list"))], [
+                  @luna.h("li", [], [@luna.text("GET /workbench?file=<path>")]),
+                  @luna.h("li", [], [@luna.text("GET /api/health")]),
+                  @luna.h("li", [], [
+                    @luna.text(
+                      "GET /api/workbench/overview?file=<path>&max_events=<n>",
+                    ),
+                  ]),
+                  @luna.h("li", [], [
+                    @luna.text(
+                      "GET /api/workbench/function?file=<path>&addr=<hex-or-name>",
+                    ),
+                  ]),
+                  @luna.h("li", [], [
+                    @luna.text("GET /api/snapshot?file=<path>&max_inst=<n>"),
+                  ]),
+                  @luna.h("li", [], [
+                    @luna.text(
+                      "GET /api/stream?file=<path>&max_inst=<n>&max_events=<n>&interval_ms=<ms>",
+                    ),
+                  ]),
+                ]),
+              ]),
+            ]),
+            @luna.h("p", [("class", @luna.attr_static("small-note"))], [
+              @luna.text(
+                "Windows 上的 server 原生回归依赖 MSVC 工具链；普通 PowerShell + GCC 不在支持路径内。",
+              ),
+            ]),
+          ]),
+        ],
+      ),
     ],
   )
   let sb = StringBuilder::new(size_hint=1024)

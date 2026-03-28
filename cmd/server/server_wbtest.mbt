@@ -3,6 +3,18 @@ test "index html exposes online workbench entry" {
   let html = build_index_html(default_options())
   assert_true(html.contains("/workbench?file=out/simple.elf"))
   assert_true(html.contains("Open Online Workbench"))
+  assert_true(html.contains("Quick Start"))
+  assert_true(html.contains("默认文件"))
+  assert_true(
+    html.contains(
+      "moon run cmd/main -- workbench out/simple.elf -o out/workbench.html",
+    ),
+  )
+  assert_true(
+    html.contains("moon run cmd/main -- asm example/simple.s -o out/simple.elf"),
+  )
+  assert_true(html.contains("Primary APIs"))
+  assert_true(html.contains("Compatibility APIs"))
   assert_true(html.contains("GET /workbench?file=&lt;path&gt;"))
   assert_true(html.contains("/api/workbench/overview"))
   assert_true(html.contains("/api/workbench/function"))
