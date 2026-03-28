@@ -2345,6 +2345,20 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    refs.helpToggle.classList.toggle("active", !state.helpCollapsed);
   #|  }
   #|
+  #|  function tableEmptyState(colspan, message, action) {
+  #|    return `<tr><td colspan="${colspan}" class="empty-panel"><div>${escapeHtml(message)}</div><div class="muted" style="margin-top:4px">${escapeHtml(action || "")}</div></td></tr>`;
+  #|  }
+  #|
+  #|  function panelEmptyState(message, action) {
+  #|    return `<div class="empty-panel"><div>${escapeHtml(message)}</div><div class="muted" style="margin-top:4px">${escapeHtml(action || "")}</div></div>`;
+  #|  }
+  #|
+  #|  function filterActionHint() {
+  #|    return queryText()
+  #|      ? "可清空搜索，或输入精确地址后按 Enter 直接跳转。"
+  #|      : "可从左侧函数列表开始，或在搜索框输入地址后按 Enter 跳转。";
+  #|  }
+  #|
   #|  function renderSummary() {
   #|    const entries = [
   #|      ["入口", overview.meta.entry_point],
@@ -2363,7 +2377,7 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    refs.sectionListCount.textContent = `${(overview.sections || []).length} items`;
   #|    refs.sectionList.innerHTML = (overview.sections || []).map((section) => {
   #|      return `<button class="nav-row" data-section-query="${escapeHtml(section.addr)}"><div class="nav-row-title"><span>#${section.index} ${escapeHtml(section.name)}</span></div><div class="nav-row-meta">${escapeHtml(section.addr)} / ${escapeHtml(section.size)}</div></button>`;
-  #|    }).join("") || '<div class="empty-panel">无节区信息</div>';
+  #|    }).join("") || panelEmptyState("当前 ELF 未提供节区信息。", "请确认输入文件是有效的 RISC-V ELF，或先回到默认文件重新加载。");
   #|  }
   #|
   #|  function renderFunctions() {
@@ -2384,13 +2398,16 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    const visibleFunctions = filteredFunctions();
   #|    refs.functionListCount.textContent = `${visibleFunctions.length}/${(overview.functions || []).length}`;
   #|    const currentFn = currentFunctionForCursor();
+  #|    const emptyMessage = queryText()
+  #|      ? panelEmptyState("当前过滤条件下没有匹配函数。", "可清空搜索，或输入精确地址后按 Enter 跳转。")
+  #|      : panelEmptyState("当前 ELF 没有函数符号。", "可先点击节区地址，或在搜索框输入地址后按 Enter 浏览。");
   #|    refs.functionList.innerHTML = visibleFunctions.map((fn) => {
   #|      const active = state.selectedFunctionAddr === fn.addr;
   #|      const current = currentFn && currentFn.addr === fn.addr;
   #|      const runtimeBadge = fn.has_runtime_event ? '<span class="badge">trace</span>' : "";
   #|      const currentBadge = current ? '<span class="badge current">PC</span>' : "";
   #|      return `<button class="nav-row${active ? " active" : ""}${current ? " current" : ""}" data-fn-addr="${fn.addr}"><div class="nav-row-title"><span>${escapeHtml(fn.name)}</span>${currentBadge}${runtimeBadge}</div><div class="nav-row-meta">${escapeHtml(fn.addr)} | inst ${fn.instruction_count} | blocks ${fn.block_count}</div></button>`;
-  #|    }).join("") || '<div class="empty-panel">无函数符号</div>';
+  #|    }).join("") || emptyMessage;
   #|  }
   #|
   #|  function renderBanner() {
@@ -2401,14 +2418,14 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    }
   #|    const messages = [];
   #|    if (Number(overview.meta.total_instruction_count || 0) > PROGRAM_ROW_LIMIT) {
-  #|      messages.push(`program truncated: total ${overview.meta.total_instruction_count}, overview only`);
+  #|      messages.push(`当前程序共有 ${overview.meta.total_instruction_count} 条指令，页面仅展示前 ${overview.meta.instruction_count} 条。可通过 CLI 参数 --max-inst 调整，或先选择函数缩小范围。`);
   #|    }
   #|    if (runtimeStoppedEarly()) {
-  #|      messages.push(`runtime stopped early: ${overview.runtime.stop_reason}`);
+  #|      messages.push(`运行提前停止：${overview.runtime.stop_reason}。请在 Trace 中定位最后一步，并结合 Syscalls/Output 面板排查原因。`);
   #|    }
   #|    const slice = selectedSlice();
   #|    if (state.selectedFunctionAddr && slice && slice.available === false) {
-  #|      messages.push(`slice unavailable: ${slice.reason || state.selectedFunctionAddr}`);
+  #|      messages.push(`函数切片不可用：${slice.reason || state.selectedFunctionAddr}。请切换到其他函数，或刷新页面后重试。`);
   #|    }
   #|    refs.truncatedBanner.style.display = messages.length > 0 ? "block" : "none";
   #|    refs.truncatedBanner.textContent = messages.join(" | ");
@@ -2473,13 +2490,13 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    const fn = selectedFunction();
   #|    refs.viewPill.textContent = fn ? fn.name : "No function";
   #|    if (!slice) {
-  #|      refs.disasmSubtitle.textContent = "no slice selected";
-  #|      refs.disasmBody.innerHTML = '<tr><td colspan="4" class="empty-panel">请选择函数</td></tr>';
+  #|      refs.disasmSubtitle.textContent = "先选择函数开始浏览";
+  #|      refs.disasmBody.innerHTML = tableEmptyState(4, "请先选择一个函数。", "可从左侧函数列表或顶部函数选择框开始。");
   #|      return;
   #|    }
   #|    if (slice.available === false) {
-  #|      refs.disasmSubtitle.textContent = "slice unavailable";
-  #|      refs.disasmBody.innerHTML = `<tr><td colspan="4" class="empty-panel">${escapeHtml(slice.reason || "slice unavailable")}</td></tr>`;
+  #|      refs.disasmSubtitle.textContent = "函数切片不可用";
+  #|      refs.disasmBody.innerHTML = tableEmptyState(4, slice.reason || "函数切片不可用。", "请切换到其他函数，或刷新页面后重试。");
   #|      return;
   #|    }
   #|    const instructions = filteredInstructions();
@@ -2494,19 +2511,19 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|          const focus = state.focusedAddr === inst.addr;
   #|          return `<tr data-addr="${inst.addr}" class="${active ? "active" : ""}${focus && !active ? " focus" : ""}"><td>${inst.index}</td><td>${escapeHtml(inst.addr)}</td><td>${escapeHtml(inst.category)}</td><td class="code-cell">${escapeHtml(inst.asm)}</td></tr>`;
   #|        }).join("")
-  #|      : '<tr><td colspan="4" class="empty-panel">当前函数下没有匹配指令</td></tr>';
+  #|      : tableEmptyState(4, "当前过滤条件下没有匹配指令。", filterActionHint());
   #|  }
   #|
   #|  function renderCfg() {
   #|    const slice = selectedSlice();
   #|    if (!slice) {
-  #|      refs.cfgSubtitle.textContent = "no slice selected";
-  #|      refs.cfgView.innerHTML = '<div class="empty-panel">请选择函数</div>';
+  #|      refs.cfgSubtitle.textContent = "先选择函数开始浏览";
+  #|      refs.cfgView.innerHTML = panelEmptyState("请先选择一个函数。", "选择函数后即可查看该函数的 CFG 与边关系。");
   #|      return;
   #|    }
   #|    if (slice.available === false) {
-  #|      refs.cfgSubtitle.textContent = "slice unavailable";
-  #|      refs.cfgView.innerHTML = `<div class="empty-panel">${escapeHtml(slice.reason || "slice unavailable")}</div>`;
+  #|      refs.cfgSubtitle.textContent = "函数切片不可用";
+  #|      refs.cfgView.innerHTML = panelEmptyState(slice.reason || "函数切片不可用。", "请切换到其他函数，或刷新页面后重试。");
   #|      return;
   #|    }
   #|    const blocks = slice.blocks || [];
@@ -2516,7 +2533,7 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    const currentAddr = event ? hexToBigInt(event.addr) : null;
   #|    const note = [];
   #|    if (blocks.length > CFG_BLOCK_LIMIT || edges.length > CFG_EDGE_LIMIT) {
-  #|      note.push(`已截断: blocks ${Math.min(blocks.length, CFG_BLOCK_LIMIT)}/${blocks.length}, edges ${Math.min(edges.length, CFG_EDGE_LIMIT)}/${edges.length}`);
+  #|      note.push(`CFG 已截断：当前仅展示 blocks ${Math.min(blocks.length, CFG_BLOCK_LIMIT)}/${blocks.length}，edges ${Math.min(edges.length, CFG_EDGE_LIMIT)}/${edges.length}。可先收窄到具体函数或地址附近继续查看。`);
   #|    }
   #|    const cards = blocks.slice(0, CFG_BLOCK_LIMIT).map((block) => {
   #|      const start = hexToBigInt(block.start_addr);
@@ -2529,10 +2546,10 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    }).join("");
   #|    refs.cfgView.innerHTML = `
   #|      ${note.length ? `<div class="empty-panel" style="padding-top:0">${escapeHtml(note.join(" | "))}</div>` : ""}
-  #|      <div class="cfg-grid">${cards || '<div class="empty-panel">无 CFG block</div>'}</div>
+  #|      <div class="cfg-grid">${cards || panelEmptyState("当前函数没有 CFG block。", "请切换函数，或检查该函数是否已成功解码。")}</div>
   #|      <table class="mono">
   #|        <thead><tr><th>from</th><th>to</th><th>edge</th></tr></thead>
-  #|        <tbody>${edgeRows || '<tr><td colspan="3" class="empty-panel">无边关系</td></tr>'}</tbody>
+  #|        <tbody>${edgeRows || tableEmptyState(3, "当前函数没有可展示的边关系。", "可结合 Disassembly 和 Trace 面板继续确认控制流。")}</tbody>
   #|      </table>
   #|    `;
   #|  }
@@ -2730,7 +2747,7 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|      }
   #|      return slice;
   #|    } catch (err) {
-  #|      const unavailable = createUnavailableSlice(key, `failed to load slice: ${String(err)}`);
+  #|      const unavailable = createUnavailableSlice(key, `函数切片加载失败：${String(err)}。请切换到其他函数，或刷新页面后重试。`);
   #|      sliceCache.set(key, unavailable);
   #|      return unavailable;
   #|    }
@@ -2796,7 +2813,7 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|  async function loadOverview(file, syncHistory) {
   #|    const targetFile = String(file || "").trim();
   #|    if (!targetFile) {
-  #|      state.loadError = "file path is required";
+  #|      state.loadError = "文件路径为空。请先输入 ELF 路径，或回到默认文件后重新加载。";
   #|      applyOverviewData(createEmptyOverview(""), "", false);
   #|      renderAll();
   #|      return;
@@ -2823,7 +2840,7 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|      await ensureDefaultSelection();
   #|    } catch (err) {
   #|      state.loading = false;
-  #|      state.loadError = `overview failed: ${String(err)}`;
+  #|      state.loadError = `文件加载失败：${String(err)}。请确认路径存在、文件可读且是有效的 RISC-V ELF。`;
   #|      applyOverviewData(createEmptyOverview(targetFile), targetFile, false);
   #|    }
   #|    renderAll();
