@@ -15,6 +15,15 @@ fn ensure_test_dir() -> Unit {
 
 ///|
 fn write_test_elf(name : String, source : String) -> String {
+  write_test_elf_with_xlen(name, source, 64)
+}
+
+///|
+fn write_test_elf_with_xlen(
+  name : String,
+  source : String,
+  xlen : Int,
+) -> String {
   ensure_test_dir()
   let path = TEST_DIR + "/" + name + ".elf"
   if @fs.path_exists(path) {
@@ -26,7 +35,12 @@ fn write_test_elf(name : String, source : String) -> String {
   if assembled.errors.length() != 0 {
     abort("assembly failed")
   }
-  let elf = @format.assemble_to_elf(@asm.encode_to_bytes(assembled), TEST_BASE)
+  let bytes = @asm.encode_to_bytes(assembled)
+  let elf = if xlen == 32 {
+    @format.assemble_to_elf32(bytes, TEST_BASE)
+  } else {
+    @format.assemble_to_elf64(bytes, TEST_BASE)
+  }
   @fs.write_bytes_to_file(path, Bytes::from_array(elf)) catch {
     _ => abort("failed to write elf")
   }
@@ -56,9 +70,25 @@ test "workbench snapshot json includes runtime metadata" {
   let json = snapshot_api_json_from_file(path, 20)
   assert_true(json.contains("\"ok\":true"))
   assert_true(json.contains("\"initial_pc\":\"0x10000\""))
+  assert_true(json.contains("\"file_class\":\"ELF64\""))
+  assert_true(json.contains("\"xlen\":64"))
   assert_true(json.contains("\"instruction_count\":5"))
   assert_true(json.contains("\"runtime_event_count\":4"))
   assert_true(json.contains("\"initial_registers\""))
+}
+
+///|
+test "workbench snapshot json preserves rv32 xlen metadata" {
+  let path = write_test_elf_with_xlen(
+    "snapshot_runtime_rv32",
+    branch_trace_program(),
+    32,
+  )
+  let json = snapshot_api_json_from_file(path, 20)
+  assert_true(json.contains("\"ok\":true"))
+  assert_true(json.contains("\"file_class\":\"ELF32\""))
+  assert_true(json.contains("\"xlen\":32"))
+  assert_true(json.contains("\"instruction_count\":5"))
 }
 
 ///|
@@ -104,6 +134,7 @@ test "generated workbench html includes godbolt style panes and controls" {
   assert_true(html.contains("localStorage"))
   assert_true(html.contains("\"embedded_overview\""))
   assert_true(html.contains("\"embedded_function_slices\""))
+  assert_true(html.contains("\"xlen\":64"))
   assert_true(html.contains("overview.events"))
   assert_true(html.contains("overview.runtime.initial_registers"))
   assert_false(html.contains("id=\"current-function-only\""))
@@ -114,6 +145,8 @@ test "overview api json includes hello navigation metadata" {
   let path = write_test_elf("overview_api", branch_trace_program())
   let json = overview_api_json_from_file(path, 200)
   assert_true(json.contains("\"ok\":true"))
+  assert_true(json.contains("\"file_class\":\"ELF64\""))
+  assert_true(json.contains("\"xlen\":64"))
   assert_true(json.contains("\"function_count\":1"))
   assert_true(json.contains("\"instruction_count\":5"))
   assert_true(json.contains("\"total_instruction_count\":5"))
@@ -122,6 +155,21 @@ test "overview api json includes hello navigation metadata" {
   assert_true(json.contains("\"sections\""))
   assert_true(json.contains("\"runtime\""))
   assert_true(json.contains("\"events\""))
+}
+
+///|
+test "overview api json preserves rv32 xlen metadata" {
+  let path = write_test_elf_with_xlen(
+    "overview_api_rv32",
+    branch_trace_program(),
+    32,
+  )
+  let json = overview_api_json_from_file(path, 200)
+  assert_true(json.contains("\"ok\":true"))
+  assert_true(json.contains("\"file_class\":\"ELF32\""))
+  assert_true(json.contains("\"xlen\":32"))
+  assert_true(json.contains("\"function_count\":1"))
+  assert_true(json.contains("\"instruction_count\":5"))
 }
 
 ///|
@@ -153,6 +201,7 @@ test "online workbench html bootstraps from overview and function apis" {
   )
   assert_true(html.contains("boot.overview_endpoint"))
   assert_true(html.contains("boot.function_endpoint"))
+  assert_true(html.contains("xlen: 0"))
   assert_true(html.contains("id=\"file-input\""))
   assert_true(html.contains("id=\"file-load-btn\""))
   assert_true(html.contains("class=\"workbench-shell\""))

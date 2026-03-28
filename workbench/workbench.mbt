@@ -40,6 +40,7 @@ struct WorkbenchMeta {
   source_file : String
   entry_point : String
   file_class : String
+  xlen : Int
   architecture : String
   section_count : Int
   program_count : Int
@@ -202,6 +203,7 @@ priv struct StaticProgramIndex {
   source_file : String
   entry_point : UInt
   file_class : String
+  xlen : Int
   architecture : String
   section_count : Int
   program_count : Int
@@ -490,6 +492,11 @@ fn load_static_program_index(
               "ELF64"
             } else {
               "ELF32"
+            },
+            xlen: if elf.is_64bit {
+              64
+            } else {
+              32
             },
             architecture: if elf.is_riscv() {
               "RISC-V"
@@ -980,6 +987,7 @@ fn build_workbench_meta(
     source_file: index.source_file,
     entry_point: format_hex(index.entry_point),
     file_class: index.file_class,
+    xlen: index.xlen,
     architecture: index.architecture,
     section_count: index.section_count,
     program_count: index.program_count,
@@ -1384,6 +1392,7 @@ fn to_json_meta(meta : WorkbenchMeta) -> String {
   json = json + ",\"source_file\":" + json_string(meta.source_file)
   json = json + ",\"entry_point\":" + json_string(meta.entry_point)
   json = json + ",\"file_class\":" + json_string(meta.file_class)
+  json = json + ",\"xlen\":" + meta.xlen.to_string()
   json = json + ",\"architecture\":" + json_string(meta.architecture)
   json = json + ",\"section_count\":" + meta.section_count.to_string()
   json = json + ",\"program_count\":" + meta.program_count.to_string()
@@ -1979,6 +1988,7 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|        source_file: sourceFile || boot.initial_file || boot.default_file || "",
   #|        entry_point: "0x0",
   #|        file_class: "",
+  #|        xlen: 0,
   #|        architecture: "",
   #|        section_count: 0,
   #|        program_count: 0,
@@ -3988,6 +3998,7 @@ fn build_html_page(title : String, boot_json : String) -> String {
     "            source_file: sourceFile || boot.initial_file || boot.default_file || '',\n"
   html = html + "            entry_point: '0x0',\n"
   html = html + "            file_class: '',\n"
+  html = html + "            xlen: 0,\n"
   html = html + "            architecture: '',\n"
   html = html + "            section_count: 0,\n"
   html = html + "            program_count: 0,\n"
