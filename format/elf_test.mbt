@@ -621,6 +621,51 @@ test "write_elf32_executable" {
 }
 
 ///|
+test "write_elf64_executable" {
+  let code : FixedArray[Byte] = FixedArray::make(4, b'\x00')
+  code[0] = 0x13U.to_byte()
+  code[1] = 0x05U.to_byte()
+  code[2] = 0x20U.to_byte()
+  code[3] = 0x02U.to_byte()
+
+  let elf = write_elf64_executable(code, 0x10000U, 0x10000U)
+
+  assert_true(elf[0] == b'\x7f')
+  assert_true(elf[1] == b'E')
+  assert_true(elf[2] == b'L')
+  assert_true(elf[3] == b'F')
+  assert_true(elf[4] == b'\x02')
+  assert_true(elf[5] == b'\x01')
+  assert_true(elf[18] == 0xF3U.to_byte())
+
+  match parse_elf(elf) {
+    Some(parsed) => {
+      assert_true(parsed.is_64bit)
+      assert_true(parsed.is_riscv())
+      assert_eq(parsed.entry_point(), 0x10000U)
+    }
+    None => abort("expected parseable ELF64 output")
+  }
+}
+
+///|
+test "assemble_to_elf32" {
+  let code : FixedArray[Byte] = FixedArray::make(4, b'\x00')
+  code[0] = 0x13U.to_byte()
+  code[1] = 0x05U.to_byte()
+  code[2] = 0x20U.to_byte()
+  code[3] = 0x02U.to_byte()
+
+  let elf = assemble_to_elf32(code, 0x10000U)
+
+  assert_true(is_elf(elf))
+  match parse_elf(elf) {
+    Some(parsed) => assert_false(parsed.is_64bit)
+    None => abort("expected parseable ELF32 output")
+  }
+}
+
+///|
 test "assemble_to_elf" {
   // Create simple code
   let code : FixedArray[Byte] = FixedArray::make(4, b'\x00')
@@ -633,4 +678,8 @@ test "assemble_to_elf" {
 
   // Should be parseable
   assert_true(is_elf(elf))
+  match parse_elf(elf) {
+    Some(parsed) => assert_true(parsed.is_64bit)
+    None => abort("expected parseable ELF64 output")
+  }
 }

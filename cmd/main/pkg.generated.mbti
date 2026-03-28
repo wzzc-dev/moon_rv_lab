@@ -22,6 +22,7 @@ pub struct AsmOptions {
   output_file : String
   format : AsmOutputFormat
   base_addr : UInt
+  xlen : Int
 }
 pub impl Show for AsmOptions
 

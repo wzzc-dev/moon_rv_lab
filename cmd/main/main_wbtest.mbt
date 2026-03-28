@@ -8,6 +8,9 @@ const SIMPLE_SOURCE_PATH : String = "example/simple.s"
 const SIMPLE_ELF_PATH : String = CLI_TEST_DIR + "/simple.elf"
 
 ///|
+const SIMPLE_ELF32_PATH : String = CLI_TEST_DIR + "/simple32.elf"
+
+///|
 fn ensure_cli_test_dir() -> Unit {
   if !@fs.path_exists(CLI_TEST_DIR) {
     @fs.create_dir(CLI_TEST_DIR) catch {
@@ -34,9 +37,10 @@ fn must_read_text(path : String) -> String {
 }
 
 ///|
-fn must_prepare_simple_elf() -> String {
+fn must_prepare_simple_elf_with_xlen(xlen : Int) -> String {
+  let output_path = if xlen == 32 { SIMPLE_ELF32_PATH } else { SIMPLE_ELF_PATH }
   ensure_cli_test_dir()
-  reset_cli_test_file(SIMPLE_ELF_PATH)
+  reset_cli_test_file(output_path)
   match read_file_string(SIMPLE_SOURCE_PATH) {
     Some(source) => {
       let result = @asm.assemble_with_symbols(source, 0x10000U)
@@ -44,24 +48,34 @@ fn must_prepare_simple_elf() -> String {
         abort("failed to assemble example/simple.s")
       }
       let bytes = @asm.encode_to_bytes(result)
-      let elf = @format.assemble_to_elf(bytes, 0x10000U)
-      if !write_file_bytes(SIMPLE_ELF_PATH, elf) {
+      let elf = if xlen == 32 {
+        @format.assemble_to_elf32(bytes, 0x10000U)
+      } else {
+        @format.assemble_to_elf64(bytes, 0x10000U)
+      }
+      if !write_file_bytes(output_path, elf) {
         abort("failed to write simple elf fixture")
       }
-      SIMPLE_ELF_PATH
+      output_path
     }
     None => abort("failed to read example/simple.s")
   }
 }
 
 ///|
+fn must_prepare_simple_elf() -> String {
+  must_prepare_simple_elf_with_xlen(64)
+}
+
+///|
 fn simple_run_options(
+  xlen : Int,
   format : OutputFormat,
   trace : String,
   breakpoints : Array[String],
 ) -> RunOptions {
   {
-    file_path: must_prepare_simple_elf(),
+    file_path: must_prepare_simple_elf_with_xlen(xlen),
     entry: "",
     max_steps: 20,
     breakpoints,
@@ -92,12 +106,28 @@ test "parse run args supports entry break trace and format" {
 }
 
 ///|
+test "parse asm args supports xlen selection" {
+  match
+    parse_asm_args([
+      "asm", "example/simple.s", "-o", "out/simple.elf", "--xlen", "32",
+    ]) {
+    Some(Command::Asm(opts)) => {
+      assert_eq(opts.input_file, "example/simple.s")
+      assert_eq(opts.output_file, "out/simple.elf")
+      assert_eq(opts.xlen, 32)
+    }
+    _ => abort("expected asm command")
+  }
+}
+
+///|
 test "run command text output summarizes execution" {
-  match execute_run_result(simple_run_options(OutputFormat::Text, "", [])) {
+  match execute_run_result(simple_run_options(64, OutputFormat::Text, "", [])) {
     Success(output) => {
       assert_true(output.contains("Execution Summary"))
       assert_true(output.contains("Entry: 0x10000"))
       assert_true(output.contains("PC: 0x1002c"))
+      assert_true(output.contains("XLEN: 64"))
       assert_true(output.contains("Steps: 12"))
       assert_true(output.contains("Stop Reason: ebreak @0x1002c"))
       assert_true(output.contains("a0: 0x2a"))
@@ -110,10 +140,10 @@ test "run command text output summarizes execution" {
 
 ///|
 test "run command json output includes snapshot and trace" {
-  match execute_run_result(simple_run_options(OutputFormat::Json, "", [])) {
+  match execute_run_result(simple_run_options(64, OutputFormat::Json, "", [])) {
     Success(output) => {
       assert_true(output.contains("\"entry\":\"0x10000\""))
-      assert_true(output.contains("\"xlen\":32"))
+      assert_true(output.contains("\"xlen\":64"))
       assert_true(output.contains("\"snapshot\":{\"pc\":\"0x1002c\""))
       assert_true(output.contains("\"stop_reason\":\"ebreak @0x1002c\""))
       assert_true(output.contains("\"trace\":["))
@@ -127,7 +157,9 @@ test "run command json output includes snapshot and trace" {
 ///|
 test "run command stops before configured breakpoint" {
   match
-    execute_run_result(simple_run_options(OutputFormat::Text, "", ["0x10010"])) {
+    execute_run_result(
+      simple_run_options(64, OutputFormat::Text, "", ["0x10010"]),
+    ) {
     Success(output) => {
       assert_true(output.contains("PC: 0x10010"))
       assert_true(output.contains("Steps: 4"))
@@ -146,7 +178,9 @@ test "run command writes structured trace file" {
   reset_cli_test_file(trace_path)
 
   match
-    execute_run_result(simple_run_options(OutputFormat::Text, trace_path, [])) {
+    execute_run_result(
+      simple_run_options(64, OutputFormat::Text, trace_path, []),
+    ) {
     Success(output) => {
       assert_true(output.contains("Execution Summary"))
       assert_true(@fs.path_exists(trace_path))
@@ -154,6 +188,18 @@ test "run command writes structured trace file" {
       assert_true(trace.contains("\"step\":1"))
       assert_true(trace.contains("\"addr\":\"0x10000\""))
       assert_true(trace.contains("\"stop_reason\":\"ebreak @0x1002c\""))
+    }
+    Failure(err) => abort(err)
+  }
+}
+
+///|
+test "run command remains compatible with explicit rv32 fixtures" {
+  match execute_run_result(simple_run_options(32, OutputFormat::Json, "", [])) {
+    Success(output) => {
+      assert_true(output.contains("\"xlen\":32"))
+      assert_true(output.contains("\"entry\":\"0x10000\""))
+      assert_true(output.contains("\"stop_reason\":\"ebreak @0x1002c\""))
     }
     Failure(err) => abort(err)
   }

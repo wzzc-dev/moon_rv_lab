@@ -49,6 +49,7 @@ pub struct AsmOptions {
   output_file : String
   format : AsmOutputFormat
   base_addr : UInt
+  xlen : Int
 } derive(Show)
 
 ///|
@@ -336,6 +337,7 @@ fn parse_asm_args(args : Array[String]) -> Command? {
   let mut output_file = ""
   let mut format = AsmOutputFormat::Elf
   let mut base_addr = 0x10000U
+  let mut xlen = 64
 
   let mut i = 1
   while i < args.length() {
@@ -369,6 +371,21 @@ fn parse_asm_args(args : Array[String]) -> Command? {
       } else {
         return None
       }
+    } else if arg == "--xlen" {
+      if i + 1 < args.length() {
+        match parse_uint_dec(args[i + 1]) {
+          Some(value) =>
+            if value == 32U || value == 64U {
+              xlen = value.reinterpret_as_int()
+            } else {
+              return None
+            }
+          None => return None
+        }
+        i = i + 2
+      } else {
+        return None
+      }
     } else if arg[0] != '-' {
       input_file = arg
       i = i + 1
@@ -381,7 +398,7 @@ fn parse_asm_args(args : Array[String]) -> Command? {
     return None
   }
 
-  Some(Command::Asm({ input_file, output_file, format, base_addr }))
+  Some(Command::Asm({ input_file, output_file, format, base_addr, xlen }))
 }
 
 ///|
@@ -939,6 +956,7 @@ fn print_usage() -> Unit {
   println("  --output, -o <file>     Output file path")
   println("  --format, -f <fmt>      Output format: elf (default), hex, raw")
   println("  --base, -b <addr>       Base address (default: 0x10000)")
+  println("  --xlen <32|64>          ELF word size (default: 64)")
   println("")
   println("Workbench Options:")
   println(
@@ -1772,7 +1790,11 @@ fn execute_asm(opts : AsmOptions) -> Unit {
       // Output based on format
       match opts.format {
         AsmOutputFormat::Elf => {
-          let elf = @format.assemble_to_elf(bytes, opts.base_addr)
+          let elf = if opts.xlen == 32 {
+            @format.assemble_to_elf32(bytes, opts.base_addr)
+          } else {
+            @format.assemble_to_elf64(bytes, opts.base_addr)
+          }
           if opts.output_file == "" {
             // Output to stdout as hex
             println("ELF binary (\{elf.length()} bytes):")
@@ -1811,6 +1833,7 @@ fn execute_asm(opts : AsmOptions) -> Unit {
       // Show summary
       println("")
       println("Assembly summary:")
+      println("  XLEN: \{opts.xlen}")
       println("  Instructions: \{result.instructions.length()}")
       println("  Symbols: \{result.symbols.entries.length()}")
       if result.symbols.entries.length() > 0 {

@@ -182,6 +182,10 @@ pub const STT_SECTION : UInt = 3
 
 pub fn assemble_to_elf(FixedArray[Byte], UInt) -> FixedArray[Byte]
 
+pub fn assemble_to_elf32(FixedArray[Byte], UInt) -> FixedArray[Byte]
+
+pub fn assemble_to_elf64(FixedArray[Byte], UInt) -> FixedArray[Byte]
+
 pub fn default_elf_config(UInt) -> ElfWriterConfig
 
 pub fn detect_format(FixedArray[Byte]) -> BinaryFormat
@@ -197,6 +201,10 @@ pub fn dw_lne_from_uint(UInt) -> DWLNE
 pub fn dw_lns_from_uint(UInt) -> DWLNS
 
 pub fn dw_tag_from_uint(UInt) -> DWTag
+
+pub fn elf32_config(UInt) -> ElfWriterConfig
+
+pub fn elf64_config(UInt) -> ElfWriterConfig
 
 pub fn execute_line_program(LineNumberProgramHeader, FixedArray[Byte]) -> Array[LineEntry]
 
@@ -289,6 +297,8 @@ pub fn read_uleb128_at(FixedArray[Byte], Int) -> (Int, UInt)?
 pub fn resolve_type_name(UInt, Map[UInt, DWARFType]) -> String
 
 pub fn write_elf32_executable(FixedArray[Byte], UInt, UInt) -> FixedArray[Byte]
+
+pub fn write_elf64_executable(FixedArray[Byte], UInt, UInt) -> FixedArray[Byte]
 
 // Errors
 
