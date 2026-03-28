@@ -124,6 +124,11 @@ test "generated workbench html includes godbolt style panes and controls" {
 
   let html = read_text_file(output)
   assert_true(html.contains("class=\"workbench-shell\""))
+  assert_true(html.contains("id=\"help-panel\""))
+  assert_true(html.contains("id=\"help-toggle\""))
+  assert_true(html.contains("How to use"))
+  assert_true(html.contains("Reset / Prev / Next / Play"))
+  assert_true(html.contains("Follow PC"))
   assert_true(html.contains("class=\"splitter splitter-x\""))
   assert_true(html.contains("class=\"pane-tabs\""))
   assert_true(html.contains("class=\"main-grid\""))
@@ -132,6 +137,7 @@ test "generated workbench html includes godbolt style panes and controls" {
   assert_true(html.contains("id=\"recent-writes\""))
   assert_true(html.contains("class=\"pane result-pane\""))
   assert_true(html.contains("localStorage"))
+  assert_true(html.contains("helpCollapsed"))
   assert_true(html.contains("\"embedded_overview\""))
   assert_true(html.contains("\"embedded_function_slices\""))
   assert_true(html.contains("\"xlen\":64"))
@@ -204,6 +210,8 @@ test "online workbench html bootstraps from overview and function apis" {
   assert_true(html.contains("xlen: 0"))
   assert_true(html.contains("id=\"file-input\""))
   assert_true(html.contains("id=\"file-load-btn\""))
+  assert_true(html.contains("id=\"help-panel\""))
+  assert_true(html.contains("id=\"help-toggle\""))
   assert_true(html.contains("class=\"workbench-shell\""))
   assert_true(html.contains("class=\"pane-tabs\""))
   assert_true(

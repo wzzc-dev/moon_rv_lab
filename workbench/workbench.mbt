@@ -1888,6 +1888,9 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    registerGroups: document.getElementById("register-groups"),
   #|    recentWrites: document.getElementById("recent-writes"),
   #|    truncatedBanner: document.getElementById("truncated-banner"),
+  #|    helpPanel: document.getElementById("help-panel"),
+  #|    helpSubtitle: document.getElementById("help-subtitle"),
+  #|    helpToggle: document.getElementById("help-toggle"),
   #|    resetBtn: document.getElementById("reset-btn"),
   #|    prevBtn: document.getElementById("prev-btn"),
   #|    nextBtn: document.getElementById("next-btn"),
@@ -1917,6 +1920,7 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    selectedFunctionAddr: "",
   #|    searchText: "",
   #|    activeTab: "trace",
+  #|    helpCollapsed: false,
   #|    followPcEnabled: true,
   #|    showChangedRegistersOnly: false,
   #|    layout: {
@@ -2047,6 +2051,7 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    state.activeTab = ["trace", "memory", "syscalls"].includes(stored.activeTab)
   #|      ? stored.activeTab
   #|      : "trace";
+  #|    state.helpCollapsed = stored.helpCollapsed === true;
   #|    state.followPcEnabled = stored.followPcEnabled !== false;
   #|    state.showChangedRegistersOnly = stored.showChangedRegistersOnly === true;
   #|    state.layout.navWidth = clampNumber(stored.navWidth, 180, 420, 240);
@@ -2063,6 +2068,7 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|        selectedFunctionAddr: state.selectedFunctionAddr,
   #|        searchText: state.searchText,
   #|        activeTab: state.activeTab,
+  #|        helpCollapsed: state.helpCollapsed,
   #|        followPcEnabled: state.followPcEnabled,
   #|        showChangedRegistersOnly: state.showChangedRegistersOnly,
   #|        navWidth: state.layout.navWidth,
@@ -2326,6 +2332,17 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|      : (state.currentFile || "未选择文件");
   #|    refs.statusPill.textContent = statusLabel();
   #|    refs.fileToolbarField.classList.toggle("hidden", !REMOTE_MODE);
+  #|  }
+  #|
+  #|  function renderHelpPanel() {
+  #|    const modeText = REMOTE_MODE
+  #|      ? "在线模式：可输入 ELF 路径并通过 workbench API 拉取 overview 与函数切片。"
+  #|      : "离线模式：当前 HTML 已嵌入 overview 与函数切片，打开后即可直接浏览。";
+  #|    const fileText = overview.meta.source_file || state.currentFile || boot.default_file || "未选择文件";
+  #|    refs.helpPanel.classList.toggle("collapsed", state.helpCollapsed);
+  #|    refs.helpSubtitle.textContent = `${modeText} 当前文件：${fileText}`;
+  #|    refs.helpToggle.textContent = state.helpCollapsed ? "展开使用说明" : "收起使用说明";
+  #|    refs.helpToggle.classList.toggle("active", !state.helpCollapsed);
   #|  }
   #|
   #|  function renderSummary() {
@@ -2628,6 +2645,7 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|
   #|  function renderOverviewPanels() {
   #|    renderHeader();
+  #|    renderHelpPanel();
   #|    renderSummary();
   #|    renderSections();
   #|    renderFunctions();
@@ -3007,6 +3025,12 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    renderToolbarState();
   #|  });
   #|
+  #|  refs.helpToggle.addEventListener("click", () => {
+  #|    state.helpCollapsed = !state.helpCollapsed;
+  #|    saveUiState();
+  #|    renderHelpPanel();
+  #|  });
+  #|
   #|  refs.changedRegistersToggle.addEventListener("click", () => {
   #|    state.showChangedRegistersOnly = !state.showChangedRegistersOnly;
   #|    saveUiState();
@@ -3242,6 +3266,51 @@ fn build_html_page(title : String, boot_json : String) -> String {
   html = html + "      border-bottom: 1px solid #f0cf99;\n"
   html = html + "      background: var(--warning-bg);\n"
   html = html + "      color: var(--warning-ink);\n"
+  html = html + "    }\n"
+  html = html + "    .help-panel {\n"
+  html = html + "      margin-bottom: 12px;\n"
+  html = html + "      border: 1px solid var(--line);\n"
+  html = html +
+    "      background: linear-gradient(180deg, #f7fbff 0%, #f2f8ff 100%);\n"
+  html = html + "    }\n"
+  html = html + "    .help-panel.collapsed .help-body {\n"
+  html = html + "      display: none;\n"
+  html = html + "    }\n"
+  html = html + "    .help-head {\n"
+  html = html + "      display: flex;\n"
+  html = html + "      align-items: center;\n"
+  html = html + "      justify-content: space-between;\n"
+  html = html + "      gap: 8px;\n"
+  html = html + "      padding: 10px 12px;\n"
+  html = html + "      border-bottom: 1px solid var(--line);\n"
+  html = html + "      background: rgba(255, 255, 255, 0.7);\n"
+  html = html + "    }\n"
+  html = html + "    .help-body {\n"
+  html = html + "      padding: 12px;\n"
+  html = html + "    }\n"
+  html = html + "    .help-subtitle {\n"
+  html = html + "      color: var(--muted);\n"
+  html = html + "      font-size: 11px;\n"
+  html = html + "      line-height: 1.6;\n"
+  html = html + "    }\n"
+  html = html + "    .help-grid {\n"
+  html = html + "      display: grid;\n"
+  html = html + "      grid-template-columns: repeat(3, minmax(0, 1fr));\n"
+  html = html + "      gap: 8px;\n"
+  html = html + "    }\n"
+  html = html + "    .help-card {\n"
+  html = html + "      border: 1px solid var(--line);\n"
+  html = html + "      background: #fff;\n"
+  html = html + "      padding: 10px;\n"
+  html = html + "    }\n"
+  html = html + "    .help-card h3 {\n"
+  html = html + "      margin: 0 0 6px;\n"
+  html = html + "      font-size: 12px;\n"
+  html = html + "    }\n"
+  html = html + "    .help-card p {\n"
+  html = html + "      margin: 0;\n"
+  html = html + "      color: var(--muted);\n"
+  html = html + "      line-height: 1.6;\n"
   html = html + "    }\n"
   html = html + "    .workbench-shell {\n"
   html = html + "      display: grid;\n"
@@ -3592,6 +3661,9 @@ fn build_html_page(title : String, boot_json : String) -> String {
   html = html + "      .toolbar-inline {\n"
   html = html + "        flex-wrap: wrap;\n"
   html = html + "      }\n"
+  html = html + "      .help-grid {\n"
+  html = html + "        grid-template-columns: repeat(2, minmax(0, 1fr));\n"
+  html = html + "      }\n"
   html = html + "    }\n"
   html = html + "    @media (max-width: 1100px) {\n"
   html = html + "      .workbench-shell {\n"
@@ -3626,6 +3698,9 @@ fn build_html_page(title : String, boot_json : String) -> String {
   html = html + "        grid-template-columns: 1fr;\n"
   html = html + "      }\n"
   html = html + "      .summary-grid {\n"
+  html = html + "        grid-template-columns: 1fr;\n"
+  html = html + "      }\n"
+  html = html + "      .help-grid {\n"
   html = html + "        grid-template-columns: 1fr;\n"
   html = html + "      }\n"
   html = html + "      .column-index,\n"
@@ -3680,6 +3755,35 @@ fn build_html_page(title : String, boot_json : String) -> String {
   html = html + "    </header>\n"
   html = html +
     "    <div class=\"status-strip\" id=\"truncated-banner\"></div>\n"
+  html = html + "    <section class=\"help-panel\" id=\"help-panel\">\n"
+  html = html + "      <div class=\"help-head\">\n"
+  html = html + "        <div>\n"
+  html = html + "          <div class=\"pane-title\">How to use</div>\n"
+  html = html +
+    "          <div class=\"help-subtitle\" id=\"help-subtitle\"></div>\n"
+  html = html + "        </div>\n"
+  html = html + "        <div class=\"pane-actions\">\n"
+  html = html +
+    "          <button id=\"help-toggle\" class=\"toggle-btn\"></button>\n"
+  html = html + "        </div>\n"
+  html = html + "      </div>\n"
+  html = html + "      <div class=\"help-body\">\n"
+  html = html + "        <div class=\"help-grid\">\n"
+  html = html +
+    "          <article class=\"help-card\"><h3>1. 载入文件</h3><p>在线模式在文件框输入 ELF 路径后点击 Load；离线模式直接使用当前嵌入数据。</p></article>\n"
+  html = html +
+    "          <article class=\"help-card\"><h3>2. 选择函数</h3><p>先看左侧函数列表或顶部函数选择框，再进入当前函数的反汇编与 CFG。</p></article>\n"
+  html = html +
+    "          <article class=\"help-card\"><h3>3. 搜索 / 跳转</h3><p>搜索框支持地址、函数名、指令文本和 category；输入地址后按 Enter 可直接跳转。</p></article>\n"
+  html = html +
+    "          <article class=\"help-card\"><h3>4. 执行控制</h3><p>Reset / Prev / Next / Play 用于浏览轨迹；运行中的高亮会同步到反汇编和结果面板。</p></article>\n"
+  html = html +
+    "          <article class=\"help-card\"><h3>5. Follow PC</h3><p>开启后会自动跟随当前执行位置；关闭后可以手动停留在任意地址查看上下文。</p></article>\n"
+  html = html +
+    "          <article class=\"help-card\"><h3>6. Trace / Memory / Syscalls</h3><p>下方面板分别查看执行轨迹、最近写入和 syscall/stdout/stderr 输出。</p></article>\n"
+  html = html + "        </div>\n"
+  html = html + "      </div>\n"
+  html = html + "    </section>\n"
   html = html + "    <main class=\"workbench-shell\">\n"
   html = html + "      <aside class=\"pane nav-pane\" id=\"nav-pane\">\n"
   html = html + "        <div class=\"pane-head\">\n"
