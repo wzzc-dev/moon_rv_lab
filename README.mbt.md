@@ -37,16 +37,19 @@ MoonBit 编写的 RISC-V 二进制分析与执行实验项目。当前仓库已�
 ~/.moon/bin/moon run cmd/main -- run out/simple32.elf --max-steps 20
 ```
 
-## 在线访问
+## 前端使用路径
 
-```bash
-~/.moon/bin/moon run cmd/server --target native -- --file out/simple.elf --port 18080
-```
+- 离线路径:
+  `~/.moon/bin/moon run cmd/main -- workbench out/simple.elf -o out/workbench.html`
+  作用: 生成单文件 HTML，适合录屏、提交材料和不依赖 server 的演示。
+- 在线路径:
+  `~/.moon/bin/moon run cmd/server --target native -- --file out/simple.elf --port 18080`
+  作用: 启动首页 `/` 与在线 `/workbench`。Windows 上请在 Visual Studio 2022 Developer Command Prompt / DevShell 中运行；普通 PowerShell + GCC 下的 `cmd/server` 失败不视为产品缺陷。
 
 - 入口页: `http://127.0.0.1:18080/`
-  作用: 轻量说明页，展示 API 和打开工作台入口。
+  作用: Quick Start 首页，会展示默认文件、打开在线 workbench 的入口、在线/离线两条使用路径，以及主 API 与兼容 API 的定位。
 - 完整在线工作台: `http://127.0.0.1:18080/workbench?file=out/simple.elf`
-  作用: Godbolt 风格在线 workbench，支持文件切换、单步、播放、寄存器/Trace/Memory 联动。
+  作用: 在线 workbench 首屏带 `How to use` 引导，推荐按“载入文件 -> 选择函数 -> 搜索/跳转 -> Reset / Prev / Next / Play -> Follow PC -> Trace / Memory / Syscalls”使用。
 
 ## 常用命令
 

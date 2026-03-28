@@ -86,6 +86,13 @@
 - 完整执行事件
 - Godbolt 风格 UI 壳
 
+页面行为与在线 `/workbench` 保持一致，包括：
+
+- 默认展开的 `How to use` 使用引导
+- 顶部函数选择、搜索/跳转与左侧函数/节区导航联动
+- `Reset / Prev / Next / Play`、`Follow PC`、`Trace / Memory Writes / Syscalls/Output`
+- 空态、错误态和截断提示中的下一步操作建议
+
 输入可以是默认生成的 RV64 ELF，也可以是显式 `--xlen 32` 生成的 RV32 ELF。
 
 ## `workbench/` 包
@@ -228,22 +235,27 @@ pub fn online_page_html(
 - `/api/workbench/overview`
 - `/api/workbench/function`
 
-`/api/snapshot` 与 `/api/stream` 保留为兼容接口，不再作为在线 workbench 的主入口。
+页面首屏默认展开 `How to use` 面板；`/api/snapshot` 与 `/api/stream` 保留为兼容接口，不再作为在线 workbench 的主入口。
 
 ## HTTP 路由
 
+Windows 上启动或验证 `cmd/server` 时，请使用 Visual Studio 2022 Developer Command Prompt / DevShell，或先初始化 MSVC 环境。普通 PowerShell + GCC 失败不视为接口问题。
+
 ### `GET /`
 
-- 轻量入口页
-- 展示默认文件、主 API 说明和 `/workbench` 入口
+- Quick Start 首页
+- 展示默认文件、`Open Online Workbench` 入口、在线/离线两条使用路径
+- 说明 `/api/workbench/overview` 与 `/api/workbench/function` 是主接口，`/api/snapshot` 与 `/api/stream` 是兼容接口
 
 ### `GET /workbench`
 
 - 返回完整在线工作台 HTML
 - 支持 `?file=<path>`
+- 首屏默认展示 `How to use` 面板
 - 页面主数据源为 `/api/workbench/overview`
 - 函数切片按需从 `/api/workbench/function` 加载
 - `/api/snapshot` 与 `/api/stream` 仅保留兼容定位
+- 页面交互围绕“载入文件 -> 选择函数 -> 搜索/跳转 -> 浏览 Trace/Memory/Syscalls”展开
 
 ### `GET /api/health`
 
