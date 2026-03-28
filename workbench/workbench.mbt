@@ -2374,9 +2374,9 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|  }
   #|
   #|  function renderSections() {
-  #|    refs.sectionListCount.textContent = `${(overview.sections || []).length} items`;
+  #|    refs.sectionListCount.textContent = `${(overview.sections || []).length} items | 点击地址同步搜索`;
   #|    refs.sectionList.innerHTML = (overview.sections || []).map((section) => {
-  #|      return `<button class="nav-row" data-section-query="${escapeHtml(section.addr)}"><div class="nav-row-title"><span>#${section.index} ${escapeHtml(section.name)}</span></div><div class="nav-row-meta">${escapeHtml(section.addr)} / ${escapeHtml(section.size)}</div></button>`;
+  #|      return `<button class="nav-row" data-section-query="${escapeHtml(section.addr)}"><div class="nav-row-title"><span>#${section.index} ${escapeHtml(section.name)}</span></div><div class="nav-row-meta">${escapeHtml(section.addr)} / ${escapeHtml(section.size)} | click to focus</div></button>`;
   #|    }).join("") || panelEmptyState("当前 ELF 未提供节区信息。", "请确认输入文件是有效的 RISC-V ELF，或先回到默认文件重新加载。");
   #|  }
   #|
@@ -2396,8 +2396,9 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    });
   #|    refs.functionSelect.value = state.selectedFunctionAddr || (allInstructionsAllowed() ? "__all__" : "");
   #|    const visibleFunctions = filteredFunctions();
-  #|    refs.functionListCount.textContent = `${visibleFunctions.length}/${(overview.functions || []).length}`;
+  #|    const activeFilter = queryText();
   #|    const currentFn = currentFunctionForCursor();
+  #|    refs.functionListCount.textContent = `${visibleFunctions.length}/${(overview.functions || []).length}${currentFn ? ` | PC=${currentFn.name}` : ""}${activeFilter ? ` | filter=${activeFilter}` : ""}`;
   #|    const emptyMessage = queryText()
   #|      ? panelEmptyState("当前过滤条件下没有匹配函数。", "可清空搜索，或输入精确地址后按 Enter 跳转。")
   #|      : panelEmptyState("当前 ELF 没有函数符号。", "可先点击节区地址，或在搜索框输入地址后按 Enter 浏览。");
@@ -2406,7 +2407,8 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|      const current = currentFn && currentFn.addr === fn.addr;
   #|      const runtimeBadge = fn.has_runtime_event ? '<span class="badge">trace</span>' : "";
   #|      const currentBadge = current ? '<span class="badge current">PC</span>' : "";
-  #|      return `<button class="nav-row${active ? " active" : ""}${current ? " current" : ""}" data-fn-addr="${fn.addr}"><div class="nav-row-title"><span>${escapeHtml(fn.name)}</span>${currentBadge}${runtimeBadge}</div><div class="nav-row-meta">${escapeHtml(fn.addr)} | inst ${fn.instruction_count} | blocks ${fn.block_count}</div></button>`;
+  #|      const stateHint = active ? " | selected" : (current ? " | current pc" : "");
+  #|      return `<button class="nav-row${active ? " active" : ""}${current ? " current" : ""}" data-fn-addr="${fn.addr}"><div class="nav-row-title"><span>${escapeHtml(fn.name)}</span>${currentBadge}${runtimeBadge}</div><div class="nav-row-meta">${escapeHtml(fn.addr)} | inst ${fn.instruction_count} | blocks ${fn.block_count}${stateHint}</div></button>`;
   #|    }).join("") || emptyMessage;
   #|  }
   #|
@@ -2488,7 +2490,7 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|  function renderDisasm() {
   #|    const slice = selectedSlice();
   #|    const fn = selectedFunction();
-  #|    refs.viewPill.textContent = fn ? fn.name : "No function";
+  #|    refs.viewPill.textContent = fn ? `${fn.name} @ ${fn.addr || "?"}` : "No function";
   #|    if (!slice) {
   #|      refs.disasmSubtitle.textContent = "先选择函数开始浏览";
   #|      refs.disasmBody.innerHTML = tableEmptyState(4, "请先选择一个函数。", "可从左侧函数列表或顶部函数选择框开始。");
@@ -2503,10 +2505,10 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    const focusAddr = instructionFocusAddr();
   #|    const focusIndex = findInstructionIndex(instructions, focusAddr);
   #|    const win = windowedItems(instructions, focusIndex, WINDOW_ROWS);
-  #|    refs.disasmSubtitle.textContent = `${instructions.length} rows | window ${win.start + 1}-${win.end}`;
+  #|    const event = currentEvent();
+  #|    refs.disasmSubtitle.textContent = `${fn ? fn.name : "no function"} | ${instructions.length} rows | ${queryText() ? `filter=${queryText()}` : "no filter"} | focus=${focusAddr || "-"} | ${event ? `step=${event.step} pc=${event.addr}` : "step=0 pc=initial"}`;
   #|    refs.disasmBody.innerHTML = win.items.length > 0
   #|      ? win.items.map((inst) => {
-  #|          const event = currentEvent();
   #|          const active = event && event.addr === inst.addr;
   #|          const focus = state.focusedAddr === inst.addr;
   #|          return `<tr data-addr="${inst.addr}" class="${active ? "active" : ""}${focus && !active ? " focus" : ""}"><td>${inst.index}</td><td>${escapeHtml(inst.addr)}</td><td>${escapeHtml(inst.category)}</td><td class="code-cell">${escapeHtml(inst.asm)}</td></tr>`;
@@ -2528,9 +2530,10 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    }
   #|    const blocks = slice.blocks || [];
   #|    const edges = slice.edges || [];
-  #|    refs.cfgSubtitle.textContent = `${blocks.length} blocks | ${edges.length} edges`;
+  #|    const fn = selectedFunction();
   #|    const event = currentEvent();
   #|    const currentAddr = event ? hexToBigInt(event.addr) : null;
+  #|    refs.cfgSubtitle.textContent = `${fn ? fn.name : "no function"} | ${blocks.length} blocks | ${edges.length} edges | ${event ? `pc=${event.addr}` : `pc=${overview.runtime.initial_pc}`}`;
   #|    const note = [];
   #|    if (blocks.length > CFG_BLOCK_LIMIT || edges.length > CFG_EDGE_LIMIT) {
   #|      note.push(`CFG 已截断：当前仅展示 blocks ${Math.min(blocks.length, CFG_BLOCK_LIMIT)}/${blocks.length}，edges ${Math.min(edges.length, CFG_EDGE_LIMIT)}/${edges.length}。可先收窄到具体函数或地址附近继续查看。`);
