@@ -17,28 +17,31 @@ MoonBit 编写的 RISC-V 二进制分析与执行实验项目。当前仓库已�
 # 自动化回归
 ~/.moon/bin/moon test
 
-# 直接运行默认演示 ELF
-~/.moon/bin/moon run cmd/main -- run example/simple.elf --max-steps 20
+# 先汇编默认演示源码
+~/.moon/bin/moon run cmd/main -- asm example/simple.s -o out/simple.elf
+
+# 运行默认演示 ELF
+~/.moon/bin/moon run cmd/main -- run out/simple.elf --max-steps 20
 
 # 断点执行
-~/.moon/bin/moon run cmd/main -- run example/simple.elf --break 0x10010
+~/.moon/bin/moon run cmd/main -- run out/simple.elf --break 0x10010
 
 # 导出 trace JSON
-~/.moon/bin/moon run cmd/main -- run example/simple.elf --trace out/trace.json
+~/.moon/bin/moon run cmd/main -- run out/simple.elf --trace out/trace.json
 
 # 生成离线 workbench
-~/.moon/bin/moon run cmd/main -- workbench example/simple.elf -o out/workbench.html
+~/.moon/bin/moon run cmd/main -- workbench out/simple.elf -o out/workbench.html
 ```
 
 ## 在线访问
 
 ```bash
-~/.moon/bin/moon run cmd/server --target native -- --file example/simple.elf --port 18080
+~/.moon/bin/moon run cmd/server --target native -- --file out/simple.elf --port 18080
 ```
 
 - 入口页: `http://127.0.0.1:18080/`
   作用: 轻量说明页，展示 API 和打开工作台入口。
-- 完整在线工作台: `http://127.0.0.1:18080/workbench?file=example/simple.elf`
+- 完整在线工作台: `http://127.0.0.1:18080/workbench?file=out/simple.elf`
   作用: Godbolt 风格在线 workbench，支持文件切换、单步、播放、寄存器/Trace/Memory 联动。
 
 ## 常用命令
@@ -48,13 +51,13 @@ MoonBit 编写的 RISC-V 二进制分析与执行实验项目。当前仓库已�
 ~/.moon/bin/moon run cmd/main -- asm example/branch_loop.s -o out/branch_loop.elf
 
 # 结构化运行结果
-~/.moon/bin/moon run cmd/main -- run example/simple.elf --format json
+~/.moon/bin/moon run cmd/main -- run out/simple.elf --format json
 
 # 导出带断点的 trace
-~/.moon/bin/moon run cmd/main -- run example/simple.elf --break 0x10010 --trace out/break.trace.json
+~/.moon/bin/moon run cmd/main -- run out/simple.elf --break 0x10010 --trace out/break.trace.json
 
 # 生成离线工作台
-~/.moon/bin/moon run cmd/main -- workbench example/simple.elf -o out/workbench.html
+~/.moon/bin/moon run cmd/main -- workbench out/simple.elf -o out/workbench.html
 ```
 
 ## 文档导航
@@ -67,7 +70,7 @@ MoonBit 编写的 RISC-V 二进制分析与执行实验项目。当前仓库已�
 
 ## 样例说明
 
-`example/simple.elf` 是默认答辩入口。文件 I/O 和 syscall 演示请优先使用以下源码样例并在 `out/` 下生成临时 ELF:
+`example/simple.s` 是默认演示源码入口。运行 `run` / `workbench` / `cmd/server` 前，请先在 `out/` 下生成临时 `simple.elf`。文件 I/O 和 syscall 演示请优先使用以下源码样例并在 `out/` 下生成临时 ELF:
 
 - `example/file_open_read_close.s`
 - `example/file_lseek_read.s`

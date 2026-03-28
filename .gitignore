@@ -17,3 +17,4 @@ example/*.bin
 example/*.elf
 out/*
 tmp_*
+.vscode/settings.json

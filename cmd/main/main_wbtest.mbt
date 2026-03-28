@@ -2,6 +2,12 @@
 const CLI_TEST_DIR : String = "tmp_cli_tests"
 
 ///|
+const SIMPLE_SOURCE_PATH : String = "example/simple.s"
+
+///|
+const SIMPLE_ELF_PATH : String = CLI_TEST_DIR + "/simple.elf"
+
+///|
 fn ensure_cli_test_dir() -> Unit {
   if !@fs.path_exists(CLI_TEST_DIR) {
     @fs.create_dir(CLI_TEST_DIR) catch {
@@ -28,13 +34,34 @@ fn must_read_text(path : String) -> String {
 }
 
 ///|
+fn must_prepare_simple_elf() -> String {
+  ensure_cli_test_dir()
+  reset_cli_test_file(SIMPLE_ELF_PATH)
+  match read_file_string(SIMPLE_SOURCE_PATH) {
+    Some(source) => {
+      let result = @asm.assemble_with_symbols(source, 0x10000U)
+      if result.errors.length() > 0 {
+        abort("failed to assemble example/simple.s")
+      }
+      let bytes = @asm.encode_to_bytes(result)
+      let elf = @format.assemble_to_elf(bytes, 0x10000U)
+      if !write_file_bytes(SIMPLE_ELF_PATH, elf) {
+        abort("failed to write simple elf fixture")
+      }
+      SIMPLE_ELF_PATH
+    }
+    None => abort("failed to read example/simple.s")
+  }
+}
+
+///|
 fn simple_run_options(
   format : OutputFormat,
   trace : String,
   breakpoints : Array[String],
 ) -> RunOptions {
   {
-    file_path: "example/simple.elf",
+    file_path: must_prepare_simple_elf(),
     entry: "",
     max_steps: 20,
     breakpoints,
@@ -47,11 +74,11 @@ fn simple_run_options(
 test "parse run args supports entry break trace and format" {
   match
     parse_run_args([
-      "run", "example/simple.elf", "--entry", "_start", "--max-steps", "55", "--break",
+      "run", "out/simple.elf", "--entry", "_start", "--max-steps", "55", "--break",
       "0x10010", "--break", "0x10018", "--trace", "out/trace.json", "--format", "json",
     ]) {
     Some(Command::Run(opts)) => {
-      assert_eq(opts.file_path, "example/simple.elf")
+      assert_eq(opts.file_path, "out/simple.elf")
       assert_eq(opts.entry, "_start")
       assert_eq(opts.max_steps, 55)
       assert_eq(opts.breakpoints.length(), 2)
@@ -137,10 +164,11 @@ test "workbench command generates offline html artifact" {
   ensure_cli_test_dir()
   let output_path = CLI_TEST_DIR + "/simple_workbench.html"
   reset_cli_test_file(output_path)
+  let simple_elf = must_prepare_simple_elf()
 
   match
     execute_workbench_result({
-      file_path: "example/simple.elf",
+      file_path: simple_elf,
       output: output_path,
       title: "CLI Test Workbench",
       max_instructions: 64,
@@ -153,7 +181,7 @@ test "workbench command generates offline html artifact" {
       assert_true(html.contains("class=\"workbench-shell\""))
       assert_true(html.contains("const WORKBENCH_BOOT = "))
       assert_true(html.contains("\"mode\":\"embedded\""))
-      assert_true(html.contains("\"embedded_data\""))
+      assert_true(html.contains("\"embedded_overview\""))
     }
     Failure(err) => abort(err)
   }

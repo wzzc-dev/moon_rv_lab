@@ -12,10 +12,11 @@ mkdir -p out
 
 ## 路径一: CLI 执行与分析
 
-### 1. 直接运行已有 ELF
+### 1. 先汇编默认样例再运行
 
 ```bash
-~/.moon/bin/moon run cmd/main -- run example/simple.elf --max-steps 20
+~/.moon/bin/moon run cmd/main -- asm example/simple.s -o out/simple.elf
+~/.moon/bin/moon run cmd/main -- run out/simple.elf --max-steps 20
 ```
 
 你会看到:
@@ -29,7 +30,7 @@ mkdir -p out
 ### 2. 断点执行
 
 ```bash
-~/.moon/bin/moon run cmd/main -- run example/simple.elf --break 0x10010
+~/.moon/bin/moon run cmd/main -- run out/simple.elf --break 0x10010
 ```
 
 预期现象:
@@ -41,7 +42,7 @@ mkdir -p out
 ### 3. JSON 输出
 
 ```bash
-~/.moon/bin/moon run cmd/main -- run example/simple.elf --format json
+~/.moon/bin/moon run cmd/main -- run out/simple.elf --format json
 ```
 
 JSON 顶层包含:
@@ -54,7 +55,7 @@ JSON 顶层包含:
 ### 4. 导出 trace 文件
 
 ```bash
-~/.moon/bin/moon run cmd/main -- run example/simple.elf --trace out/trace.json
+~/.moon/bin/moon run cmd/main -- run out/simple.elf --trace out/trace.json
 ```
 
 导出的 `out/trace.json` 与 `run --format json` 里的 `trace` 字段结构一致。
@@ -71,7 +72,7 @@ JSON 顶层包含:
 离线模式适合提交材料、录屏或不依赖 server 的答辩演示。
 
 ```bash
-~/.moon/bin/moon run cmd/main -- workbench example/simple.elf -o out/workbench.html
+~/.moon/bin/moon run cmd/main -- workbench out/simple.elf -o out/workbench.html
 ```
 
 打开 `out/workbench.html` 后可用:
@@ -96,14 +97,14 @@ JSON 顶层包含:
 ### 1. 启动服务
 
 ```bash
-~/.moon/bin/moon run cmd/server --target native -- --file example/simple.elf --port 18080
+~/.moon/bin/moon run cmd/server --target native -- --file out/simple.elf --port 18080
 ```
 
 ### 2. 打开路由
 
 - 入口页: `http://127.0.0.1:18080/`
 - 完整工作台: `http://127.0.0.1:18080/workbench`
-- 指定文件: `http://127.0.0.1:18080/workbench?file=example/simple.elf`
+- 指定文件: `http://127.0.0.1:18080/workbench?file=out/simple.elf`
 
 ### 3. 页面内操作
 
@@ -130,9 +131,9 @@ JSON 顶层包含:
 
 ## 推荐演示闭环
 
-1. `run example/simple.elf`
-2. `run example/simple.elf --break 0x10010`
-3. `run example/simple.elf --trace out/trace.json`
-4. `workbench example/simple.elf -o out/workbench.html`
-5. `cmd/server --file example/simple.elf --port 18080`
+1. `asm example/simple.s -o out/simple.elf`
+2. `run out/simple.elf --break 0x10010`
+3. `run out/simple.elf --trace out/trace.json`
+4. `workbench out/simple.elf -o out/workbench.html`
+5. `cmd/server --file out/simple.elf --port 18080`
 6. 浏览器打开 `/workbench`

@@ -20,11 +20,12 @@
 ## 命令级 smoke check
 
 ```bash
-~/.moon/bin/moon run cmd/main -- run example/simple.elf --max-steps 20
-~/.moon/bin/moon run cmd/main -- run example/simple.elf --break 0x10010
-~/.moon/bin/moon run cmd/main -- run example/simple.elf --trace out/trace.json
-~/.moon/bin/moon run cmd/main -- workbench example/simple.elf -o out/workbench.html
-~/.moon/bin/moon run cmd/server --target native -- --file example/simple.elf --port 18080
+~/.moon/bin/moon run cmd/main -- asm example/simple.s -o out/simple.elf
+~/.moon/bin/moon run cmd/main -- run out/simple.elf --max-steps 20
+~/.moon/bin/moon run cmd/main -- run out/simple.elf --break 0x10010
+~/.moon/bin/moon run cmd/main -- run out/simple.elf --trace out/trace.json
+~/.moon/bin/moon run cmd/main -- workbench out/simple.elf -o out/workbench.html
+~/.moon/bin/moon run cmd/server --target native -- --file out/simple.elf --port 18080
 ```
 
 预期结果:
@@ -86,14 +87,14 @@
 ### 启动
 
 ```bash
-~/.moon/bin/moon run cmd/server --target native -- --file example/simple.elf --port 18080
+~/.moon/bin/moon run cmd/server --target native -- --file out/simple.elf --port 18080
 ```
 
 ### 浏览器检查
 
 1. 打开 `http://127.0.0.1:18080/`
 2. 点击 `Open Online Workbench`
-3. 打开 `http://127.0.0.1:18080/workbench?file=example/simple.elf`
+3. 打开 `http://127.0.0.1:18080/workbench?file=out/simple.elf`
 4. 检查 `Reset / Prev / Next / Play`
 5. 检查寄存器、Trace、Memory Writes、Syscalls/Output 联动
 6. 切换 `?file=` 后确认页面重新加载并同步更新 URL

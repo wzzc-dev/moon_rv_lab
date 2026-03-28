@@ -12,7 +12,7 @@
 
 | 文件 | 用途 | 推荐命令 | 观察点 |
 | --- | --- | --- | --- |
-| `simple.s` | 算术/逻辑/移位/LUI | `~/.moon/bin/moon run cmd/main -- run example/simple.elf --max-steps 20` | `a0/a1/a2/t0` 最终值、`ebreak` 停止原因 |
+| `simple.s` | 算术/逻辑/移位/LUI | `~/.moon/bin/moon run cmd/main -- asm example/simple.s -o out/simple.elf` -> `~/.moon/bin/moon run cmd/main -- run out/simple.elf --max-steps 20` | `a0/a1/a2/t0` 最终值、`ebreak` 停止原因 |
 | `branch_loop.s` | 分支与循环 | `asm example/branch_loop.s -> run out/branch_loop.elf` | `a0` 在循环里累加，`bne` 形成回边 |
 | `memory_roundtrip.s` | 栈访存 | `asm example/memory_roundtrip.s -> run --trace out/memory_roundtrip.elf` | `sw/lw` 对应的寄存器和内存写入 |
 | `call_chain.s` | 函数调用与返回 | `asm example/call_chain.s -> workbench out/call_chain.elf` | `jal/jalr` 与返回地址流转 |
@@ -36,15 +36,18 @@
 
 ## 推荐演示顺序
 
-1. `example/simple.elf`
-   命令: `~/.moon/bin/moon run cmd/main -- run example/simple.elf --max-steps 20`
+1. `example/simple.s`
+   命令: `~/.moon/bin/moon run cmd/main -- asm example/simple.s -o out/simple.elf`
+   作用: 先生成默认演示 ELF，作为后续 `run` / `workbench` / `cmd/server` 的统一输入。
+2. `out/simple.elf`
+   命令: `~/.moon/bin/moon run cmd/main -- run out/simple.elf --max-steps 20`
    作用: 先展示执行引擎、寄存器变化和 stop reason。
-2. `example/simple.elf`
-   命令: `~/.moon/bin/moon run cmd/main -- workbench example/simple.elf -o out/workbench.html`
+3. `out/simple.elf`
+   命令: `~/.moon/bin/moon run cmd/main -- workbench out/simple.elf -o out/workbench.html`
    作用: 展示离线 Godbolt 风格工作台。
-3. `example/file_open_read_close.s`
+4. `example/file_open_read_close.s`
    命令: `~/.moon/bin/moon run cmd/main -- asm example/file_open_read_close.s -o out/file_open_read_close.elf`
    作用: 进入 syscall + 文件 I/O 演示。
-4. 在线工作台
-   命令: `~/.moon/bin/moon run cmd/server --target native -- --file example/simple.elf --port 18080`
+5. 在线工作台
+   命令: `~/.moon/bin/moon run cmd/server --target native -- --file out/simple.elf --port 18080`
    作用: 浏览器中展示 `/workbench`、文件切换、单步和播放。
