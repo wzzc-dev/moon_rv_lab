@@ -1890,6 +1890,10 @@ const WORKBENCH_CLIENT_SCRIPT : String =
 #|    breakpointSummary: document.getElementById("breakpoint-summary"),
 #|    breakpointList: document.getElementById("breakpoint-list"),
 #|    breakpointClearBtn: document.getElementById("breakpoint-clear-btn"),
+#|    comparePrevBtn: document.getElementById("compare-prev-btn"),
+#|    compareInitialBtn: document.getElementById("compare-initial-btn"),
+#|    compareSummary: document.getElementById("compare-summary"),
+#|    compareBody: document.getElementById("compare-body"),
 #|    truncatedBanner: document.getElementById("truncated-banner"),
 #|    helpPanel: document.getElementById("help-panel"),
   #|    helpSubtitle: document.getElementById("help-subtitle"),
@@ -1923,11 +1927,12 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|  const state = {
   #|    selectedFunctionAddr: "",
   #|    searchText: "",
-  #|    activeTab: "trace",
-  #|    helpCollapsed: false,
-  #|    followPcEnabled: true,
-  #|    showChangedRegistersOnly: false,
-  #|    layout: {
+#|    activeTab: "trace",
+#|    helpCollapsed: false,
+#|    followPcEnabled: true,
+#|    showChangedRegistersOnly: false,
+#|    compareMode: "prev",
+#|    layout: {
   #|      navWidth: 240,
   #|      inspectorWidth: 320,
   #|      bottomHeight: 260,
@@ -2071,10 +2076,11 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    state.activeTab = ["trace", "memory", "syscalls"].includes(stored.activeTab)
   #|      ? stored.activeTab
   #|      : "trace";
-  #|    state.helpCollapsed = stored.helpCollapsed === true;
-  #|    state.followPcEnabled = stored.followPcEnabled !== false;
-  #|    state.showChangedRegistersOnly = stored.showChangedRegistersOnly === true;
-  #|    state.layout.navWidth = clampNumber(stored.navWidth, 180, 420, 240);
+#|    state.helpCollapsed = stored.helpCollapsed === true;
+#|    state.followPcEnabled = stored.followPcEnabled !== false;
+#|    state.showChangedRegistersOnly = stored.showChangedRegistersOnly === true;
+#|    state.compareMode = stored.compareMode === "initial" ? "initial" : "prev";
+#|    state.layout.navWidth = clampNumber(stored.navWidth, 180, 420, 240);
   #|    state.layout.inspectorWidth = clampNumber(stored.inspectorWidth, 240, 460, 320);
 #|    state.layout.bottomHeight = clampNumber(stored.bottomHeight, 180, 420, 260);
 #|    state.layout.navCollapsed = stored.navCollapsed === true;
@@ -2090,9 +2096,10 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|        selectedFunctionAddr: state.selectedFunctionAddr,
   #|        searchText: state.searchText,
   #|        activeTab: state.activeTab,
-  #|        helpCollapsed: state.helpCollapsed,
-  #|        followPcEnabled: state.followPcEnabled,
-  #|        showChangedRegistersOnly: state.showChangedRegistersOnly,
+#|        helpCollapsed: state.helpCollapsed,
+#|        followPcEnabled: state.followPcEnabled,
+#|        showChangedRegistersOnly: state.showChangedRegistersOnly,
+#|        compareMode: state.compareMode,
 #|        navWidth: state.layout.navWidth,
 #|        inspectorWidth: state.layout.inspectorWidth,
 #|        bottomHeight: state.layout.bottomHeight,
@@ -2286,6 +2293,21 @@ const WORKBENCH_CLIENT_SCRIPT : String =
 #|    state.replayBreakpointHit = "";
 #|    saveUiState();
 #|    renderRuntimePanels();
+#|  }
+#|
+#|  function compareRegistersToInitial() {
+#|    return REGISTER_ORDER.map((name) => {
+#|      const before = initialRegisters[name] || "0x0";
+#|      const after = state.registers[name] || "0x0";
+#|      return before !== after ? { name, before, after } : null;
+#|    }).filter(Boolean);
+#|  }
+#|
+#|  function renderCompareCard(title, rows, emptyMessage) {
+#|    const body = rows && rows.length > 0
+#|      ? rows.join("")
+#|      : `<div class="empty-panel">${escapeHtml(emptyMessage)}</div>`;
+#|    return `<div class="compare-card"><div class="compare-card-title">${escapeHtml(title)}</div>${body}</div>`;
 #|  }
 #|
 #|  function selectedSlice() {
@@ -2685,6 +2707,44 @@ const WORKBENCH_CLIENT_SCRIPT : String =
 #|      : panelEmptyState("当前没有回放断点。", "可在反汇编或 CFG 中点亮 trace reachable 地址。");
 #|  }
 #|
+#|  function renderStateCompare() {
+#|    refs.comparePrevBtn.classList.toggle("active", state.compareMode === "prev");
+#|    refs.compareInitialBtn.classList.toggle("active", state.compareMode === "initial");
+#|    const event = currentEvent();
+#|    if (state.compareMode === "prev") {
+#|      if (!event) {
+#|        refs.compareSummary.textContent = "Prev step: 先通过 Next / Play 进入任意一步。";
+#|        refs.compareBody.innerHTML = panelEmptyState("当前还没有选中执行步。", "使用 Next / Play 命中某一步后，再查看与上一状态的差异。");
+#|        return;
+#|      }
+#|      const baseline = event.step > 1 ? `step ${event.step - 1}` : "initial state";
+#|      refs.compareSummary.textContent = `Prev step baseline: ${baseline}`;
+#|      const registerRows = (event.register_writes || []).map((item) => `<div class="compare-row mono"><span>${escapeHtml(item.name)}</span><span>${escapeHtml(item.before)} -> ${escapeHtml(item.after)}</span></div>`);
+#|      const memoryRows = (event.memory_writes || []).map((item) => `<div class="compare-row mono"><span>${escapeHtml(item.addr)}</span><span>${escapeHtml(item.before)} -> ${escapeHtml(item.after)} (size=${item.size})</span></div>`);
+#|      const outputRows = [];
+#|      if (event.stdout_append) {
+#|        outputRows.push(`<div class="compare-row mono"><span>stdout</span><span>${escapeHtml(event.stdout_append)}</span></div>`);
+#|      }
+#|      if (event.stderr_append) {
+#|        outputRows.push(`<div class="compare-row mono"><span>stderr</span><span>${escapeHtml(event.stderr_append)}</span></div>`);
+#|      }
+#|      refs.compareBody.innerHTML = `<div class="compare-grid">${renderCompareCard("Registers", registerRows, "本步没有寄存器变化")}${renderCompareCard("Memory", memoryRows, "本步没有内存写入")}${renderCompareCard("Output", outputRows, "本步没有 stdout / stderr 增量")}</div>`;
+#|      return;
+#|    }
+#|    const registerDiffs = compareRegistersToInitial();
+#|    refs.compareSummary.textContent = "Initial baseline: 对比初始寄存器状态，并补充累计输出与最近写内存摘要。";
+#|    const registerRows = registerDiffs.map((item) => `<div class="compare-row mono"><span>${escapeHtml(item.name)}</span><span>${escapeHtml(item.before)} -> ${escapeHtml(item.after)}</span></div>`);
+#|    const memoryRows = state.memoryHistory.slice(0, 8).map((item) => `<div class="compare-row mono"><span>step ${item.step}</span><span>${escapeHtml(item.addr)}: ${escapeHtml(item.before)} -> ${escapeHtml(item.after)} (size=${item.size})</span></div>`);
+#|    const outputRows = [];
+#|    if (state.stdout) {
+#|      outputRows.push(`<div class="compare-row mono"><span>stdout</span><span>${escapeHtml(state.stdout)}</span></div>`);
+#|    }
+#|    if (state.stderr) {
+#|      outputRows.push(`<div class="compare-row mono"><span>stderr</span><span>${escapeHtml(state.stderr)}</span></div>`);
+#|    }
+#|    refs.compareBody.innerHTML = `<div class="compare-grid">${renderCompareCard("Registers", registerRows, "当前寄存器与初始状态一致")}${renderCompareCard("Recent Memory Writes", memoryRows, "从初始状态开始还没有内存写入")}${renderCompareCard("Accumulated Output", outputRows, "从初始状态开始还没有 stdout / stderr 输出")}</div>`;
+#|  }
+#|
 #|  function renderTrace() {
 #|    const events = overview.events || [];
   #|    const center = state.cursor >= 0 ? state.cursor : 0;
@@ -2778,8 +2838,9 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    renderHeader();
   #|    renderFunctions();
   #|    renderBanner();
-  #|    renderRuntimeSummary();
-  #|    renderExecution();
+#|    renderRuntimeSummary();
+#|    renderStateCompare();
+#|    renderExecution();
 #|    renderRegisters();
 #|    renderRecentWrites();
 #|    renderReplayBreakpoints();
@@ -3210,12 +3271,24 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    renderHelpPanel();
   #|  });
   #|
-  #|  refs.changedRegistersToggle.addEventListener("click", () => {
-  #|    state.showChangedRegistersOnly = !state.showChangedRegistersOnly;
-  #|    saveUiState();
-  #|    renderRegisters();
-  #|    renderToolbarState();
-  #|  });
+#|  refs.changedRegistersToggle.addEventListener("click", () => {
+#|    state.showChangedRegistersOnly = !state.showChangedRegistersOnly;
+#|    saveUiState();
+#|    renderRegisters();
+#|    renderToolbarState();
+#|  });
+#|
+#|  refs.comparePrevBtn.addEventListener("click", () => {
+#|    state.compareMode = "prev";
+#|    saveUiState();
+#|    renderStateCompare();
+#|  });
+#|
+#|  refs.compareInitialBtn.addEventListener("click", () => {
+#|    state.compareMode = "initial";
+#|    saveUiState();
+#|    renderStateCompare();
+#|  });
   #|
   #|  refs.toggleNavPane.addEventListener("click", () => {
   #|    state.layout.navCollapsed = !state.layout.navCollapsed;
@@ -3783,6 +3856,32 @@ fn build_html_page(title : String, boot_json : String) -> String {
   html = html + "      font-size: 12px;\n"
   html = html + "      font-weight: 700;\n"
   html = html + "    }\n"
+  html = html + "    .compare-grid {\n"
+  html = html + "      display: grid;\n"
+  html = html + "      gap: 8px;\n"
+  html = html + "    }\n"
+  html = html + "    .compare-card {\n"
+  html = html + "      border: 1px solid var(--line);\n"
+  html = html + "      background: #fff;\n"
+  html = html + "      padding: 6px;\n"
+  html = html + "    }\n"
+  html = html + "    .compare-card-title {\n"
+  html = html + "      margin-bottom: 6px;\n"
+  html = html + "      color: var(--muted);\n"
+  html = html + "      font-size: 11px;\n"
+  html = html + "      font-weight: 700;\n"
+  html = html + "    }\n"
+  html = html + "    .compare-row {\n"
+  html = html + "      display: grid;\n"
+  html = html + "      grid-template-columns: minmax(72px, auto) minmax(0, 1fr);\n"
+  html = html + "      gap: 8px;\n"
+  html = html + "      padding: 4px 0;\n"
+  html = html + "      border-top: 1px solid var(--line);\n"
+  html = html + "    }\n"
+  html = html + "    .compare-card > .compare-row:first-of-type {\n"
+  html = html + "      border-top: 0;\n"
+  html = html + "      padding-top: 0;\n"
+  html = html + "    }\n"
   html = html + "    .register-toolbar {\n"
   html = html + "      display: flex;\n"
   html = html + "      align-items: center;\n"
@@ -4142,6 +4241,20 @@ fn build_html_page(title : String, boot_json : String) -> String {
   html = html + "            <h3>State</h3>\n"
   html = html +
     "            <div class=\"summary-grid\" id=\"runtime-summary\"></div>\n"
+  html = html + "          </div>\n"
+  html = html + "          <div class=\"section-block\">\n"
+  html = html + "            <div class=\"register-toolbar\">\n"
+  html = html + "              <h3 style=\"margin:0\">State Compare</h3>\n"
+  html = html + "              <div class=\"toolbar-inline\">\n"
+  html = html +
+    "                <button id=\"compare-prev-btn\" class=\"toggle-btn\">Prev step</button>\n"
+  html = html +
+    "                <button id=\"compare-initial-btn\" class=\"toggle-btn\">Initial</button>\n"
+  html = html + "              </div>\n"
+  html = html + "            </div>\n"
+  html = html +
+    "            <div class=\"muted\" id=\"compare-summary\"></div>\n"
+  html = html + "            <div id=\"compare-body\"></div>\n"
   html = html + "          </div>\n"
   html = html + "          <div class=\"section-block\">\n"
   html = html + "            <div class=\"register-toolbar\">\n"

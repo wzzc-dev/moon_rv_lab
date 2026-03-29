@@ -138,6 +138,10 @@ test "generated workbench html includes godbolt style panes and controls" {
   assert_true(html.contains("id=\"breakpoint-summary\""))
   assert_true(html.contains("id=\"breakpoint-list\""))
   assert_true(html.contains("id=\"breakpoint-clear-btn\""))
+  assert_true(html.contains("State Compare"))
+  assert_true(html.contains("id=\"compare-body\""))
+  assert_true(html.contains("id=\"compare-prev-btn\""))
+  assert_true(html.contains("id=\"compare-initial-btn\""))
   assert_true(html.contains("class=\"pane result-pane\""))
   assert_true(html.contains("localStorage"))
   assert_true(html.contains("helpCollapsed"))
@@ -148,6 +152,8 @@ test "generated workbench html includes godbolt style panes and controls" {
   assert_true(html.contains("overview.runtime.initial_registers"))
   assert_true(html.contains("state.breakpoints"))
   assert_true(html.contains("replayBreakpointHit"))
+  assert_true(html.contains("compareMode"))
+  assert_true(html.contains("renderStateCompare"))
   assert_false(html.contains("id=\"current-function-only\""))
 }
 
@@ -174,6 +180,9 @@ test "generated workbench html keeps navigation and actionable hint hooks" {
   assert_true(html.contains("data-breakpoint-addr"))
   assert_true(html.contains("clearAllReplayBreakpoints"))
   assert_true(html.contains("setReplayBreakpoint"))
+  assert_true(html.contains("Prev step baseline"))
+  assert_true(html.contains("Initial baseline"))
+  assert_true(html.contains("compareRegistersToInitial"))
 }
 
 ///|
