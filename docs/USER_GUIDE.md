@@ -136,6 +136,7 @@ Windows 上请优先使用 Visual Studio 2022 Developer Command Prompt / DevShel
 ### 3. 页面内操作
 
 - 推荐先从入口页进入 `/workbench?file=...`，这样默认文件会直接带入查询参数
+- 在线 workbench 主链路会先加载 `/api/workbench/overview`，再按需请求 `/api/workbench/function`；`/api/snapshot` 与 `/api/stream` 仅保留兼容定位
 - 顶部输入框支持切换 ELF 文件，点击 `Load` 后会重新加载 overview 与函数切片
 - `How to use` 面板默认展开，可关闭；关闭状态同样会写入 `localStorage`
 - 切换文件后地址栏会同步写回 `?file=...`

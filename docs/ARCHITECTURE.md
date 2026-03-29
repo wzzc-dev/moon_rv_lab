@@ -58,11 +58,11 @@ format / asm / decode / disasm / analysis   cmd/server
 - 把静态分析结果和 simulator runtime 数据投影为 `WorkbenchData`。
 - 提供三类能力:
   - 离线单文件 HTML 生成
-  - `/api/snapshot` JSON
-  - `/api/stream` 事件 JSON
+  - `/api/workbench/overview` + `/api/workbench/function` 主接口
+  - `/api/snapshot` / `/api/stream` 兼容接口
 - 在线和离线页面共用同一套 HTML/CSS/JS 壳，只是启动模式不同:
   - 离线模式内嵌完整 `WorkbenchData`
-  - 在线模式通过 `/api/snapshot` 拉取数据
+  - 在线模式先拉取 `/api/workbench/overview`，再按需请求 `/api/workbench/function`
 
 ### `cmd/main/`
 
@@ -77,7 +77,7 @@ format / asm / decode / disasm / analysis   cmd/server
 - 只负责在线路由和 HTML/API 出口，不承载模拟器状态。
 - `/` 是轻量入口页。
 - `/workbench` 是完整在线工作台。
-- `/api/snapshot` / `/api/stream` 保持兼容，workbench v1 主数据源使用 `/api/snapshot`。
+- `/api/workbench/overview` / `/api/workbench/function` 是在线 workbench 主接口；`/api/snapshot` / `/api/stream` 保持兼容。
 
 ## 关键数据流
 
@@ -101,9 +101,9 @@ format / asm / decode / disasm / analysis   cmd/server
 
 1. `cmd/server` 返回在线 workbench HTML 壳。
 2. 页面读取 `?file=` 或 server 默认文件。
-3. 前端请求 `/api/snapshot?file=...`。
-4. 后端调用 `workbench.snapshot_api_json_from_file(...)` 返回完整 `WorkbenchData`。
-5. 页面在本地根据 `data.events` 做播放、单步和 inspector 联动。
+3. 前端请求 `/api/workbench/overview?file=...` 获取概览与 runtime/events。
+4. 用户选择函数或地址后，再按需请求 `/api/workbench/function?file=...&addr=...`。
+5. 页面在本地根据 overview 的 `events` 和函数切片数据做播放、单步和 inspector 联动。
 
 ## 设计边界
 

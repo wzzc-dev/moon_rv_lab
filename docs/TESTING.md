@@ -115,6 +115,8 @@ Windows 本地执行要求：
 ~/.moon/bin/moon run cmd/server --target native -- --file out/simple.elf --port 18080
 ```
 
+当前在线 workbench 首屏依赖 `/api/workbench/overview`，函数切片依赖 `/api/workbench/function`；`/api/snapshot` 与 `/api/stream` 仅保留兼容定位。
+
 检查项：
 
 1. 打开 `http://127.0.0.1:18080/`

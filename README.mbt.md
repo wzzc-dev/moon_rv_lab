@@ -9,7 +9,7 @@ MoonBit 编写的 RISC-V 二进制分析与执行实验项目。当前仓库已�
 - 执行能力:
   `run`、断点、trace JSON、按 ELF 位宽装载执行（默认 RV64，显式兼容 RV32）、`exit/read/write/openat/close/lseek/fstat/brk/ioctl`
 - 展示能力:
-  离线单文件 `workbench`，在线 `/workbench`，以及 `/api/snapshot` / `/api/stream`
+  离线单文件 `workbench`，在线 `/workbench`，主接口 `/api/workbench/overview` / `/api/workbench/function`，以及兼容接口 `/api/snapshot` / `/api/stream`
 
 ## 快速开始
 

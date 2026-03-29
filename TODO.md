@@ -20,7 +20,13 @@
 | TODO-16 | 已完成 | 加固前端入口页与 workbench 使用层回归，并在收尾时写回实际提交记录 | `moon test workbench --target native`<br>`moon test cmd/server --target native`<br>`moon run cmd/main -- asm example/simple.s -o out/simple.elf`<br>`moon run cmd/main -- workbench out/simple.elf -o out/workbench.html` | `test: 加固前端入口与 workbench 使用回归` |
 | TODO-17 | 已完成 | 统一 workbench 在线加载链路，移除旧 snapshot 前端后备实现 | `moon test workbench --target native` | `refactor: 统一 workbench 在线加载链路` |
 | TODO-18 | 已完成 | 加固 online workbench 接口契约回归，防止回退到旧接口模型 | `moon test workbench --target native`<br>`moon test cmd/server --target native` | `test: 加固 online workbench 接口契约回归` |
-| TODO-19 | 待办 | 同步 workbench 主接口文档与 TODO 流程约定，消除实现/文档漂移 | `moon test workbench --target native`<br>`moon test cmd/server --target native` | `docs: 同步 workbench 主接口与 TODO 流程约定` |
+| TODO-19 | 已完成 | 同步 workbench 主接口文档与 TODO 流程约定，消除实现/文档漂移 | `moon test workbench --target native`<br>`moon test cmd/server --target native` | `docs: 同步 workbench 主接口与 TODO 流程约定` |
+
+## 执行约定
+
+- 每完成一个 TODO，就同步更新本表状态与提交记录，并立即单独提交一个 commit。
+- 默认保留当前工作区里的 `out/workbench.html` 现状；只有某个 TODO 的验收命令明确要求重新生成并纳入提交时，才处理该产物。
+- Windows 上涉及 `cmd/server --target native` 的验收，优先在 Visual Studio 2022 Developer Command Prompt / DevShell 或先执行 `vcvars64.bat` 的环境中完成。
 
 ## 本轮提交记录
 
@@ -32,3 +38,4 @@
 - `test: 加固前端入口与 workbench 使用回归`
 - `refactor: 统一 workbench 在线加载链路`
 - `test: 加固 online workbench 接口契约回归`
+- `docs: 同步 workbench 主接口与 TODO 流程约定`
