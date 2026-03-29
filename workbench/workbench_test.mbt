@@ -135,6 +135,9 @@ test "generated workbench html includes godbolt style panes and controls" {
   assert_true(html.contains("id=\"follow-pc\""))
   assert_true(html.contains("id=\"cfg-subtitle\""))
   assert_true(html.contains("id=\"recent-writes\""))
+  assert_true(html.contains("id=\"breakpoint-summary\""))
+  assert_true(html.contains("id=\"breakpoint-list\""))
+  assert_true(html.contains("id=\"breakpoint-clear-btn\""))
   assert_true(html.contains("class=\"pane result-pane\""))
   assert_true(html.contains("localStorage"))
   assert_true(html.contains("helpCollapsed"))
@@ -143,6 +146,8 @@ test "generated workbench html includes godbolt style panes and controls" {
   assert_true(html.contains("\"xlen\":64"))
   assert_true(html.contains("overview.events"))
   assert_true(html.contains("overview.runtime.initial_registers"))
+  assert_true(html.contains("state.breakpoints"))
+  assert_true(html.contains("replayBreakpointHit"))
   assert_false(html.contains("id=\"current-function-only\""))
 }
 
@@ -165,6 +170,10 @@ test "generated workbench html keeps navigation and actionable hint hooks" {
   assert_true(html.contains("focus="))
   assert_true(html.contains("step=0 pc=initial"))
   assert_true(html.contains("filter="))
+  assert_true(html.contains("Replay breakpoint @"))
+  assert_true(html.contains("data-breakpoint-addr"))
+  assert_true(html.contains("clearAllReplayBreakpoints"))
+  assert_true(html.contains("setReplayBreakpoint"))
 }
 
 ///|
