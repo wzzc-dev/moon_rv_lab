@@ -1885,17 +1885,17 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    syscallBody: document.getElementById("syscall-body"),
   #|    stdoutOutput: document.getElementById("stdout-output"),
   #|    stderrOutput: document.getElementById("stderr-output"),
-#|    registerGroups: document.getElementById("register-groups"),
-#|    recentWrites: document.getElementById("recent-writes"),
-#|    breakpointSummary: document.getElementById("breakpoint-summary"),
-#|    breakpointList: document.getElementById("breakpoint-list"),
-#|    breakpointClearBtn: document.getElementById("breakpoint-clear-btn"),
-#|    comparePrevBtn: document.getElementById("compare-prev-btn"),
-#|    compareInitialBtn: document.getElementById("compare-initial-btn"),
-#|    compareSummary: document.getElementById("compare-summary"),
-#|    compareBody: document.getElementById("compare-body"),
-#|    truncatedBanner: document.getElementById("truncated-banner"),
-#|    helpPanel: document.getElementById("help-panel"),
+  #|    registerGroups: document.getElementById("register-groups"),
+  #|    recentWrites: document.getElementById("recent-writes"),
+  #|    breakpointSummary: document.getElementById("breakpoint-summary"),
+  #|    breakpointList: document.getElementById("breakpoint-list"),
+  #|    breakpointClearBtn: document.getElementById("breakpoint-clear-btn"),
+  #|    comparePrevBtn: document.getElementById("compare-prev-btn"),
+  #|    compareInitialBtn: document.getElementById("compare-initial-btn"),
+  #|    compareSummary: document.getElementById("compare-summary"),
+  #|    compareBody: document.getElementById("compare-body"),
+  #|    truncatedBanner: document.getElementById("truncated-banner"),
+  #|    helpPanel: document.getElementById("help-panel"),
   #|    helpSubtitle: document.getElementById("help-subtitle"),
   #|    helpToggle: document.getElementById("help-toggle"),
   #|    resetBtn: document.getElementById("reset-btn"),
@@ -1919,20 +1919,20 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|  let overview = createEmptyOverview("");
   #|  const sliceCache = new Map();
   #|  let storageKey = storageKeyFor(boot.initial_file || boot.default_file || "default");
-#|  let initialRegisters = {};
-#|  let eventIndexByAddr = new Map();
-#|  let tracedAddrSet = new Set();
-#|  let functionRanges = [];
+  #|  let initialRegisters = {};
+  #|  let eventIndexByAddr = new Map();
+  #|  let tracedAddrSet = new Set();
+  #|  let functionRanges = [];
   #|
   #|  const state = {
   #|    selectedFunctionAddr: "",
   #|    searchText: "",
-#|    activeTab: "trace",
-#|    helpCollapsed: false,
-#|    followPcEnabled: true,
-#|    showChangedRegistersOnly: false,
-#|    compareMode: "prev",
-#|    layout: {
+  #|    activeTab: "trace",
+  #|    helpCollapsed: false,
+  #|    followPcEnabled: true,
+  #|    showChangedRegistersOnly: false,
+  #|    compareMode: "prev",
+  #|    layout: {
   #|      navWidth: 240,
   #|      inspectorWidth: 320,
   #|      bottomHeight: 260,
@@ -1940,12 +1940,12 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|      bottomCollapsed: false,
   #|      inspectorCollapsed: false
   #|    },
-#|    cursor: -1,
-#|    focusedAddr: "0x0",
-#|    breakpoints: [],
-#|    replayBreakpointHit: "",
-#|    registers: {},
-#|    memoryHistory: [],
+  #|    cursor: -1,
+  #|    focusedAddr: "0x0",
+  #|    breakpoints: [],
+  #|    replayBreakpointHit: "",
+  #|    registers: {},
+  #|    memoryHistory: [],
   #|    ioHistory: [],
   #|    stdout: "",
   #|    stderr: "",
@@ -2046,49 +2046,49 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    return `moonrv-workbench-ui:${file || "default"}`;
   #|  }
   #|
-#|  function readUiState() {
-#|    try {
-#|      const parsed = JSON.parse(localStorage.getItem(storageKey) || "{}");
-#|      return parsed && typeof parsed === "object" ? parsed : {};
+  #|  function readUiState() {
+  #|    try {
+  #|      const parsed = JSON.parse(localStorage.getItem(storageKey) || "{}");
+  #|      return parsed && typeof parsed === "object" ? parsed : {};
   #|    } catch (_) {
   #|      return {};
-#|    }
-#|  }
-#|
-#|  function sanitizeBreakpointAddrs(values) {
-#|    if (!Array.isArray(values)) {
-#|      return [];
-#|    }
-#|    const seen = new Set();
-#|    return values.map((value) => String(value || "").trim()).filter((addr) => {
-#|      if (!isAddressQuery(addr) || seen.has(addr)) {
-#|        return false;
-#|      }
-#|      seen.add(addr);
-#|      return true;
-#|    });
-#|  }
-#|
-#|  function applyStoredUi(value) {
-#|    const stored = value && typeof value === "object" ? value : {};
-#|    state.selectedFunctionAddr = stored.selectedFunctionAddr || "";
+  #|    }
+  #|  }
+  #|
+  #|  function sanitizeBreakpointAddrs(values) {
+  #|    if (!Array.isArray(values)) {
+  #|      return [];
+  #|    }
+  #|    const seen = new Set();
+  #|    return values.map((value) => String(value || "").trim()).filter((addr) => {
+  #|      if (!isAddressQuery(addr) || seen.has(addr)) {
+  #|        return false;
+  #|      }
+  #|      seen.add(addr);
+  #|      return true;
+  #|    });
+  #|  }
+  #|
+  #|  function applyStoredUi(value) {
+  #|    const stored = value && typeof value === "object" ? value : {};
+  #|    state.selectedFunctionAddr = stored.selectedFunctionAddr || "";
   #|    state.searchText = stored.searchText || "";
   #|    state.activeTab = ["trace", "memory", "syscalls"].includes(stored.activeTab)
   #|      ? stored.activeTab
   #|      : "trace";
-#|    state.helpCollapsed = stored.helpCollapsed === true;
-#|    state.followPcEnabled = stored.followPcEnabled !== false;
-#|    state.showChangedRegistersOnly = stored.showChangedRegistersOnly === true;
-#|    state.compareMode = stored.compareMode === "initial" ? "initial" : "prev";
-#|    state.layout.navWidth = clampNumber(stored.navWidth, 180, 420, 240);
+  #|    state.helpCollapsed = stored.helpCollapsed === true;
+  #|    state.followPcEnabled = stored.followPcEnabled !== false;
+  #|    state.showChangedRegistersOnly = stored.showChangedRegistersOnly === true;
+  #|    state.compareMode = stored.compareMode === "initial" ? "initial" : "prev";
+  #|    state.layout.navWidth = clampNumber(stored.navWidth, 180, 420, 240);
   #|    state.layout.inspectorWidth = clampNumber(stored.inspectorWidth, 240, 460, 320);
-#|    state.layout.bottomHeight = clampNumber(stored.bottomHeight, 180, 420, 260);
-#|    state.layout.navCollapsed = stored.navCollapsed === true;
-#|    state.layout.bottomCollapsed = stored.bottomCollapsed === true;
-#|    state.layout.inspectorCollapsed = stored.inspectorCollapsed === true;
-#|    state.breakpoints = sanitizeBreakpointAddrs(stored.breakpoints);
-#|    state.replayBreakpointHit = "";
-#|  }
+  #|    state.layout.bottomHeight = clampNumber(stored.bottomHeight, 180, 420, 260);
+  #|    state.layout.navCollapsed = stored.navCollapsed === true;
+  #|    state.layout.bottomCollapsed = stored.bottomCollapsed === true;
+  #|    state.layout.inspectorCollapsed = stored.inspectorCollapsed === true;
+  #|    state.breakpoints = sanitizeBreakpointAddrs(stored.breakpoints);
+  #|    state.replayBreakpointHit = "";
+  #|  }
   #|
   #|  function saveUiState() {
   #|    try {
@@ -2096,20 +2096,20 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|        selectedFunctionAddr: state.selectedFunctionAddr,
   #|        searchText: state.searchText,
   #|        activeTab: state.activeTab,
-#|        helpCollapsed: state.helpCollapsed,
-#|        followPcEnabled: state.followPcEnabled,
-#|        showChangedRegistersOnly: state.showChangedRegistersOnly,
-#|        compareMode: state.compareMode,
-#|        navWidth: state.layout.navWidth,
-#|        inspectorWidth: state.layout.inspectorWidth,
-#|        bottomHeight: state.layout.bottomHeight,
-#|        navCollapsed: state.layout.navCollapsed,
-#|        bottomCollapsed: state.layout.bottomCollapsed,
-#|        inspectorCollapsed: state.layout.inspectorCollapsed,
-#|        breakpoints: state.breakpoints
-#|      }));
-#|    } catch (_) {
-#|    }
+  #|        helpCollapsed: state.helpCollapsed,
+  #|        followPcEnabled: state.followPcEnabled,
+  #|        showChangedRegistersOnly: state.showChangedRegistersOnly,
+  #|        compareMode: state.compareMode,
+  #|        navWidth: state.layout.navWidth,
+  #|        inspectorWidth: state.layout.inspectorWidth,
+  #|        bottomHeight: state.layout.bottomHeight,
+  #|        navCollapsed: state.layout.navCollapsed,
+  #|        bottomCollapsed: state.layout.bottomCollapsed,
+  #|        inspectorCollapsed: state.layout.inspectorCollapsed,
+  #|        breakpoints: state.breakpoints
+  #|      }));
+  #|    } catch (_) {
+  #|    }
   #|  }
   #|
   #|  function seedEmbeddedSlices(sourceFile) {
@@ -2129,18 +2129,18 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    });
   #|  }
   #|
-#|  function rebuildDerivedCaches() {
-#|    initialRegisters = Object.fromEntries(
-#|      (overview.runtime.initial_registers || []).map(item => [item.name, item.value]),
-#|    );
-#|    eventIndexByAddr = new Map();
-#|    tracedAddrSet = new Set();
-#|    (overview.events || []).forEach((event, index) => {
-#|      tracedAddrSet.add(event.addr);
-#|      if (!eventIndexByAddr.has(event.addr)) {
-#|        eventIndexByAddr.set(event.addr, index);
-#|      }
-#|    });
+  #|  function rebuildDerivedCaches() {
+  #|    initialRegisters = Object.fromEntries(
+  #|      (overview.runtime.initial_registers || []).map(item => [item.name, item.value]),
+  #|    );
+  #|    eventIndexByAddr = new Map();
+  #|    tracedAddrSet = new Set();
+  #|    (overview.events || []).forEach((event, index) => {
+  #|      tracedAddrSet.add(event.addr);
+  #|      if (!eventIndexByAddr.has(event.addr)) {
+  #|        eventIndexByAddr.set(event.addr, index);
+  #|      }
+  #|    });
   #|    functionRanges = (overview.functions || [])
   #|      .slice()
   #|      .sort((lhs, rhs) => compareAddr(lhs.addr, rhs.addr))
@@ -2153,12 +2153,12 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|        const end = size > 0n ? start + size : nextStart;
   #|        return { fn, start, end: end > start ? end : start + 4n };
   #|      });
-#|    if (!state.focusedAddr || state.focusedAddr === "0x0") {
-#|      state.focusedAddr = overview.runtime.initial_pc || overview.meta.entry_point || "0x0";
-#|    }
-#|    state.breakpoints = state.breakpoints.filter((addr) => tracedAddrSet.has(addr));
-#|    state.replayBreakpointHit = "";
-#|  }
+  #|    if (!state.focusedAddr || state.focusedAddr === "0x0") {
+  #|      state.focusedAddr = overview.runtime.initial_pc || overview.meta.entry_point || "0x0";
+  #|    }
+  #|    state.breakpoints = state.breakpoints.filter((addr) => tracedAddrSet.has(addr));
+  #|    state.replayBreakpointHit = "";
+  #|  }
   #|
   #|  function resetRuntimeState() {
   #|    state.registers = { ...initialRegisters };
@@ -2243,76 +2243,76 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    return match ? match.fn : null;
   #|  }
   #|
-#|  function currentFunctionForCursor() {
-#|    const event = currentEvent();
-#|    return functionForAddress(
-#|      event ? event.addr : (overview.runtime.initial_pc || overview.meta.entry_point || "0x0"),
-#|    );
-#|  }
-#|
-#|  function isTraceReachable(addr) {
-#|    return tracedAddrSet.has(String(addr || "").trim());
-#|  }
-#|
-#|  function hasReplayBreakpoint(addr) {
-#|    return state.breakpoints.includes(String(addr || "").trim());
-#|  }
-#|
-#|  function sortedReplayBreakpoints() {
-#|    return state.breakpoints.slice().sort(compareAddr);
-#|  }
-#|
-#|  function replayBreakpointLabel() {
-#|    return state.replayBreakpointHit ? `Replay breakpoint @${state.replayBreakpointHit}` : "";
-#|  }
-#|
-#|  function setReplayBreakpoint(addr, enabled) {
-#|    const target = String(addr || "").trim();
-#|    if (!isAddressQuery(target) || !isTraceReachable(target)) {
-#|      return false;
-#|    }
-#|    const nextEnabled = typeof enabled === "boolean" ? enabled : !hasReplayBreakpoint(target);
-#|    if (nextEnabled) {
-#|      state.breakpoints = sanitizeBreakpointAddrs([...state.breakpoints, target]);
-#|    } else {
-#|      state.breakpoints = state.breakpoints.filter((item) => item !== target);
-#|      if (state.replayBreakpointHit === target) {
-#|        state.replayBreakpointHit = "";
-#|      }
-#|    }
-#|    saveUiState();
-#|    renderRuntimePanels();
-#|    return true;
-#|  }
-#|
-#|  function clearAllReplayBreakpoints() {
-#|    if (state.breakpoints.length === 0) {
-#|      return;
-#|    }
-#|    state.breakpoints = [];
-#|    state.replayBreakpointHit = "";
-#|    saveUiState();
-#|    renderRuntimePanels();
-#|  }
-#|
-#|  function compareRegistersToInitial() {
-#|    return REGISTER_ORDER.map((name) => {
-#|      const before = initialRegisters[name] || "0x0";
-#|      const after = state.registers[name] || "0x0";
-#|      return before !== after ? { name, before, after } : null;
-#|    }).filter(Boolean);
-#|  }
-#|
-#|  function renderCompareCard(title, rows, emptyMessage) {
-#|    const body = rows && rows.length > 0
-#|      ? rows.join("")
-#|      : `<div class="empty-panel">${escapeHtml(emptyMessage)}</div>`;
-#|    return `<div class="compare-card"><div class="compare-card-title">${escapeHtml(title)}</div>${body}</div>`;
-#|  }
-#|
-#|  function selectedSlice() {
-#|    return state.selectedFunctionAddr ? sliceCache.get(state.selectedFunctionAddr) || null : null;
-#|  }
+  #|  function currentFunctionForCursor() {
+  #|    const event = currentEvent();
+  #|    return functionForAddress(
+  #|      event ? event.addr : (overview.runtime.initial_pc || overview.meta.entry_point || "0x0"),
+  #|    );
+  #|  }
+  #|
+  #|  function isTraceReachable(addr) {
+  #|    return tracedAddrSet.has(String(addr || "").trim());
+  #|  }
+  #|
+  #|  function hasReplayBreakpoint(addr) {
+  #|    return state.breakpoints.includes(String(addr || "").trim());
+  #|  }
+  #|
+  #|  function sortedReplayBreakpoints() {
+  #|    return state.breakpoints.slice().sort(compareAddr);
+  #|  }
+  #|
+  #|  function replayBreakpointLabel() {
+  #|    return state.replayBreakpointHit ? `Replay breakpoint @${state.replayBreakpointHit}` : "";
+  #|  }
+  #|
+  #|  function setReplayBreakpoint(addr, enabled) {
+  #|    const target = String(addr || "").trim();
+  #|    if (!isAddressQuery(target) || !isTraceReachable(target)) {
+  #|      return false;
+  #|    }
+  #|    const nextEnabled = typeof enabled === "boolean" ? enabled : !hasReplayBreakpoint(target);
+  #|    if (nextEnabled) {
+  #|      state.breakpoints = sanitizeBreakpointAddrs([...state.breakpoints, target]);
+  #|    } else {
+  #|      state.breakpoints = state.breakpoints.filter((item) => item !== target);
+  #|      if (state.replayBreakpointHit === target) {
+  #|        state.replayBreakpointHit = "";
+  #|      }
+  #|    }
+  #|    saveUiState();
+  #|    renderRuntimePanels();
+  #|    return true;
+  #|  }
+  #|
+  #|  function clearAllReplayBreakpoints() {
+  #|    if (state.breakpoints.length === 0) {
+  #|      return;
+  #|    }
+  #|    state.breakpoints = [];
+  #|    state.replayBreakpointHit = "";
+  #|    saveUiState();
+  #|    renderRuntimePanels();
+  #|  }
+  #|
+  #|  function compareRegistersToInitial() {
+  #|    return REGISTER_ORDER.map((name) => {
+  #|      const before = initialRegisters[name] || "0x0";
+  #|      const after = state.registers[name] || "0x0";
+  #|      return before !== after ? { name, before, after } : null;
+  #|    }).filter(Boolean);
+  #|  }
+  #|
+  #|  function renderCompareCard(title, rows, emptyMessage) {
+  #|    const body = rows && rows.length > 0
+  #|      ? rows.join("")
+  #|      : `<div class="empty-panel">${escapeHtml(emptyMessage)}</div>`;
+  #|    return `<div class="compare-card"><div class="compare-card-title">${escapeHtml(title)}</div>${body}</div>`;
+  #|  }
+  #|
+  #|  function selectedSlice() {
+  #|    return state.selectedFunctionAddr ? sliceCache.get(state.selectedFunctionAddr) || null : null;
+  #|  }
   #|
   #|  function selectedFunction() {
   #|    const slice = selectedSlice();
@@ -2506,23 +2506,23 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    }).join("") || emptyMessage;
   #|  }
   #|
-#|  function renderBanner() {
-#|    if (state.loadError) {
-#|      refs.truncatedBanner.style.display = "block";
-#|      refs.truncatedBanner.textContent = state.loadError;
-#|      return;
+  #|  function renderBanner() {
+  #|    if (state.loadError) {
+  #|      refs.truncatedBanner.style.display = "block";
+  #|      refs.truncatedBanner.textContent = state.loadError;
+  #|      return;
   #|    }
   #|    const messages = [];
   #|    if (Number(overview.meta.total_instruction_count || 0) > PROGRAM_ROW_LIMIT) {
   #|      messages.push(`当前程序共有 ${overview.meta.total_instruction_count} 条指令，页面仅展示前 ${overview.meta.instruction_count} 条。可通过 CLI 参数 --max-inst 调整，或先选择函数缩小范围。`);
   #|    }
-#|    if (runtimeStoppedEarly()) {
-#|      messages.push(`运行提前停止：${overview.runtime.stop_reason}。请在 Trace 中定位最后一步，并结合 Syscalls/Output 面板排查原因。`);
-#|    }
-#|    if (replayBreakpointLabel()) {
-#|      messages.push(`${replayBreakpointLabel()}。这是轨迹回放断点，不会改写原始 stop reason。`);
-#|    }
-#|    const slice = selectedSlice();
+  #|    if (runtimeStoppedEarly()) {
+  #|      messages.push(`运行提前停止：${overview.runtime.stop_reason}。请在 Trace 中定位最后一步，并结合 Syscalls/Output 面板排查原因。`);
+  #|    }
+  #|    if (replayBreakpointLabel()) {
+  #|      messages.push(`${replayBreakpointLabel()}。这是轨迹回放断点，不会改写原始 stop reason。`);
+  #|    }
+  #|    const slice = selectedSlice();
   #|    if (state.selectedFunctionAddr && slice && slice.available === false) {
   #|      messages.push(`函数切片不可用：${slice.reason || state.selectedFunctionAddr}。请切换到其他函数，或刷新页面后重试。`);
   #|    }
@@ -2530,18 +2530,18 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    refs.truncatedBanner.textContent = messages.join(" | ");
   #|  }
   #|
-#|  function renderRuntimeSummary() {
-#|    const event = currentEvent();
-#|    const currentFn = currentFunctionForCursor();
-#|    const entries = [
-#|      ["PC", event ? event.addr : overview.runtime.initial_pc],
-#|      ["步骤", `${Math.max(0, state.cursor + 1)}/${(overview.events || []).length}`],
-#|      ["当前函数", currentFn ? currentFn.name : "N/A"],
-#|      ["停止", event && event.stop_reason ? event.stop_reason : overview.runtime.stop_reason],
-#|      ["回放断点", replayBreakpointLabel() || "-"],
-#|      ["stdout", String(state.stdout.length)],
-#|      ["stderr", String(state.stderr.length)]
-#|    ];
+  #|  function renderRuntimeSummary() {
+  #|    const event = currentEvent();
+  #|    const currentFn = currentFunctionForCursor();
+  #|    const entries = [
+  #|      ["PC", event ? event.addr : overview.runtime.initial_pc],
+  #|      ["步骤", `${Math.max(0, state.cursor + 1)}/${(overview.events || []).length}`],
+  #|      ["当前函数", currentFn ? currentFn.name : "N/A"],
+  #|      ["停止", event && event.stop_reason ? event.stop_reason : overview.runtime.stop_reason],
+  #|      ["回放断点", replayBreakpointLabel() || "-"],
+  #|      ["stdout", String(state.stdout.length)],
+  #|      ["stderr", String(state.stderr.length)]
+  #|    ];
   #|    refs.runtimeSummary.innerHTML = entries
   #|      .map(([key, value]) => `<div class="stat"><div class="k">${escapeHtml(key)}</div><div class="v">${escapeHtml(value)}</div></div>`)
   #|      .join("");
@@ -2564,13 +2564,13 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|      ["pc", row.addr],
   #|      ["next", row.next_addr || "-"],
   #|      ["block", row.block_start || "-"],
-#|      ["function", currentFn ? currentFn.name : "-"],
-#|      ["category", row.category || "-"],
-#|      ["stop", row.stop_reason || overview.runtime.stop_reason || "-"],
-#|      ["replay breakpoint", replayBreakpointLabel() || "-"],
-#|      ["asm", row.asm || "-"]
-#|    ].map(([key, value]) => `<tr><td>${escapeHtml(key)}</td><td>${escapeHtml(value)}</td></tr>`).join("");
-#|  }
+  #|      ["function", currentFn ? currentFn.name : "-"],
+  #|      ["category", row.category || "-"],
+  #|      ["stop", row.stop_reason || overview.runtime.stop_reason || "-"],
+  #|      ["replay breakpoint", replayBreakpointLabel() || "-"],
+  #|      ["asm", row.asm || "-"]
+  #|    ].map(([key, value]) => `<tr><td>${escapeHtml(key)}</td><td>${escapeHtml(value)}</td></tr>`).join("");
+  #|  }
   #|
   #|  function renderToolbarState() {
   #|    refs.prevBtn.disabled = state.cursor < 0;
@@ -2581,47 +2581,47 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    refs.followPc.classList.toggle("active", state.followPcEnabled);
   #|    refs.changedRegistersToggle.classList.toggle("active", state.showChangedRegistersOnly);
   #|    refs.fileLoadBtn.classList.toggle("hidden", !REMOTE_MODE);
-#|    refs.fileLoadBtn.disabled = state.loading || refs.fileInput.value.trim() === "";
-#|    refs.fileLoadBtn.textContent = state.loading ? "Loading..." : "Load";
-#|    refs.fileInput.disabled = !REMOTE_MODE || state.loading;
-#|    refs.breakpointClearBtn.disabled = state.breakpoints.length === 0;
-#|  }
-#|
-#|  function renderDisasm() {
+  #|    refs.fileLoadBtn.disabled = state.loading || refs.fileInput.value.trim() === "";
+  #|    refs.fileLoadBtn.textContent = state.loading ? "Loading..." : "Load";
+  #|    refs.fileInput.disabled = !REMOTE_MODE || state.loading;
+  #|    refs.breakpointClearBtn.disabled = state.breakpoints.length === 0;
+  #|  }
+  #|
+  #|  function renderDisasm() {
   #|    const slice = selectedSlice();
   #|    const fn = selectedFunction();
   #|    refs.viewPill.textContent = fn ? `${fn.name} @ ${fn.addr || "?"}` : "No function";
-#|    if (!slice) {
-#|      refs.disasmSubtitle.textContent = "先选择函数开始浏览";
-#|      refs.disasmBody.innerHTML = tableEmptyState(5, "请先选择一个函数。", "可从左侧函数列表或顶部函数选择框开始。");
-#|      return;
-#|    }
-#|    if (slice.available === false) {
-#|      refs.disasmSubtitle.textContent = "函数切片不可用";
-#|      refs.disasmBody.innerHTML = tableEmptyState(5, slice.reason || "函数切片不可用。", "请切换到其他函数，或刷新页面后重试。");
-#|      return;
-#|    }
+  #|    if (!slice) {
+  #|      refs.disasmSubtitle.textContent = "先选择函数开始浏览";
+  #|      refs.disasmBody.innerHTML = tableEmptyState(5, "请先选择一个函数。", "可从左侧函数列表或顶部函数选择框开始。");
+  #|      return;
+  #|    }
+  #|    if (slice.available === false) {
+  #|      refs.disasmSubtitle.textContent = "函数切片不可用";
+  #|      refs.disasmBody.innerHTML = tableEmptyState(5, slice.reason || "函数切片不可用。", "请切换到其他函数，或刷新页面后重试。");
+  #|      return;
+  #|    }
   #|    const instructions = filteredInstructions();
   #|    const focusAddr = instructionFocusAddr();
   #|    const focusIndex = findInstructionIndex(instructions, focusAddr);
   #|    const win = windowedItems(instructions, focusIndex, WINDOW_ROWS);
   #|    const event = currentEvent();
-#|    refs.disasmSubtitle.textContent = `${fn ? fn.name : "no function"} | ${instructions.length} rows | ${queryText() ? `filter=${queryText()}` : "no filter"} | focus=${focusAddr || "-"} | ${event ? `step=${event.step} pc=${event.addr}` : "step=0 pc=initial"}`;
-#|    refs.disasmBody.innerHTML = win.items.length > 0
-#|      ? win.items.map((inst) => {
-#|          const active = event && event.addr === inst.addr;
-#|          const focus = state.focusedAddr === inst.addr;
-#|          const canBreak = isTraceReachable(inst.addr);
-#|          const armed = hasReplayBreakpoint(inst.addr);
-#|          const breakpointCell = canBreak
-#|            ? `<button class="breakpoint-toggle${armed ? " active" : ""}" data-breakpoint-addr="${inst.addr}" title="${armed ? "移除回放断点" : "添加回放断点"}">${armed ? "BP" : "+"}</button>`
-#|            : `<button class="breakpoint-toggle disabled" data-breakpoint-disabled="1" title="当前 trace 不会经过该地址，不能设置回放断点">-</button>`;
-#|          return `<tr data-addr="${inst.addr}" class="${active ? "active" : ""}${focus && !active ? " focus" : ""}${armed ? " breakpoint" : ""}"><td class="bp-cell">${breakpointCell}</td><td>${inst.index}</td><td>${escapeHtml(inst.addr)}</td><td>${escapeHtml(inst.category)}</td><td class="code-cell">${escapeHtml(inst.asm)}</td></tr>`;
-#|        }).join("")
-#|      : tableEmptyState(5, "当前过滤条件下没有匹配指令。", filterActionHint());
-#|  }
-#|
-#|  function renderCfg() {
+  #|    refs.disasmSubtitle.textContent = `${fn ? fn.name : "no function"} | ${instructions.length} rows | ${queryText() ? `filter=${queryText()}` : "no filter"} | focus=${focusAddr || "-"} | ${event ? `step=${event.step} pc=${event.addr}` : "step=0 pc=initial"}`;
+  #|    refs.disasmBody.innerHTML = win.items.length > 0
+  #|      ? win.items.map((inst) => {
+  #|          const active = event && event.addr === inst.addr;
+  #|          const focus = state.focusedAddr === inst.addr;
+  #|          const canBreak = isTraceReachable(inst.addr);
+  #|          const armed = hasReplayBreakpoint(inst.addr);
+  #|          const breakpointCell = canBreak
+  #|            ? `<button class="breakpoint-toggle${armed ? " active" : ""}" data-breakpoint-addr="${inst.addr}" title="${armed ? "移除回放断点" : "添加回放断点"}">${armed ? "BP" : "+"}</button>`
+  #|            : `<button class="breakpoint-toggle disabled" data-breakpoint-disabled="1" title="当前 trace 不会经过该地址，不能设置回放断点">-</button>`;
+  #|          return `<tr data-addr="${inst.addr}" class="${active ? "active" : ""}${focus && !active ? " focus" : ""}${armed ? " breakpoint" : ""}"><td class="bp-cell">${breakpointCell}</td><td>${inst.index}</td><td>${escapeHtml(inst.addr)}</td><td>${escapeHtml(inst.category)}</td><td class="code-cell">${escapeHtml(inst.asm)}</td></tr>`;
+  #|        }).join("")
+  #|      : tableEmptyState(5, "当前过滤条件下没有匹配指令。", filterActionHint());
+  #|  }
+  #|
+  #|  function renderCfg() {
   #|    const slice = selectedSlice();
   #|    if (!slice) {
   #|      refs.cfgSubtitle.textContent = "先选择函数开始浏览";
@@ -2632,28 +2632,28 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|      refs.cfgSubtitle.textContent = "函数切片不可用";
   #|      refs.cfgView.innerHTML = panelEmptyState(slice.reason || "函数切片不可用。", "请切换到其他函数，或刷新页面后重试。");
   #|      return;
-#|    }
-#|    const blocks = slice.blocks || [];
-#|    const edges = slice.edges || [];
-#|    const fn = selectedFunction();
-#|    const event = currentEvent();
+  #|    }
+  #|    const blocks = slice.blocks || [];
+  #|    const edges = slice.edges || [];
+  #|    const fn = selectedFunction();
+  #|    const event = currentEvent();
   #|    const currentAddr = event ? hexToBigInt(event.addr) : null;
   #|    refs.cfgSubtitle.textContent = `${fn ? fn.name : "no function"} | ${blocks.length} blocks | ${edges.length} edges | ${event ? `pc=${event.addr}` : `pc=${overview.runtime.initial_pc}`}`;
   #|    const note = [];
   #|    if (blocks.length > CFG_BLOCK_LIMIT || edges.length > CFG_EDGE_LIMIT) {
   #|      note.push(`CFG 已截断：当前仅展示 blocks ${Math.min(blocks.length, CFG_BLOCK_LIMIT)}/${blocks.length}，edges ${Math.min(edges.length, CFG_EDGE_LIMIT)}/${edges.length}。可先收窄到具体函数或地址附近继续查看。`);
-#|    }
-#|    const cards = blocks.slice(0, CFG_BLOCK_LIMIT).map((block) => {
-#|      const start = hexToBigInt(block.start_addr);
-#|      const end = hexToBigInt(block.end_addr);
-#|      const active = currentAddr !== null && currentAddr >= start && currentAddr <= end;
-#|      const canBreak = isTraceReachable(block.start_addr);
-#|      const armed = hasReplayBreakpoint(block.start_addr);
-#|      const breakpointButton = canBreak
-#|        ? `<button class="breakpoint-toggle${armed ? " active" : ""}" data-breakpoint-addr="${block.start_addr}" title="${armed ? "移除回放断点" : "将 block 起点加入回放断点"}">${armed ? "BP" : "+"}</button>`
-#|        : `<button class="breakpoint-toggle disabled" data-breakpoint-disabled="1" title="当前 trace 不会经过该 basic block 起点，不能设置回放断点">trace</button>`;
-#|      return `<div class="cfg-card${active ? " active" : ""}${armed ? " breakpoint" : ""}"><div class="cfg-card-head"><div class="cfg-card-title">${escapeHtml(block.start_addr)} - ${escapeHtml(block.end_addr)}</div>${breakpointButton}</div><div class="muted">inst=${block.instruction_count}, term=${block.is_terminated}</div></div>`;
-#|    }).join("");
+  #|    }
+  #|    const cards = blocks.slice(0, CFG_BLOCK_LIMIT).map((block) => {
+  #|      const start = hexToBigInt(block.start_addr);
+  #|      const end = hexToBigInt(block.end_addr);
+  #|      const active = currentAddr !== null && currentAddr >= start && currentAddr <= end;
+  #|      const canBreak = isTraceReachable(block.start_addr);
+  #|      const armed = hasReplayBreakpoint(block.start_addr);
+  #|      const breakpointButton = canBreak
+  #|        ? `<button class="breakpoint-toggle${armed ? " active" : ""}" data-breakpoint-addr="${block.start_addr}" title="${armed ? "移除回放断点" : "将 block 起点加入回放断点"}">${armed ? "BP" : "+"}</button>`
+  #|        : `<button class="breakpoint-toggle disabled" data-breakpoint-disabled="1" title="当前 trace 不会经过该 basic block 起点，不能设置回放断点">trace</button>`;
+  #|      return `<div class="cfg-card${active ? " active" : ""}${armed ? " breakpoint" : ""}"><div class="cfg-card-head"><div class="cfg-card-title">${escapeHtml(block.start_addr)} - ${escapeHtml(block.end_addr)}</div>${breakpointButton}</div><div class="muted">inst=${block.instruction_count}, term=${block.is_terminated}</div></div>`;
+  #|    }).join("");
   #|    const edgeRows = edges.slice(0, CFG_EDGE_LIMIT).map((edge) => {
   #|      return `<tr><td>${escapeHtml(edge.from_block)}</td><td>${escapeHtml(edge.to_block)}</td><td>${escapeHtml(edge.edge_type)}</td></tr>`;
   #|    }).join("");
@@ -2687,66 +2687,66 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    }).join("") || '<div class="empty-panel">当前 step 没有寄存器变化</div>';
   #|  }
   #|
-#|  function renderRecentWrites() {
-#|    refs.recentWrites.innerHTML = state.memoryHistory.slice(0, 8).map((item) => {
-#|      return `<tr><td>${item.step}</td><td>${escapeHtml(item.addr)}</td><td>${item.size}</td><td>${escapeHtml(item.after)}</td></tr>`;
-#|    }).join("") || '<tr><td colspan="4" class="empty-panel">暂无最近写入</td></tr>';
-#|  }
-#|
-#|  function renderReplayBreakpoints() {
-#|    const sorted = sortedReplayBreakpoints();
-#|    refs.breakpointSummary.textContent = sorted.length > 0
-#|      ? `${sorted.length} armed | 仅对当前 trace reachable 地址生效`
-#|      : "当前没有回放断点。";
-#|    refs.breakpointList.innerHTML = sorted.length > 0
-#|      ? sorted.map((addr) => {
-#|          const firstHit = eventIndexByAddr.has(addr) ? Number(eventIndexByAddr.get(addr)) + 1 : 0;
-#|          const active = state.replayBreakpointHit === addr;
-#|          return `<div class="breakpoint-row${active ? " active" : ""}"><button class="breakpoint-link" data-breakpoint-jump="${addr}"><div class="breakpoint-row-title">${escapeHtml(addr)}${active ? '<span class="badge current">hit</span>' : ""}</div><div class="nav-row-meta">first hit step ${firstHit || "-"} | click to focus</div></button><button class="breakpoint-remove-btn" data-breakpoint-remove="${addr}">Remove</button></div>`;
-#|        }).join("")
-#|      : panelEmptyState("当前没有回放断点。", "可在反汇编或 CFG 中点亮 trace reachable 地址。");
-#|  }
-#|
-#|  function renderStateCompare() {
-#|    refs.comparePrevBtn.classList.toggle("active", state.compareMode === "prev");
-#|    refs.compareInitialBtn.classList.toggle("active", state.compareMode === "initial");
-#|    const event = currentEvent();
-#|    if (state.compareMode === "prev") {
-#|      if (!event) {
-#|        refs.compareSummary.textContent = "Prev step: 先通过 Next / Play 进入任意一步。";
-#|        refs.compareBody.innerHTML = panelEmptyState("当前还没有选中执行步。", "使用 Next / Play 命中某一步后，再查看与上一状态的差异。");
-#|        return;
-#|      }
-#|      const baseline = event.step > 1 ? `step ${event.step - 1}` : "initial state";
-#|      refs.compareSummary.textContent = `Prev step baseline: ${baseline}`;
-#|      const registerRows = (event.register_writes || []).map((item) => `<div class="compare-row mono"><span>${escapeHtml(item.name)}</span><span>${escapeHtml(item.before)} -> ${escapeHtml(item.after)}</span></div>`);
-#|      const memoryRows = (event.memory_writes || []).map((item) => `<div class="compare-row mono"><span>${escapeHtml(item.addr)}</span><span>${escapeHtml(item.before)} -> ${escapeHtml(item.after)} (size=${item.size})</span></div>`);
-#|      const outputRows = [];
-#|      if (event.stdout_append) {
-#|        outputRows.push(`<div class="compare-row mono"><span>stdout</span><span>${escapeHtml(event.stdout_append)}</span></div>`);
-#|      }
-#|      if (event.stderr_append) {
-#|        outputRows.push(`<div class="compare-row mono"><span>stderr</span><span>${escapeHtml(event.stderr_append)}</span></div>`);
-#|      }
-#|      refs.compareBody.innerHTML = `<div class="compare-grid">${renderCompareCard("Registers", registerRows, "本步没有寄存器变化")}${renderCompareCard("Memory", memoryRows, "本步没有内存写入")}${renderCompareCard("Output", outputRows, "本步没有 stdout / stderr 增量")}</div>`;
-#|      return;
-#|    }
-#|    const registerDiffs = compareRegistersToInitial();
-#|    refs.compareSummary.textContent = "Initial baseline: 对比初始寄存器状态，并补充累计输出与最近写内存摘要。";
-#|    const registerRows = registerDiffs.map((item) => `<div class="compare-row mono"><span>${escapeHtml(item.name)}</span><span>${escapeHtml(item.before)} -> ${escapeHtml(item.after)}</span></div>`);
-#|    const memoryRows = state.memoryHistory.slice(0, 8).map((item) => `<div class="compare-row mono"><span>step ${item.step}</span><span>${escapeHtml(item.addr)}: ${escapeHtml(item.before)} -> ${escapeHtml(item.after)} (size=${item.size})</span></div>`);
-#|    const outputRows = [];
-#|    if (state.stdout) {
-#|      outputRows.push(`<div class="compare-row mono"><span>stdout</span><span>${escapeHtml(state.stdout)}</span></div>`);
-#|    }
-#|    if (state.stderr) {
-#|      outputRows.push(`<div class="compare-row mono"><span>stderr</span><span>${escapeHtml(state.stderr)}</span></div>`);
-#|    }
-#|    refs.compareBody.innerHTML = `<div class="compare-grid">${renderCompareCard("Registers", registerRows, "当前寄存器与初始状态一致")}${renderCompareCard("Recent Memory Writes", memoryRows, "从初始状态开始还没有内存写入")}${renderCompareCard("Accumulated Output", outputRows, "从初始状态开始还没有 stdout / stderr 输出")}</div>`;
-#|  }
-#|
-#|  function renderTrace() {
-#|    const events = overview.events || [];
+  #|  function renderRecentWrites() {
+  #|    refs.recentWrites.innerHTML = state.memoryHistory.slice(0, 8).map((item) => {
+  #|      return `<tr><td>${item.step}</td><td>${escapeHtml(item.addr)}</td><td>${item.size}</td><td>${escapeHtml(item.after)}</td></tr>`;
+  #|    }).join("") || '<tr><td colspan="4" class="empty-panel">暂无最近写入</td></tr>';
+  #|  }
+  #|
+  #|  function renderReplayBreakpoints() {
+  #|    const sorted = sortedReplayBreakpoints();
+  #|    refs.breakpointSummary.textContent = sorted.length > 0
+  #|      ? `${sorted.length} armed | 仅对当前 trace reachable 地址生效`
+  #|      : "当前没有回放断点。";
+  #|    refs.breakpointList.innerHTML = sorted.length > 0
+  #|      ? sorted.map((addr) => {
+  #|          const firstHit = eventIndexByAddr.has(addr) ? Number(eventIndexByAddr.get(addr)) + 1 : 0;
+  #|          const active = state.replayBreakpointHit === addr;
+  #|          return `<div class="breakpoint-row${active ? " active" : ""}"><button class="breakpoint-link" data-breakpoint-jump="${addr}"><div class="breakpoint-row-title">${escapeHtml(addr)}${active ? '<span class="badge current">hit</span>' : ""}</div><div class="nav-row-meta">first hit step ${firstHit || "-"} | click to focus</div></button><button class="breakpoint-remove-btn" data-breakpoint-remove="${addr}">Remove</button></div>`;
+  #|        }).join("")
+  #|      : panelEmptyState("当前没有回放断点。", "可在反汇编或 CFG 中点亮 trace reachable 地址。");
+  #|  }
+  #|
+  #|  function renderStateCompare() {
+  #|    refs.comparePrevBtn.classList.toggle("active", state.compareMode === "prev");
+  #|    refs.compareInitialBtn.classList.toggle("active", state.compareMode === "initial");
+  #|    const event = currentEvent();
+  #|    if (state.compareMode === "prev") {
+  #|      if (!event) {
+  #|        refs.compareSummary.textContent = "Prev step: 先通过 Next / Play 进入任意一步。";
+  #|        refs.compareBody.innerHTML = panelEmptyState("当前还没有选中执行步。", "使用 Next / Play 命中某一步后，再查看与上一状态的差异。");
+  #|        return;
+  #|      }
+  #|      const baseline = event.step > 1 ? `step ${event.step - 1}` : "initial state";
+  #|      refs.compareSummary.textContent = `Prev step baseline: ${baseline}`;
+  #|      const registerRows = (event.register_writes || []).map((item) => `<div class="compare-row mono"><span>${escapeHtml(item.name)}</span><span>${escapeHtml(item.before)} -> ${escapeHtml(item.after)}</span></div>`);
+  #|      const memoryRows = (event.memory_writes || []).map((item) => `<div class="compare-row mono"><span>${escapeHtml(item.addr)}</span><span>${escapeHtml(item.before)} -> ${escapeHtml(item.after)} (size=${item.size})</span></div>`);
+  #|      const outputRows = [];
+  #|      if (event.stdout_append) {
+  #|        outputRows.push(`<div class="compare-row mono"><span>stdout</span><span>${escapeHtml(event.stdout_append)}</span></div>`);
+  #|      }
+  #|      if (event.stderr_append) {
+  #|        outputRows.push(`<div class="compare-row mono"><span>stderr</span><span>${escapeHtml(event.stderr_append)}</span></div>`);
+  #|      }
+  #|      refs.compareBody.innerHTML = `<div class="compare-grid">${renderCompareCard("Registers", registerRows, "本步没有寄存器变化")}${renderCompareCard("Memory", memoryRows, "本步没有内存写入")}${renderCompareCard("Output", outputRows, "本步没有 stdout / stderr 增量")}</div>`;
+  #|      return;
+  #|    }
+  #|    const registerDiffs = compareRegistersToInitial();
+  #|    refs.compareSummary.textContent = "Initial baseline: 对比初始寄存器状态，并补充累计输出与最近写内存摘要。";
+  #|    const registerRows = registerDiffs.map((item) => `<div class="compare-row mono"><span>${escapeHtml(item.name)}</span><span>${escapeHtml(item.before)} -> ${escapeHtml(item.after)}</span></div>`);
+  #|    const memoryRows = state.memoryHistory.slice(0, 8).map((item) => `<div class="compare-row mono"><span>step ${item.step}</span><span>${escapeHtml(item.addr)}: ${escapeHtml(item.before)} -> ${escapeHtml(item.after)} (size=${item.size})</span></div>`);
+  #|    const outputRows = [];
+  #|    if (state.stdout) {
+  #|      outputRows.push(`<div class="compare-row mono"><span>stdout</span><span>${escapeHtml(state.stdout)}</span></div>`);
+  #|    }
+  #|    if (state.stderr) {
+  #|      outputRows.push(`<div class="compare-row mono"><span>stderr</span><span>${escapeHtml(state.stderr)}</span></div>`);
+  #|    }
+  #|    refs.compareBody.innerHTML = `<div class="compare-grid">${renderCompareCard("Registers", registerRows, "当前寄存器与初始状态一致")}${renderCompareCard("Recent Memory Writes", memoryRows, "从初始状态开始还没有内存写入")}${renderCompareCard("Accumulated Output", outputRows, "从初始状态开始还没有 stdout / stderr 输出")}</div>`;
+  #|  }
+  #|
+  #|  function renderTrace() {
+  #|    const events = overview.events || [];
   #|    const center = state.cursor >= 0 ? state.cursor : 0;
   #|    const win = windowedItems(events, center, WINDOW_ROWS);
   #|    refs.traceBody.innerHTML = win.items.length > 0
@@ -2838,14 +2838,14 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    renderHeader();
   #|    renderFunctions();
   #|    renderBanner();
-#|    renderRuntimeSummary();
-#|    renderStateCompare();
-#|    renderExecution();
-#|    renderRegisters();
-#|    renderRecentWrites();
-#|    renderReplayBreakpoints();
-#|    renderDisasm();
-#|    renderCfg();
+  #|    renderRuntimeSummary();
+  #|    renderStateCompare();
+  #|    renderExecution();
+  #|    renderRegisters();
+  #|    renderRecentWrites();
+  #|    renderReplayBreakpoints();
+  #|    renderDisasm();
+  #|    renderCfg();
   #|    renderTrace();
   #|    renderMemoryWrites();
   #|    renderSyscalls();
@@ -2881,9 +2881,9 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    rebuildDerivedCaches();
   #|    stopPlay();
   #|    state.cursor = -1;
-#|    resetRuntimeState();
-#|    state.replayBreakpointHit = "";
-#|    if (
+  #|    resetRuntimeState();
+  #|    state.replayBreakpointHit = "";
+  #|    if (
   #|      state.selectedFunctionAddr &&
   #|      state.selectedFunctionAddr !== "__all__" &&
   #|      !(overview.functions || []).some((fn) => fn.addr === state.selectedFunctionAddr)
@@ -3022,22 +3022,22 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    state.timer = null;
   #|  }
   #|
-#|  async function setCursor(next, reason = "navigate") {
-#|    const maxIndex = (overview.events || []).length - 1;
-#|    const clamped = Math.max(-1, Math.min(maxIndex, next));
-#|    if (clamped === state.cursor) {
-#|      return;
-#|    }
-#|    state.cursor = clamped;
-#|    const current = clamped >= 0 ? overview.events[clamped] : null;
-#|    state.replayBreakpointHit = "";
-#|    if ((reason === "step" || reason === "play") && current && hasReplayBreakpoint(current.addr)) {
-#|      state.replayBreakpointHit = current.addr;
-#|      stopPlay();
-#|    }
-#|    state.focusedAddr = clamped >= 0
-#|      ? overview.events[clamped].addr
-#|      : (overview.runtime.initial_pc || overview.meta.entry_point || "0x0");
+  #|  async function setCursor(next, reason = "navigate") {
+  #|    const maxIndex = (overview.events || []).length - 1;
+  #|    const clamped = Math.max(-1, Math.min(maxIndex, next));
+  #|    if (clamped === state.cursor) {
+  #|      return;
+  #|    }
+  #|    state.cursor = clamped;
+  #|    const current = clamped >= 0 ? overview.events[clamped] : null;
+  #|    state.replayBreakpointHit = "";
+  #|    if ((reason === "step" || reason === "play") && current && hasReplayBreakpoint(current.addr)) {
+  #|      state.replayBreakpointHit = current.addr;
+  #|      stopPlay();
+  #|    }
+  #|    state.focusedAddr = clamped >= 0
+  #|      ? overview.events[clamped].addr
+  #|      : (overview.runtime.initial_pc || overview.meta.entry_point || "0x0");
   #|    rebuildToCursor(state.cursor);
   #|    if (state.followPcEnabled) {
   #|      const currentFn = currentFunctionForCursor();
@@ -3050,13 +3050,13 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    renderRuntimePanels();
   #|  }
   #|
-#|  async function step(delta) {
-#|    if ((overview.events || []).length === 0) {
-#|      return;
-#|    }
-#|    const reason = delta > 0 ? (state.timer ? "play" : "step") : "navigate";
-#|    await setCursor(state.cursor + delta, reason);
-#|  }
+  #|  async function step(delta) {
+  #|    if ((overview.events || []).length === 0) {
+  #|      return;
+  #|    }
+  #|    const reason = delta > 0 ? (state.timer ? "play" : "step") : "navigate";
+  #|    await setCursor(state.cursor + delta, reason);
+  #|  }
   #|
   #|  function togglePlay() {
   #|    if (state.timer) {
@@ -3132,71 +3132,71 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    renderAll();
   #|  });
   #|
-#|  refs.disasmBody.addEventListener("click", async (event) => {
-#|    const disabledBreakpoint = event.target.closest("[data-breakpoint-disabled]");
-#|    if (disabledBreakpoint) {
-#|      event.preventDefault();
-#|      event.stopPropagation();
-#|      return;
-#|    }
-#|    const breakpointToggle = event.target.closest("[data-breakpoint-addr]");
-#|    if (breakpointToggle) {
-#|      event.preventDefault();
-#|      event.stopPropagation();
-#|      setReplayBreakpoint(breakpointToggle.getAttribute("data-breakpoint-addr") || "");
-#|      return;
-#|    }
-#|    const row = event.target.closest("tr[data-addr]");
-#|    if (!row) {
-#|      return;
+  #|  refs.disasmBody.addEventListener("click", async (event) => {
+  #|    const disabledBreakpoint = event.target.closest("[data-breakpoint-disabled]");
+  #|    if (disabledBreakpoint) {
+  #|      event.preventDefault();
+  #|      event.stopPropagation();
+  #|      return;
+  #|    }
+  #|    const breakpointToggle = event.target.closest("[data-breakpoint-addr]");
+  #|    if (breakpointToggle) {
+  #|      event.preventDefault();
+  #|      event.stopPropagation();
+  #|      setReplayBreakpoint(breakpointToggle.getAttribute("data-breakpoint-addr") || "");
+  #|      return;
+  #|    }
+  #|    const row = event.target.closest("tr[data-addr]");
+  #|    if (!row) {
+  #|      return;
   #|    }
   #|    const addr = row.getAttribute("data-addr") || "";
   #|    state.focusedAddr = addr;
   #|    if (eventIndexByAddr.has(addr)) {
-#|      await setCursor(eventIndexByAddr.get(addr));
-#|    } else {
-#|      await jumpToAddress(addr);
-#|    }
-#|  });
-#|
-#|  refs.cfgView.addEventListener("click", async (event) => {
-#|    const disabledBreakpoint = event.target.closest("[data-breakpoint-disabled]");
-#|    if (disabledBreakpoint) {
-#|      event.preventDefault();
-#|      event.stopPropagation();
-#|      return;
-#|    }
-#|    const breakpointToggle = event.target.closest("[data-breakpoint-addr]");
-#|    if (!breakpointToggle) {
-#|      return;
-#|    }
-#|    event.preventDefault();
-#|    event.stopPropagation();
-#|    setReplayBreakpoint(breakpointToggle.getAttribute("data-breakpoint-addr") || "");
-#|  });
-#|
-#|  refs.traceBody.addEventListener("click", async (event) => {
-#|    const row = event.target.closest("tr[data-event-index]");
-#|    if (!row) {
+  #|      await setCursor(eventIndexByAddr.get(addr));
+  #|    } else {
+  #|      await jumpToAddress(addr);
+  #|    }
+  #|  });
+  #|
+  #|  refs.cfgView.addEventListener("click", async (event) => {
+  #|    const disabledBreakpoint = event.target.closest("[data-breakpoint-disabled]");
+  #|    if (disabledBreakpoint) {
+  #|      event.preventDefault();
+  #|      event.stopPropagation();
   #|      return;
   #|    }
-#|    await setCursor(Number(row.getAttribute("data-event-index")));
-#|  });
-#|
-#|  refs.breakpointList.addEventListener("click", async (event) => {
-#|    const removeButton = event.target.closest("[data-breakpoint-remove]");
-#|    if (removeButton) {
-#|      event.preventDefault();
-#|      setReplayBreakpoint(removeButton.getAttribute("data-breakpoint-remove") || "", false);
-#|      return;
-#|    }
-#|    const jumpButton = event.target.closest("[data-breakpoint-jump]");
-#|    if (!jumpButton) {
-#|      return;
-#|    }
-#|    event.preventDefault();
-#|    await jumpToAddress(jumpButton.getAttribute("data-breakpoint-jump") || "");
-#|  });
+  #|    const breakpointToggle = event.target.closest("[data-breakpoint-addr]");
+  #|    if (!breakpointToggle) {
+  #|      return;
+  #|    }
+  #|    event.preventDefault();
+  #|    event.stopPropagation();
+  #|    setReplayBreakpoint(breakpointToggle.getAttribute("data-breakpoint-addr") || "");
+  #|  });
+  #|
+  #|  refs.traceBody.addEventListener("click", async (event) => {
+  #|    const row = event.target.closest("tr[data-event-index]");
+  #|    if (!row) {
+  #|      return;
+  #|    }
+  #|    await setCursor(Number(row.getAttribute("data-event-index")));
+  #|  });
+  #|
+  #|  refs.breakpointList.addEventListener("click", async (event) => {
+  #|    const removeButton = event.target.closest("[data-breakpoint-remove]");
+  #|    if (removeButton) {
+  #|      event.preventDefault();
+  #|      setReplayBreakpoint(removeButton.getAttribute("data-breakpoint-remove") || "", false);
+  #|      return;
+  #|    }
+  #|    const jumpButton = event.target.closest("[data-breakpoint-jump]");
+  #|    if (!jumpButton) {
+  #|      return;
+  #|    }
+  #|    event.preventDefault();
+  #|    await jumpToAddress(jumpButton.getAttribute("data-breakpoint-jump") || "");
+  #|  });
   #|
   #|  refs.paneTabs.addEventListener("click", (event) => {
   #|    const button = event.target.closest("[data-tab]");
@@ -3255,15 +3255,15 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|  refs.nextBtn.addEventListener("click", async () => { await step(1); });
   #|  refs.playBtn.addEventListener("click", togglePlay);
   #|
-#|  refs.followPc.addEventListener("click", () => {
-#|    state.followPcEnabled = !state.followPcEnabled;
-#|    saveUiState();
-#|    renderToolbarState();
-#|  });
-#|
-#|  refs.breakpointClearBtn.addEventListener("click", () => {
-#|    clearAllReplayBreakpoints();
-#|  });
+  #|  refs.followPc.addEventListener("click", () => {
+  #|    state.followPcEnabled = !state.followPcEnabled;
+  #|    saveUiState();
+  #|    renderToolbarState();
+  #|  });
+  #|
+  #|  refs.breakpointClearBtn.addEventListener("click", () => {
+  #|    clearAllReplayBreakpoints();
+  #|  });
   #|
   #|  refs.helpToggle.addEventListener("click", () => {
   #|    state.helpCollapsed = !state.helpCollapsed;
@@ -3271,24 +3271,24 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    renderHelpPanel();
   #|  });
   #|
-#|  refs.changedRegistersToggle.addEventListener("click", () => {
-#|    state.showChangedRegistersOnly = !state.showChangedRegistersOnly;
-#|    saveUiState();
-#|    renderRegisters();
-#|    renderToolbarState();
-#|  });
-#|
-#|  refs.comparePrevBtn.addEventListener("click", () => {
-#|    state.compareMode = "prev";
-#|    saveUiState();
-#|    renderStateCompare();
-#|  });
-#|
-#|  refs.compareInitialBtn.addEventListener("click", () => {
-#|    state.compareMode = "initial";
-#|    saveUiState();
-#|    renderStateCompare();
-#|  });
+  #|  refs.changedRegistersToggle.addEventListener("click", () => {
+  #|    state.showChangedRegistersOnly = !state.showChangedRegistersOnly;
+  #|    saveUiState();
+  #|    renderRegisters();
+  #|    renderToolbarState();
+  #|  });
+  #|
+  #|  refs.comparePrevBtn.addEventListener("click", () => {
+  #|    state.compareMode = "prev";
+  #|    saveUiState();
+  #|    renderStateCompare();
+  #|  });
+  #|
+  #|  refs.compareInitialBtn.addEventListener("click", () => {
+  #|    state.compareMode = "initial";
+  #|    saveUiState();
+  #|    renderStateCompare();
+  #|  });
   #|
   #|  refs.toggleNavPane.addEventListener("click", () => {
   #|    state.layout.navCollapsed = !state.layout.navCollapsed;
@@ -3873,7 +3873,8 @@ fn build_html_page(title : String, boot_json : String) -> String {
   html = html + "    }\n"
   html = html + "    .compare-row {\n"
   html = html + "      display: grid;\n"
-  html = html + "      grid-template-columns: minmax(72px, auto) minmax(0, 1fr);\n"
+  html = html +
+    "      grid-template-columns: minmax(72px, auto) minmax(0, 1fr);\n"
   html = html + "      gap: 8px;\n"
   html = html + "      padding: 4px 0;\n"
   html = html + "      border-top: 1px solid var(--line);\n"

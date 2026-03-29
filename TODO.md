@@ -23,7 +23,7 @@
 | TODO-19 | 已完成 | 同步 workbench 主接口文档与 TODO 流程约定，消除实现/文档漂移 | `moon test workbench --target native`<br>`moon test cmd/server --target native` | `docs: 同步 workbench 主接口与 TODO 流程约定` |
 | TODO-20 | 已完成 | 为 workbench 增加轨迹回放断点 | `moon test workbench --target native` | `feat: 为 workbench 增加轨迹回放断点` |
 | TODO-21 | 已完成 | 为 workbench 增加状态对比视图 | `moon test workbench --target native` | `feat: 为 workbench 增加状态对比视图` |
-| TODO-22 | 进行中 | 同步 workbench 断点与状态对比说明 | `moon test workbench --target native`<br>`moon test cmd/server --target native`<br>`moon run cmd/main -- asm example/simple.s -o out/simple.elf`<br>`moon run cmd/main -- workbench out/simple.elf -o out/workbench.html` | `docs: 同步 workbench 断点与状态对比说明` |
+| TODO-22 | 已完成 | 同步 workbench 断点与状态对比说明 | `moon test workbench --target native`<br>`moon test cmd/server --target native`<br>`moon run cmd/main -- asm example/simple.s -o out/simple.elf`<br>`moon run cmd/main -- workbench out/simple.elf -o out/workbench.html` | `docs: 同步 workbench 断点与状态对比说明` |
 
 ## 执行约定
 
@@ -44,3 +44,4 @@
 - `docs: 同步 workbench 主接口与 TODO 流程约定`
 - `feat: 为 workbench 增加轨迹回放断点`
 - `feat: 为 workbench 增加状态对比视图`
+- `docs: 同步 workbench 断点与状态对比说明`

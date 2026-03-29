@@ -91,9 +91,14 @@
 - 默认展开的 `How to use` 使用引导
 - 顶部函数选择、搜索/跳转与左侧函数/节区导航联动
 - `Reset / Prev / Next / Play`、`Follow PC`、`Trace / Memory Writes / Syscalls/Output`
+- `Replay Breakpoints` 只对当前 trace reachable 地址生效，可在反汇编和 CFG block start 上切换，并沿用 `localStorage` 持久化
+- 命中回放断点时只会额外显示 `Replay breakpoint @...`，不会覆盖运行时真实的 `stop_reason`
+- `State Compare` 提供 `Prev step` 与 `Initial` 两种 baseline；前者直接读取当前 event 的寄存器/内存/输出增量，后者基于 `runtime.initial_registers`、累计输出与最近 memory writes 做纯客户端对比
 - 空态、错误态和截断提示中的下一步操作建议
 
 输入可以是默认生成的 RV64 ELF，也可以是显式 `--xlen 32` 生成的 RV32 ELF。
+
+这些交互全部在客户端完成，不会修改 `/api/workbench/overview`、`/api/workbench/function`、`/api/snapshot`、`/api/stream` 的 wire format。
 
 ## `workbench/` 包
 
@@ -134,6 +139,16 @@ pub fn overview_api_json_from_file(
 - `events`
 
 在线 workbench 首屏与导航以该接口为主。
+
+回放断点与 `State Compare` 继续复用现有字段，不新增 schema，客户端主要读取：
+
+- `runtime.initial_registers`
+- `events[*].addr`
+- `events[*].register_writes`
+- `events[*].memory_writes`
+- `events[*].stdout_append`
+- `events[*].stderr_append`
+- `events[*].stop_reason`
 
 ### `function_api_json_from_file`
 
@@ -256,6 +271,8 @@ Windows 上启动或验证 `cmd/server` 时，请使用 Visual Studio 2022 Devel
 - 函数切片按需从 `/api/workbench/function` 加载
 - `/api/snapshot` 与 `/api/stream` 仅保留兼容定位
 - 页面交互围绕“载入文件 -> 选择函数 -> 搜索/跳转 -> 浏览 Trace/Memory/Syscalls”展开
+- 页面内的 `Replay Breakpoints` 和 `State Compare` 都是纯客户端能力，不新增查询参数，也不新增响应字段
+- 回放断点只在当前 trace reachable 地址上生效，命中后额外显示 `Replay breakpoint @...`
 
 ### `GET /api/health`
 
@@ -276,6 +293,8 @@ curl -sS "http://127.0.0.1:18080/api/workbench/overview?file=out/simple.elf&max_
 ```
 
 返回在线 workbench 的概览载荷。
+
+当前 workbench 的回放断点和状态对比继续消费已有 `runtime` / `events` 字段，不新增响应字段。
 
 ### `GET /api/workbench/function?file=<path>&addr=<hex-or-name>`
 
