@@ -253,5 +253,10 @@ test "online workbench html bootstraps from overview and function apis" {
       "loadOverview(state.currentFile || boot.default_file || \"\", false)",
     ),
   )
+  assert_false(html.contains("loadSnapshot("))
+  assert_false(html.contains("snapshot_endpoint"))
+  assert_false(html.contains("snapshot failed"))
+  assert_false(html.contains("\"embedded_data\""))
+  assert_false(html.contains("/api/snapshot"))
   assert_true(html.contains("id=\"cfg-subtitle\""))
 }

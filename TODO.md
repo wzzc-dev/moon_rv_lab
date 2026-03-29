@@ -19,7 +19,7 @@
 | TODO-15 | 已完成 | 同步 README、用户文档和 API 参考中的前端使用说明，消除页面与文档偏差 | `moon test workbench --target native`<br>`moon test cmd/main --target native` | `docs: 同步前端页面使用说明与接口文档` |
 | TODO-16 | 已完成 | 加固前端入口页与 workbench 使用层回归，并在收尾时写回实际提交记录 | `moon test workbench --target native`<br>`moon test cmd/server --target native`<br>`moon run cmd/main -- asm example/simple.s -o out/simple.elf`<br>`moon run cmd/main -- workbench out/simple.elf -o out/workbench.html` | `test: 加固前端入口与 workbench 使用回归` |
 | TODO-17 | 已完成 | 统一 workbench 在线加载链路，移除旧 snapshot 前端后备实现 | `moon test workbench --target native` | `refactor: 统一 workbench 在线加载链路` |
-| TODO-18 | 待办 | 加固 online workbench 接口契约回归，防止回退到旧接口模型 | `moon test workbench --target native`<br>`moon test cmd/server --target native` | `test: 加固 online workbench 接口契约回归` |
+| TODO-18 | 已完成 | 加固 online workbench 接口契约回归，防止回退到旧接口模型 | `moon test workbench --target native`<br>`moon test cmd/server --target native` | `test: 加固 online workbench 接口契约回归` |
 | TODO-19 | 待办 | 同步 workbench 主接口文档与 TODO 流程约定，消除实现/文档漂移 | `moon test workbench --target native`<br>`moon test cmd/server --target native` | `docs: 同步 workbench 主接口与 TODO 流程约定` |
 
 ## 本轮提交记录
@@ -31,3 +31,4 @@
 - `docs: 同步前端页面使用说明与接口文档`
 - `test: 加固前端入口与 workbench 使用回归`
 - `refactor: 统一 workbench 在线加载链路`
+- `test: 加固 online workbench 接口契约回归`

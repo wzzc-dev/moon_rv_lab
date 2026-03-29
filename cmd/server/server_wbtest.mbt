@@ -33,6 +33,8 @@ test "index html exposes online workbench entry" {
   assert_true(html.contains("GET /workbench?file=&lt;path&gt;"))
   assert_true(html.contains("/api/workbench/overview"))
   assert_true(html.contains("/api/workbench/function"))
+  assert_true(html.contains("/api/snapshot"))
+  assert_true(html.contains("/api/stream"))
   assert_false(html.contains("window.__RVR_CONFIG__"))
 }
 
@@ -60,5 +62,10 @@ test "workbench route html embeds online bootstrap config" {
   assert_true(html.contains("boot.default_file"))
   assert_true(html.contains("id=\"help-panel\""))
   assert_true(html.contains("How to use"))
+  assert_false(html.contains("loadSnapshot("))
+  assert_false(html.contains("snapshot_endpoint"))
+  assert_false(html.contains("snapshot failed"))
+  assert_false(html.contains("\"embedded_data\""))
+  assert_false(html.contains("/api/snapshot"))
   assert_true(html.contains("id=\"cfg-subtitle\""))
 }
