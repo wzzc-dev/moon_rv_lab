@@ -1158,6 +1158,83 @@ fn read_file_bytes(path : String) -> FixedArray[Byte]? {
 }
 
 ///|
+priv struct LoadedPrimaryCode {
+  base_addr : UInt
+  bytes : FixedArray[Byte]
+}
+
+///|
+priv enum PrimaryCodeLoadError {
+  CannotRead(String)
+  NotAnElf(String)
+  ParseElfFailed(String)
+  NotRiscV(String)
+  NoCodeSection(String)
+}
+
+///|
+priv enum PrimaryCodeLoadResult {
+  Loaded(LoadedPrimaryCode)
+  LoadFailed(PrimaryCodeLoadError)
+}
+
+///|
+fn load_primary_code(
+  file_path : String,
+  raw_mode : Bool,
+  base_addr : UInt,
+) -> PrimaryCodeLoadResult {
+  match read_file_bytes(file_path) {
+    Some(bytes) =>
+      if raw_mode {
+        let raw = @format.parse_raw_binary(bytes, base_addr)
+        Loaded({ base_addr: raw.base_addr, bytes: raw.code })
+      } else {
+        if !@format.is_elf(bytes) {
+          return LoadFailed(PrimaryCodeLoadError::NotAnElf(file_path))
+        }
+        match @format.parse_elf(bytes) {
+          Some(elf) => {
+            if !elf.is_riscv() {
+              return LoadFailed(PrimaryCodeLoadError::NotRiscV(file_path))
+            }
+            let code_sections = elf.get_code_sections()
+            if code_sections.length() == 0 {
+              return LoadFailed(PrimaryCodeLoadError::NoCodeSection(file_path))
+            }
+            let (vaddr, code) = code_sections[0]
+            Loaded({ base_addr: vaddr, bytes: code })
+          }
+          None => LoadFailed(PrimaryCodeLoadError::ParseElfFailed(file_path))
+        }
+      }
+    None => LoadFailed(PrimaryCodeLoadError::CannotRead(file_path))
+  }
+}
+
+///|
+fn primary_code_error_message(
+  err : PrimaryCodeLoadError,
+  raw_hint : Bool,
+) -> String {
+  match err {
+    PrimaryCodeLoadError::CannotRead(file_path) =>
+      "Error: Cannot read file: \{file_path}"
+    PrimaryCodeLoadError::NotAnElf(file_path) =>
+      if raw_hint {
+        "Error: Not a valid ELF file: \{file_path}\nUse --raw option for raw binary files"
+      } else {
+        "Error: Not a valid ELF file: \{file_path}"
+      }
+    PrimaryCodeLoadError::ParseElfFailed(_file_path) =>
+      "Error: Failed to parse ELF file"
+    PrimaryCodeLoadError::NotRiscV(_file_path) => "Error: Not a RISC-V ELF file"
+    PrimaryCodeLoadError::NoCodeSection(_file_path) =>
+      "Error: No executable code sections found"
+  }
+}
+
+///|
 /// Write string to file
 fn write_output_file(path : String, content : String) -> Bool {
   try {
@@ -1175,38 +1252,16 @@ fn write_output_file(path : String, content : String) -> Bool {
 ///|
 /// Execute disasm command
 fn execute_disasm(opts : DisasmOptions) -> Unit {
-  match read_file_bytes(opts.file_path) {
-    Some(bytes) =>
-      if opts.raw_mode {
-        let instructions = @analysis.decode_instructions(bytes, opts.base_addr)
-        let output = format_disasm(instructions, opts.format)
-        write_or_print(output, opts.output)
-      } else {
-        if !@format.is_elf(bytes) {
-          println("Error: Not a valid ELF file: \{opts.file_path}")
-          println("Use --raw option for raw binary files")
-          return
-        }
-        match @format.parse_elf(bytes) {
-          Some(elf) => {
-            if !elf.is_riscv() {
-              println("Error: Not a RISC-V ELF file")
-              return
-            }
-            let code_sections = elf.get_code_sections()
-            if code_sections.length() == 0 {
-              println("Error: No executable code sections found")
-              return
-            }
-            let (vaddr, code) = code_sections[0]
-            let instructions = @analysis.decode_instructions(code, vaddr)
-            let output = format_disasm(instructions, opts.format)
-            write_or_print(output, opts.output)
-          }
-          None => println("Error: Failed to parse ELF file")
-        }
-      }
-    None => println("Error: Cannot read file: \{opts.file_path}")
+  match load_primary_code(opts.file_path, opts.raw_mode, opts.base_addr) {
+    Loaded(input) => {
+      let instructions = @analysis.decode_instructions(
+        input.bytes,
+        input.base_addr,
+      )
+      let output = format_disasm(instructions, opts.format)
+      write_or_print(output, opts.output)
+    }
+    LoadFailed(err) => println(primary_code_error_message(err, true))
   }
 }
 

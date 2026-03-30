@@ -14,6 +14,9 @@ const SIMPLE_ELF_PATH : String = CLI_TEST_DIR + "/simple.elf"
 const SIMPLE_ELF32_PATH : String = CLI_TEST_DIR + "/simple32.elf"
 
 ///|
+const SIMPLE_RAW_PATH : String = CLI_TEST_DIR + "/simple.raw"
+
+///|
 const CALL_CHAIN_ELF_PATH : String = CLI_TEST_DIR + "/call_chain.elf"
 
 ///|
@@ -85,6 +88,26 @@ fn must_prepare_simple_elf() -> String {
 ///|
 fn must_prepare_call_chain_elf() -> String {
   must_prepare_elf_fixture(CALL_CHAIN_SOURCE_PATH, CALL_CHAIN_ELF_PATH, 64)
+}
+
+///|
+fn must_prepare_simple_raw() -> String {
+  ensure_cli_test_dir()
+  reset_cli_test_file(SIMPLE_RAW_PATH)
+  match read_file_string(SIMPLE_SOURCE_PATH) {
+    Some(source) => {
+      let result = @asm.assemble_with_symbols(source, 0x10000U)
+      if result.errors.length() > 0 {
+        abort("failed to assemble raw fixture")
+      }
+      let bytes = @asm.encode_to_bytes(result)
+      if !write_file_bytes(SIMPLE_RAW_PATH, bytes) {
+        abort("failed to write raw fixture")
+      }
+      SIMPLE_RAW_PATH
+    }
+    None => abort("failed to read raw fixture source")
+  }
 }
 
 ///|
@@ -180,6 +203,27 @@ test "disasm command writes elf disassembly json" {
   assert_true(output.contains("\"addr\": \"0x10000\""))
   assert_true(output.contains("\"inst\": \"addi a0, zero, 42\""))
   assert_true(output.contains("\"addr\": \"0x1002c\""))
+}
+
+///|
+test "disasm command keeps raw fixture support through shared loader" {
+  ensure_cli_test_dir()
+  let output_path = CLI_TEST_DIR + "/disasm_raw.txt"
+  reset_cli_test_file(output_path)
+  let simple_raw = must_prepare_simple_raw()
+
+  execute_disasm({
+    file_path: simple_raw,
+    base_addr: 0x10000U,
+    format: OutputFormat::Text,
+    raw_mode: true,
+    output: output_path,
+  })
+
+  assert_true(@fs.path_exists(output_path))
+  let output = must_read_text(output_path)
+  assert_true(output.contains("0x00010000: addi a0, zero, 42"))
+  assert_true(output.contains("0x0001002c: ebreak"))
 }
 
 ///|
