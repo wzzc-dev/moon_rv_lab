@@ -29,6 +29,19 @@ mkdir -p out
 - `Stop Reason`
 - 非零寄存器摘要
 
+### 1.1 同一份源码走 RAW 路径
+
+```bash
+~/.moon/bin/moon run cmd/main -- asm example/simple.s -o out/simple.raw --format raw
+~/.moon/bin/moon run cmd/main -- run out/simple.raw --raw --base 0x10000 --xlen 64 --max-steps 20
+```
+
+RAW 路径的约定:
+
+- 当前默认值固定为 `base=0x10000`、`xlen=64`
+- `run` 的文本/JSON 摘要结构与 ELF 保持一致，但符号名解析不可用
+- `symbols --raw` 只返回“无符号表”说明，`callgraph --raw` 只返回显式“不支持”结果
+
 ### 2. 断点执行
 
 ```bash
@@ -89,6 +102,12 @@ JSON 顶层包含:
 ~/.moon/bin/moon run cmd/main -- workbench out/simple.elf -o out/workbench.html
 ```
 
+RAW 等价命令:
+
+```bash
+~/.moon/bin/moon run cmd/main -- workbench out/simple.raw --raw --base 0x10000 --xlen 64 -o out/simple_raw.html
+```
+
 打开 `out/workbench.html` 后，离线页面与在线 `/workbench` 共用同一套交互:
 
 - 首屏 `How to use` 面板默认展开，可手动关闭，关闭状态会写入 `localStorage`
@@ -126,6 +145,13 @@ JSON 顶层包含:
 ~/.moon/bin/moon run cmd/main -- workbench out/file_fstat_close.elf -o out/file_fstat_close.html
 ```
 
+RAW 离线路径说明:
+
+- 当前离线 `workbench` 已支持 RAW 输入
+- RAW 页面会保留现有 Godbolt 风格布局、trace 回放、`Replay Breakpoints` 和 `State Compare`
+- RAW 页面使用显式 `base/xlen` 元数据生成 overview 与 runtime
+- 当前在线 `/workbench` 仍然只覆盖 ELF，不在本轮 RAW 支持范围内
+
 ## 路径三: 在线 Workbench
 
 ### 1. 启动服务
@@ -147,6 +173,7 @@ Windows 上请优先使用 Visual Studio 2022 Developer Command Prompt / DevShel
 
 - 推荐先从入口页进入 `/workbench?file=...`，这样默认文件会直接带入查询参数
 - 在线 workbench 主链路会先加载 `/api/workbench/overview`，再按需请求 `/api/workbench/function`；`/api/snapshot` 与 `/api/stream` 仅保留兼容定位
+- 当前在线链路只支持 ELF；如果需要 RAW，请改走 CLI `run` 或离线 `workbench`
 - 顶部输入框支持切换 ELF 文件，点击 `Load` 后会重新加载 overview 与函数切片
 - `How to use` 面板默认展开，可关闭；关闭状态同样会写入 `localStorage`
 - 在线/离线 workbench 共用 `Replay Breakpoints` 与 `State Compare` 交互；这两项能力都只依赖已有 overview/function/runtime/event 数据，不新增 `/api/workbench/*` 字段
@@ -176,11 +203,14 @@ Windows 上请优先使用 Visual Studio 2022 Developer Command Prompt / DevShel
 ## 推荐演示闭环
 
 1. `asm example/simple.s -o out/simple.elf`
-2. `run out/simple.elf --break 0x10010`
-3. `run out/simple.elf --trace out/trace.json`
-4. `workbench out/simple.elf -o out/workbench.html`
-5. `moon run cmd/server --target native -- --file out/simple.elf --port 18080`
-6. 浏览器先打开 `/` 查看 Quick Start，再进入 `/workbench?file=out/simple.elf`
+2. `asm example/simple.s -o out/simple.raw --format raw`
+3. `run out/simple.elf --break 0x10010`
+4. `run out/simple.raw --raw --base 0x10000 --xlen 64 --max-steps 20`
+5. `run out/simple.elf --trace out/trace.json`
+6. `workbench out/simple.elf -o out/workbench.html`
+7. `workbench out/simple.raw --raw --base 0x10000 --xlen 64 -o out/simple_raw.html`
+8. `moon run cmd/server --target native -- --file out/simple.elf --port 18080`
+9. 浏览器先打开 `/` 查看 Quick Start，再进入 `/workbench?file=out/simple.elf`
 
 进入 workbench 后，建议再手工确认一次:
 

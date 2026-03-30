@@ -15,8 +15,12 @@
 ### `run`
 
 ```bash
-~/.moon/bin/moon run cmd/main -- run <file> [--entry <name|addr>] [--max-steps <n>] [--break <name|addr>] [--trace <file>] [--format text|json]
+~/.moon/bin/moon run cmd/main -- run <file> [--entry <name|addr>] [--max-steps <n>] [--break <name|addr>] [--trace <file>] [--format text|json] [--raw] [--base <addr>] [--xlen 32|64]
 ```
+
+- ELF 路径默认不需要额外元数据。
+- RAW 路径请显式传 `--raw --base <addr> --xlen <32|64>`；当前默认值为 `base=0x10000`、`xlen=64`。
+- RAW 输入不提供符号表；`--entry` / `--break` 建议直接使用地址。
 
 #### 文本输出
 
@@ -73,10 +77,24 @@
 - `--trace out/trace.json` 会把 `trace` 数组单独写到文件。
 - 文件内容与 JSON 输出里的 `trace` 字段结构一致。
 
+### `symbols` / `callgraph` 的 RAW 受限模式
+
+- `symbols --raw --format json` 返回固定受限结构:
+  - `input_format: "raw"`
+  - `supported: false`
+  - `symbols: []`
+  - `message: "RAW input does not provide a symbol table."`
+- `callgraph --raw --format json` 返回固定受限结构:
+  - `input_format: "raw"`
+  - `supported: false`
+  - `functions: []`
+  - `edges: []`
+  - `message: "RAW input lacks reliable function boundaries, so call graph generation is unavailable."`
+
 ### `workbench`
 
 ```bash
-~/.moon/bin/moon run cmd/main -- workbench <file> -o out/workbench.html [--title <text>] [--max-inst <n>]
+~/.moon/bin/moon run cmd/main -- workbench <file> -o out/workbench.html [--title <text>] [--max-inst <n>] [--raw] [--base <addr>] [--xlen 32|64]
 ```
 
 输出是一个完全离线的单文件 HTML，内嵌：
@@ -96,7 +114,16 @@
 - `State Compare` 提供 `Prev step` 与 `Initial` 两种 baseline；前者直接读取当前 event 的寄存器/内存/输出增量，后者基于 `runtime.initial_registers`、累计输出与最近 memory writes 做纯客户端对比
 - 空态、错误态和截断提示中的下一步操作建议
 
-输入可以是默认生成的 RV64 ELF，也可以是显式 `--xlen 32` 生成的 RV32 ELF。
+输入可以是:
+
+- 默认生成的 RV64 ELF
+- 显式 `--xlen 32` 生成的 RV32 ELF
+- 通过 `asm --format raw` 生成的 RAW 文件，再配合 `--raw --base <addr> --xlen <32|64>`
+
+说明:
+
+- RAW 仅覆盖离线 `workbench` HTML 生成
+- 当前在线 `/workbench` 与 `/api/workbench/*` 仍然按 ELF 设计，不包含 RAW 输入
 
 这些交互全部在客户端完成，不会修改 `/api/workbench/overview`、`/api/workbench/function`、`/api/snapshot`、`/api/stream` 的 wire format。
 
@@ -106,6 +133,18 @@
 
 ```moonbit
 pub fn create_options(title : String, max_instructions : Int) -> WorkbenchOptions
+```
+
+### `create_input_options`
+
+```moonbit
+pub fn create_input_options(
+  title : String,
+  max_instructions : Int,
+  raw_mode : Bool,
+  base_addr : UInt,
+  xlen : Int
+) -> WorkbenchOptions
 ```
 
 ### `generate_from_file`
