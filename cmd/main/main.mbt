@@ -91,6 +91,9 @@ pub struct InfoOptions {
   file_path : String
   format : OutputFormat
   output : String
+  raw_mode : Bool
+  base_addr : UInt
+  xlen : Int
 } derive(Show)
 
 ///|
@@ -109,6 +112,8 @@ pub struct CfgOptions {
   function : String // Function name or address
   format : OutputFormat
   output : String
+  raw_mode : Bool
+  base_addr : UInt
 } derive(Show)
 
 ///|
@@ -144,6 +149,8 @@ pub struct AnalyzeOptions {
   format : OutputFormat
   output : String
   detailed : Bool
+  raw_mode : Bool
+  base_addr : UInt
 } derive(Show)
 
 ///|
@@ -153,6 +160,8 @@ pub struct DecompileOptions {
   function : String // Function name or address (empty for entry point)
   output : String
   show_code : Bool // Show pseudo-code (default: false, only show control flow)
+  raw_mode : Bool
+  base_addr : UInt
 } derive(Show)
 
 ///|
@@ -463,7 +472,7 @@ fn parse_disasm_args(args : Array[String]) -> Command? {
   }
 
   let mut file_path = ""
-  let mut base_addr = 0U
+  let mut base_addr = 0x10000U
   let mut format = OutputFormat::Text
   let mut raw_mode = false
   let mut output = ""
@@ -523,6 +532,9 @@ fn parse_info_args(args : Array[String]) -> Command? {
   let mut file_path = ""
   let mut format = OutputFormat::Text
   let mut output = ""
+  let mut raw_mode = false
+  let mut base_addr = 0x10000U
+  let mut xlen = 64
   let mut i = 1
 
   while i < args.length() {
@@ -541,6 +553,34 @@ fn parse_info_args(args : Array[String]) -> Command? {
       } else {
         return None
       }
+    } else if arg == "--base" || arg == "-b" {
+      if i + 1 < args.length() {
+        match parse_number(args[i + 1]) {
+          Some(addr) => base_addr = addr
+          None => return None
+        }
+        i = i + 2
+      } else {
+        return None
+      }
+    } else if arg == "--raw" || arg == "-r" {
+      raw_mode = true
+      i = i + 1
+    } else if arg == "--xlen" {
+      if i + 1 < args.length() {
+        match parse_uint_dec(args[i + 1]) {
+          Some(value) =>
+            if value == 32U || value == 64U {
+              xlen = value.reinterpret_as_int()
+            } else {
+              return None
+            }
+          None => return None
+        }
+        i = i + 2
+      } else {
+        return None
+      }
     } else if arg[0] != '-' {
       file_path = arg
       i = i + 1
@@ -553,7 +593,7 @@ fn parse_info_args(args : Array[String]) -> Command? {
     return None
   }
 
-  Some(Command::Info({ file_path, format, output }))
+  Some(Command::Info({ file_path, format, output, raw_mode, base_addr, xlen }))
 }
 
 ///|
@@ -614,6 +654,8 @@ fn parse_cfg_args(args : Array[String]) -> Command? {
   let mut function = ""
   let mut format = OutputFormat::Dot
   let mut output = ""
+  let mut raw_mode = false
+  let mut base_addr = 0x10000U
   let mut i = 1
 
   while i < args.length() {
@@ -639,6 +681,19 @@ fn parse_cfg_args(args : Array[String]) -> Command? {
       } else {
         return None
       }
+    } else if arg == "--base" || arg == "-b" {
+      if i + 1 < args.length() {
+        match parse_number(args[i + 1]) {
+          Some(addr) => base_addr = addr
+          None => return None
+        }
+        i = i + 2
+      } else {
+        return None
+      }
+    } else if arg == "--raw" || arg == "-r" {
+      raw_mode = true
+      i = i + 1
     } else if arg[0] != '-' {
       file_path = arg
       i = i + 1
@@ -651,7 +706,9 @@ fn parse_cfg_args(args : Array[String]) -> Command? {
     return None
   }
 
-  Some(Command::Cfg({ file_path, function, format, output }))
+  Some(
+    Command::Cfg({ file_path, function, format, output, raw_mode, base_addr }),
+  )
 }
 
 ///|
@@ -815,6 +872,8 @@ fn parse_analyze_args(args : Array[String]) -> Command? {
   let mut format = OutputFormat::Text
   let mut output = ""
   let mut detailed = false
+  let mut raw_mode = false
+  let mut base_addr = 0x10000U
   let mut i = 1
 
   while i < args.length() {
@@ -833,6 +892,19 @@ fn parse_analyze_args(args : Array[String]) -> Command? {
       } else {
         return None
       }
+    } else if arg == "--base" || arg == "-b" {
+      if i + 1 < args.length() {
+        match parse_number(args[i + 1]) {
+          Some(addr) => base_addr = addr
+          None => return None
+        }
+        i = i + 2
+      } else {
+        return None
+      }
+    } else if arg == "--raw" || arg == "-r" {
+      raw_mode = true
+      i = i + 1
     } else if arg == "--detailed" || arg == "-d" {
       detailed = true
       i = i + 1
@@ -848,7 +920,16 @@ fn parse_analyze_args(args : Array[String]) -> Command? {
     return None
   }
 
-  Some(Command::Analyze({ file_path, format, output, detailed }))
+  Some(
+    Command::Analyze({
+      file_path,
+      format,
+      output,
+      detailed,
+      raw_mode,
+      base_addr,
+    }),
+  )
 }
 
 ///|
@@ -862,6 +943,8 @@ fn parse_decompile_args(args : Array[String]) -> Command? {
   let mut function = ""
   let mut output = ""
   let mut show_code = false
+  let mut raw_mode = false
+  let mut base_addr = 0x10000U
   let mut i = 1
 
   while i < args.length() {
@@ -880,6 +963,19 @@ fn parse_decompile_args(args : Array[String]) -> Command? {
       } else {
         return None
       }
+    } else if arg == "--base" || arg == "-b" {
+      if i + 1 < args.length() {
+        match parse_number(args[i + 1]) {
+          Some(addr) => base_addr = addr
+          None => return None
+        }
+        i = i + 2
+      } else {
+        return None
+      }
+    } else if arg == "--raw" || arg == "-r" {
+      raw_mode = true
+      i = i + 1
     } else if arg == "--code" || arg == "-c" {
       show_code = true
       i = i + 1
@@ -895,7 +991,16 @@ fn parse_decompile_args(args : Array[String]) -> Command? {
     return None
   }
 
-  Some(Command::Decompile({ file_path, function, output, show_code }))
+  Some(
+    Command::Decompile({
+      file_path,
+      function,
+      output,
+      show_code,
+      raw_mode,
+      base_addr,
+    }),
+  )
 }
 
 ///|
@@ -927,18 +1032,35 @@ fn print_usage() -> Unit {
   println("")
   println("Disasm Options:")
   println(
-    "  --base, -b <addr>       Base address for raw binaries (default: 0)",
+    "  --base, -b <addr>       Base address for raw binaries (default: 0x10000)",
   )
   println("  --raw, -r               Treat as raw binary (not ELF)")
+  println("")
+  println("Info Options:")
+  println(
+    "  --base, -b <addr>       Base address for raw binaries (default: 0x10000)",
+  )
+  println("  --raw, -r               Treat as raw binary (not ELF)")
+  println(
+    "  --xlen <32|64>          Raw binary word size metadata (default: 64)",
+  )
   println("")
   println("Symbols Options:")
   println("  --all, -a               Show all symbols including local")
   println("")
   println("CFG Options:")
   println("  --function, -n <name>   Function name or address to analyze")
+  println(
+    "  --base, -b <addr>       Base address for raw binaries (default: 0x10000)",
+  )
+  println("  --raw, -r               Treat as raw binary (not ELF)")
   println("")
   println("Analyze Options:")
   println("  --detailed, -d          Show detailed analysis")
+  println(
+    "  --base, -b <addr>       Base address for raw binaries (default: 0x10000)",
+  )
+  println("  --raw, -r               Treat as raw binary (not ELF)")
   println("")
   println("Run Options:")
   println("  --entry <name|addr>     Override entry with symbol or address")
@@ -951,6 +1073,10 @@ fn print_usage() -> Unit {
   println(
     "  --code, -c              Show pseudo-code (default: control flow only)",
   )
+  println(
+    "  --base, -b <addr>       Base address for raw binaries (default: 0x10000)",
+  )
+  println("  --raw, -r               Treat as raw binary (not ELF)")
   println("")
   println("Asm Options:")
   println("  --output, -o <file>     Output file path")
@@ -971,14 +1097,18 @@ fn print_usage() -> Unit {
   println("  rvkit disasm program.elf")
   println("  rvkit disasm --raw --base 0x8000 firmware.bin")
   println("  rvkit info program.elf")
+  println("  rvkit info --raw --base 0x8000 --xlen 64 firmware.bin")
   println("  rvkit symbols program.elf")
   println("  rvkit cfg program.elf --function main -o cfg.dot")
+  println("  rvkit cfg --raw --base 0x8000 firmware.bin --format json")
   println("  rvkit callgraph program.elf -o callgraph.dot")
   println("  rvkit run program.elf --entry main --max-steps 200")
   println("  rvkit run program.elf --break main+0x10 --trace out/trace.json")
   println("  rvkit hex 0x123452B7")
   println("  rvkit analyze program.elf --detailed")
+  println("  rvkit analyze --raw --base 0x8000 firmware.bin --format json")
   println("  rvkit decompile program.elf --function main")
+  println("  rvkit decompile --raw --base 0x8000 firmware.bin")
   println("  rvkit decompile program.elf --function main --code -o pseudo.c")
   println("  rvkit asm code.s -o program.elf")
   println("  rvkit asm code.s -f hex")
@@ -1333,6 +1463,21 @@ fn arch_str(elf : @format.ElfFile) -> String {
 ///|
 /// Execute info command
 fn execute_info(opts : InfoOptions) -> Unit {
+  if opts.raw_mode {
+    match load_primary_code(opts.file_path, true, opts.base_addr) {
+      Loaded(input) => {
+        let output = match opts.format {
+          OutputFormat::Json => format_raw_info_json(input, opts.xlen)
+          OutputFormat::Text | OutputFormat::Dot =>
+            format_raw_info_text(input, opts.xlen)
+        }
+        write_or_print(output, opts.output)
+      }
+      LoadFailed(err) => println(primary_code_error_message(err, true))
+    }
+    return
+  }
+
   match read_file_bytes(opts.file_path) {
     Some(bytes) => {
       if !@format.is_elf(bytes) {
@@ -1393,6 +1538,37 @@ fn format_elf_info_json(elf : @format.ElfFile) -> String {
   result = result + "  \"entry_point\": \"\{entry_str}\",\n"
   result = result + "  \"section_count\": \{elf.section_count()},\n"
   result = result + "  \"program_count\": \{elf.program_count()}\n"
+  result = result + "}"
+  result
+}
+
+///|
+fn format_raw_info_text(input : LoadedPrimaryCode, xlen : Int) -> String {
+  let instructions = @analysis.decode_instructions(input.bytes, input.base_addr)
+  let mut result = ""
+  result = result + "Raw Binary Information\n"
+  result = result + "======================\n\n"
+  result = result + "Input Format: raw\n"
+  result = result + "Architecture: RISC-V\n"
+  result = result + "Entry Point: \{format_hex(input.base_addr)}\n"
+  result = result + "Base Address: \{format_hex(input.base_addr)}\n"
+  result = result + "XLEN: \{xlen}\n"
+  result = result + "Code Size: \{input.bytes.length()}\n"
+  result = result + "Instruction Count: \{instructions.length()}\n"
+  result
+}
+
+///|
+fn format_raw_info_json(input : LoadedPrimaryCode, xlen : Int) -> String {
+  let instructions = @analysis.decode_instructions(input.bytes, input.base_addr)
+  let mut result = "{\n"
+  result = result + "  \"input_format\": \"raw\",\n"
+  result = result + "  \"architecture\": \"RISC-V\",\n"
+  result = result + "  \"entry_point\": \"\{format_hex(input.base_addr)}\",\n"
+  result = result + "  \"base_addr\": \"\{format_hex(input.base_addr)}\",\n"
+  result = result + "  \"xlen\": \{xlen},\n"
+  result = result + "  \"code_size\": \{input.bytes.length()},\n"
+  result = result + "  \"instruction_count\": \{instructions.length()}\n"
   result = result + "}"
   result
 }
@@ -1529,6 +1705,34 @@ fn format_symbols_json(
 ///|
 /// Execute cfg command
 fn execute_cfg(opts : CfgOptions) -> Unit {
+  if opts.raw_mode {
+    match load_primary_code(opts.file_path, true, opts.base_addr) {
+      Loaded(input) => {
+        let cfg = @analysis.analyze_code(input.bytes, input.base_addr)
+        let name = if opts.function == "" { "main" } else { opts.function }
+        let output = match opts.format {
+          OutputFormat::Dot => @analysis.cfg_to_dot(cfg, name)
+          OutputFormat::Json => @analysis.cfg_to_json(cfg)
+          OutputFormat::Text => {
+            @analysis.print_cfg(cfg)
+            ""
+          }
+        }
+        if opts.output != "" && output != "" {
+          if write_output_file(opts.output, output) {
+            println("Output written to: \{opts.output}")
+          } else {
+            println("Error: Failed to write output file")
+          }
+        } else if output != "" {
+          println(output)
+        }
+      }
+      LoadFailed(err) => println(primary_code_error_message(err, true))
+    }
+    return
+  }
+
   match read_file_bytes(opts.file_path) {
     Some(bytes) => {
       if !@format.is_elf(bytes) {
@@ -2009,6 +2213,25 @@ fn category_to_string(cat : @decode.InstructionCategory) -> String {
 ///|
 /// Execute analyze command (comprehensive analysis)
 fn execute_analyze(opts : AnalyzeOptions) -> Unit {
+  if opts.raw_mode {
+    match load_primary_code(opts.file_path, true, opts.base_addr) {
+      Loaded(input) => {
+        let output = analyze_raw(input, opts.detailed, opts.format)
+        if opts.output != "" {
+          if write_output_file(opts.output, output) {
+            println("Analysis written to: \{opts.output}")
+          } else {
+            println("Error: Failed to write output file")
+          }
+        } else {
+          println(output)
+        }
+      }
+      LoadFailed(err) => println(primary_code_error_message(err, true))
+    }
+    return
+  }
+
   match read_file_bytes(opts.file_path) {
     Some(bytes) => {
       if !@format.is_elf(bytes) {
@@ -2050,6 +2273,88 @@ fn analyze_elf(
     OutputFormat::Json => analyze_elf_json(elf, detailed)
     OutputFormat::Text | OutputFormat::Dot => analyze_elf_text(elf, detailed)
   }
+}
+
+///|
+fn analyze_raw(
+  input : LoadedPrimaryCode,
+  detailed : Bool,
+  format : OutputFormat,
+) -> String {
+  let instructions = @analysis.decode_instructions(input.bytes, input.base_addr)
+  let cfg = @analysis.build_cfg(instructions, input.base_addr)
+  let cg = @analysis.build_call_graph(instructions, cfg)
+  match format {
+    OutputFormat::Json =>
+      analyze_raw_json(input, instructions, cfg, cg, detailed)
+    OutputFormat::Text | OutputFormat::Dot =>
+      analyze_raw_text(input, instructions, cfg, cg, detailed)
+  }
+}
+
+///|
+fn analyze_raw_text(
+  input : LoadedPrimaryCode,
+  instructions : FixedArray[@analysis.DecodedInst],
+  cfg : @analysis.CFG,
+  cg : @analysis.CallGraph,
+  detailed : Bool,
+) -> String {
+  let mut result = ""
+  result = result + "=== Raw Binary Analysis ===\n\n"
+  result = result + "Input Format: raw\n"
+  result = result + "Architecture: RISC-V\n"
+  result = result + "Entry Point: \{format_hex(input.base_addr)}\n"
+  result = result + "Base Address: \{format_hex(input.base_addr)}\n"
+  result = result + "Code Size: \{input.bytes.length()}\n\n"
+  result = result + "Code Analysis:\n"
+  result = result + "  Instructions: \{instructions.length()}\n"
+  result = result + "  Basic Blocks: \{cfg.blocks.length()}\n"
+  result = result + "  CFG Edges: \{cfg.edges.length()}\n"
+  result = result + "  Functions in Call Graph: \{cg.nodes.length()}\n"
+
+  if detailed {
+    result = result + "\n--- Detailed Analysis ---\n\n"
+    result = result + "Instruction Categories:\n"
+    let categories = count_instruction_categories(instructions)
+    for item in categories {
+      let (cat, count) = item
+      result = result + "  \{cat}: \{count}\n"
+    }
+    result = result + "\nControl Flow:\n"
+    result = result + "  Entry Points: \{cfg.entry_points.length()}\n"
+  }
+
+  result
+}
+
+///|
+fn analyze_raw_json(
+  input : LoadedPrimaryCode,
+  instructions : FixedArray[@analysis.DecodedInst],
+  cfg : @analysis.CFG,
+  cg : @analysis.CallGraph,
+  detailed : Bool,
+) -> String {
+  let mut result = "{\n"
+  result = result + "  \"input_format\": \"raw\",\n"
+  result = result + "  \"architecture\": \"RISC-V\",\n"
+  result = result + "  \"entry_point\": \"\{format_hex(input.base_addr)}\",\n"
+  result = result + "  \"base_addr\": \"\{format_hex(input.base_addr)}\",\n"
+  result = result + "  \"code_size\": \{input.bytes.length()},\n"
+  result = result + "  \"analysis\": {\n"
+  result = result + "    \"instruction_count\": \{instructions.length()},\n"
+  result = result + "    \"basic_blocks\": \{cfg.blocks.length()},\n"
+  result = result + "    \"cfg_edges\": \{cfg.edges.length()},\n"
+  result = result + "    \"call_graph_nodes\": \{cg.nodes.length()}"
+  if detailed {
+    result = result + ",\n    \"entry_points\": \{cfg.entry_points.length()}\n"
+  } else {
+    result = result + "\n"
+  }
+  result = result + "  }\n"
+  result = result + "}"
+  result
 }
 
 ///|
@@ -2191,8 +2496,142 @@ fn escape_json_string(s : String) -> String {
 }
 
 ///|
+fn render_decompile_output(
+  func_name : String,
+  func_addr : UInt,
+  func_cfg : @analysis.CFG,
+  func_instructions : FixedArray[@analysis.DecodedInst],
+  symbol_map : Map[UInt, String],
+  string_map : Map[UInt, String],
+  show_code : Bool,
+) -> String {
+  let mut output = ""
+
+  if show_code {
+    let pseudo_code = @analysis.decompile(
+      func_cfg, func_instructions, symbol_map, string_map,
+    )
+
+    output = "// Pseudo-code generated by RISC-V Binary Analyzer\n"
+    output = output + "// Function: \{func_name} @ \{format_hex(func_addr)}\n\n"
+    output = output + "void \{func_name}() {\n"
+    output = output + pseudo_code
+    output = output + "}\n"
+  } else {
+    output = "// Function: \{func_name} @ \{format_hex(func_addr)}\n\n"
+    output = output + "// Basic Blocks: \{func_cfg.blocks.length()}\n"
+    output = output + "// Edges: \{func_cfg.edges.length()}\n\n"
+
+    for block in func_cfg.blocks {
+      output = output + "Block \{format_hex(block.start_addr)}:\n"
+
+      let outgoing : Array[String] = []
+      for edge in func_cfg.edges {
+        if edge.from_block == block.start_addr {
+          let edge_desc = match edge.edge_type {
+            @analysis.Jump => "jump"
+            @analysis.BranchTaken => "branch (taken)"
+            @analysis.BranchNotTaken => "branch (not taken)"
+            @analysis.Call => "call"
+            @analysis.Return => "return"
+          }
+          outgoing.push("  -> \{format_hex(edge.to_block)} (" + edge_desc + ")")
+        }
+      }
+
+      for desc in outgoing {
+        output = output + desc + "\n"
+      }
+
+      if outgoing.length() > 0 {
+        output = output + "\n"
+      }
+    }
+  }
+
+  output
+}
+
+///|
 /// Execute decompile command
 fn execute_decompile(opts : DecompileOptions) -> Unit {
+  if opts.raw_mode {
+    match load_primary_code(opts.file_path, true, opts.base_addr) {
+      Loaded(input) => {
+        let all_instructions = @analysis.decode_instructions(
+          input.bytes,
+          input.base_addr,
+        )
+        let func_addr = match opts.function {
+          "" => input.base_addr
+          _ =>
+            match parse_number(opts.function) {
+              Some(addr) => addr
+              None => {
+                println("Error: Function not found: \{opts.function}")
+                return
+              }
+            }
+        }
+        let func_end = input.base_addr +
+          input.bytes.length().reinterpret_as_uint()
+        if func_addr < input.base_addr || func_addr >= func_end {
+          println(
+            "Error: Function address not in code sections: \{format_hex(func_addr)}",
+          )
+          return
+        }
+
+        let func_instructions : Array[@analysis.DecodedInst] = []
+        for inst in all_instructions {
+          if inst.addr >= func_addr {
+            func_instructions.push(inst)
+          }
+        }
+
+        if func_instructions.length() == 0 {
+          println(
+            "Error: No instructions found for function at \{format_hex(func_addr)}",
+          )
+          return
+        }
+
+        let func_cfg = @analysis.build_cfg(
+          FixedArray::from_array(func_instructions),
+          func_addr,
+        )
+        let symbol_map : Map[UInt, String] = {}
+        let string_map : Map[UInt, String] = {}
+        let func_name = if opts.function == "" {
+          "entry"
+        } else {
+          "func_" + format_hex(func_addr)
+        }
+        let output = render_decompile_output(
+          func_name,
+          func_addr,
+          func_cfg,
+          FixedArray::from_array(func_instructions),
+          symbol_map,
+          string_map,
+          opts.show_code,
+        )
+
+        if opts.output != "" {
+          if write_output_file(opts.output, output) {
+            println("Pseudo-code written to: \{opts.output}")
+          } else {
+            println("Error: Failed to write output file")
+          }
+        } else {
+          println(output)
+        }
+      }
+      LoadFailed(err) => println(primary_code_error_message(err, true))
+    }
+    return
+  }
+
   match read_file_bytes(opts.file_path) {
     Some(bytes) => {
       if !@format.is_elf(bytes) {
@@ -2326,61 +2765,15 @@ fn execute_decompile(opts : DecompileOptions) -> Unit {
             FixedArray::from_array(func_instructions),
             func_addr,
           )
-
-          // Generate output based on show_code option
-          let mut output = ""
-
-          if opts.show_code {
-            // Generate pseudo-code with enhanced analysis
-            let pseudo_code = @analysis.decompile(
-              func_cfg,
-              FixedArray::from_array(func_instructions),
-              symbol_map,
-              string_map,
-            )
-
-            output = "// Pseudo-code generated by RISC-V Binary Analyzer\n"
-            output = output +
-              "// Function: \{func_name} @ \{format_hex(func_addr)}\n\n"
-            output = output + "void \{func_name}() {\n"
-            output = output + pseudo_code
-            output = output + "}\n"
-          } else {
-            // Generate simplified output (control flow summary)
-            output = "// Function: \{func_name} @ \{format_hex(func_addr)}\n\n"
-            output = output + "// Basic Blocks: \{func_cfg.blocks.length()}\n"
-            output = output + "// Edges: \{func_cfg.edges.length()}\n\n"
-
-            // Show control flow structure
-            for block in func_cfg.blocks {
-              output = output + "Block \{format_hex(block.start_addr)}:\n"
-
-              // Find outgoing edges
-              let outgoing : Array[String] = []
-              for edge in func_cfg.edges {
-                if edge.from_block == block.start_addr {
-                  let edge_desc = match edge.edge_type {
-                    @analysis.Jump => "jump"
-                    @analysis.BranchTaken => "branch (taken)"
-                    @analysis.BranchNotTaken => "branch (not taken)"
-                    @analysis.Call => "call"
-                    @analysis.Return => "return"
-                  }
-                  outgoing.push(
-                    "  -> \{format_hex(edge.to_block)} (" + edge_desc + ")",
-                  )
-                }
-              }
-
-              for desc in outgoing {
-                output = output + desc + "\n"
-              }
-
-              if outgoing.length() > 0 {
-                output = output + "\n"
-              }
-            }
-          }
+          let output = render_decompile_output(
+            func_name,
+            func_addr,
+            func_cfg,
+            FixedArray::from_array(func_instructions),
+            symbol_map,
+            string_map,
+            opts.show_code,
+          )
 
           if opts.output != "" {
             if write_output_file(opts.output, output) {

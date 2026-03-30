@@ -164,6 +164,25 @@ test "parse asm args supports xlen selection" {
 }
 
 ///|
+test "parse info args supports raw metadata options" {
+  match
+    parse_info_args([
+      "info", "out/simple.raw", "--raw", "--base", "0x20000", "--xlen", "32", "--format",
+      "json", "--output", "out/info.json",
+    ]) {
+    Some(Command::Info(opts)) => {
+      assert_eq(opts.file_path, "out/simple.raw")
+      assert_true(opts.raw_mode)
+      assert_eq(opts.base_addr, 0x20000U)
+      assert_eq(opts.xlen, 32)
+      assert_eq(opts.format, OutputFormat::Json)
+      assert_eq(opts.output, "out/info.json")
+    }
+    _ => abort("expected info command")
+  }
+}
+
+///|
 test "info command writes elf metadata json" {
   ensure_cli_test_dir()
   let output_path = CLI_TEST_DIR + "/info.json"
@@ -174,6 +193,9 @@ test "info command writes elf metadata json" {
     file_path: simple_elf,
     format: OutputFormat::Json,
     output: output_path,
+    raw_mode: false,
+    base_addr: 0x10000U,
+    xlen: 64,
   })
 
   assert_true(@fs.path_exists(output_path))
@@ -181,6 +203,31 @@ test "info command writes elf metadata json" {
   assert_true(output.contains("\"class\": \"ELF64\""))
   assert_true(output.contains("\"architecture\": \"RISC-V\""))
   assert_true(output.contains("\"entry_point\": \"0x10000\""))
+}
+
+///|
+test "info command writes raw metadata json" {
+  ensure_cli_test_dir()
+  let output_path = CLI_TEST_DIR + "/info_raw.json"
+  reset_cli_test_file(output_path)
+  let simple_raw = must_prepare_simple_raw()
+
+  execute_info({
+    file_path: simple_raw,
+    format: OutputFormat::Json,
+    output: output_path,
+    raw_mode: true,
+    base_addr: 0x10000U,
+    xlen: 64,
+  })
+
+  assert_true(@fs.path_exists(output_path))
+  let output = must_read_text(output_path)
+  assert_true(output.contains("\"input_format\": \"raw\""))
+  assert_true(output.contains("\"entry_point\": \"0x10000\""))
+  assert_true(output.contains("\"base_addr\": \"0x10000\""))
+  assert_true(output.contains("\"xlen\": 64"))
+  assert_true(output.contains("\"instruction_count\": 12"))
 }
 
 ///|
@@ -238,6 +285,31 @@ test "cfg command writes elf cfg json" {
     function: "",
     format: OutputFormat::Json,
     output: output_path,
+    raw_mode: false,
+    base_addr: 0x10000U,
+  })
+
+  assert_true(@fs.path_exists(output_path))
+  let output = must_read_text(output_path)
+  assert_true(output.contains("\"blocks\": ["))
+  assert_true(output.contains("\"start_addr\": \"0x10000\""))
+  assert_true(output.contains("\"entry_points\": ["))
+}
+
+///|
+test "cfg command writes raw cfg json" {
+  ensure_cli_test_dir()
+  let output_path = CLI_TEST_DIR + "/cfg_raw.json"
+  reset_cli_test_file(output_path)
+  let simple_raw = must_prepare_simple_raw()
+
+  execute_cfg({
+    file_path: simple_raw,
+    function: "",
+    format: OutputFormat::Json,
+    output: output_path,
+    raw_mode: true,
+    base_addr: 0x10000U,
   })
 
   assert_true(@fs.path_exists(output_path))
@@ -281,6 +353,8 @@ test "analyze command writes elf analysis json" {
     format: OutputFormat::Json,
     output: output_path,
     detailed: true,
+    raw_mode: false,
+    base_addr: 0x10000U,
   })
 
   assert_true(@fs.path_exists(output_path))
@@ -289,6 +363,31 @@ test "analyze command writes elf analysis json" {
   assert_true(output.contains("\"architecture\": \"RISC-V\""))
   assert_true(output.contains("\"instruction_count\": 12"))
   assert_true(output.contains("\"basic_blocks\": 1"))
+}
+
+///|
+test "analyze command writes raw analysis json" {
+  ensure_cli_test_dir()
+  let output_path = CLI_TEST_DIR + "/analyze_raw.json"
+  reset_cli_test_file(output_path)
+  let simple_raw = must_prepare_simple_raw()
+
+  execute_analyze({
+    file_path: simple_raw,
+    format: OutputFormat::Json,
+    output: output_path,
+    detailed: true,
+    raw_mode: true,
+    base_addr: 0x10000U,
+  })
+
+  assert_true(@fs.path_exists(output_path))
+  let output = must_read_text(output_path)
+  assert_true(output.contains("\"input_format\": \"raw\""))
+  assert_true(output.contains("\"entry_point\": \"0x10000\""))
+  assert_true(output.contains("\"instruction_count\": 12"))
+  assert_true(output.contains("\"basic_blocks\": 1"))
+  assert_true(output.contains("\"entry_points\": 1"))
 }
 
 ///|
@@ -303,11 +402,36 @@ test "decompile command writes elf control flow summary" {
     function: "",
     output: output_path,
     show_code: false,
+    raw_mode: false,
+    base_addr: 0x10000U,
   })
 
   assert_true(@fs.path_exists(output_path))
   let output = must_read_text(output_path)
   assert_true(output.contains("// Function: _start @ 0x10000"))
+  assert_true(output.contains("// Basic Blocks: 1"))
+  assert_true(output.contains("Block 0x10000:"))
+}
+
+///|
+test "decompile command writes raw control flow summary" {
+  ensure_cli_test_dir()
+  let output_path = CLI_TEST_DIR + "/decompile_raw.txt"
+  reset_cli_test_file(output_path)
+  let simple_raw = must_prepare_simple_raw()
+
+  execute_decompile({
+    file_path: simple_raw,
+    function: "",
+    output: output_path,
+    show_code: false,
+    raw_mode: true,
+    base_addr: 0x10000U,
+  })
+
+  assert_true(@fs.path_exists(output_path))
+  let output = must_read_text(output_path)
+  assert_true(output.contains("// Function: entry @ 0x10000"))
   assert_true(output.contains("// Basic Blocks: 1"))
   assert_true(output.contains("Block 0x10000:"))
 }

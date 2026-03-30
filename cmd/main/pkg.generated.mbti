@@ -14,6 +14,8 @@ pub struct AnalyzeOptions {
   format : OutputFormat
   output : String
   detailed : Bool
+  raw_mode : Bool
+  base_addr : UInt
 }
 pub impl Show for AnalyzeOptions
 
@@ -45,6 +47,8 @@ pub struct CfgOptions {
   function : String
   format : OutputFormat
   output : String
+  raw_mode : Bool
+  base_addr : UInt
 }
 pub impl Show for CfgOptions
 
@@ -85,6 +89,8 @@ pub struct DecompileOptions {
   function : String
   output : String
   show_code : Bool
+  raw_mode : Bool
+  base_addr : UInt
 }
 pub impl Show for DecompileOptions
 
@@ -107,6 +113,9 @@ pub struct InfoOptions {
   file_path : String
   format : OutputFormat
   output : String
+  raw_mode : Bool
+  base_addr : UInt
+  xlen : Int
 }
 pub impl Show for InfoOptions
 
