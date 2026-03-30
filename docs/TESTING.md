@@ -3,7 +3,7 @@
 ## 稳定 Smoke 回归
 
 稳定 smoke 回归是当前发布门禁，对应 workflow 为 `.github/workflows/stable-smoke.yml`。
-Linux smoke 继续作为主门禁；Windows/MSVC 仅作为补充校验，对应 `.github/workflows/windows-msvc-native.yml`，不替代现有 Linux 主线。
+Linux smoke 继续作为主门禁，并同时覆盖默认 ELF 路径与 RAW 主路径；Windows/MSVC 仅作为补充校验，对应 `.github/workflows/windows-msvc-native.yml`，不替代现有 Linux 主线。
 
 如果本地没有 `out/` 目录，先创建一次：
 
@@ -23,6 +23,14 @@ mkdir -p out
 grep '"xlen":64' out/simple.run.json
 ~/.moon/bin/moon run cmd/main -- run out/simple.elf --max-steps 20
 ~/.moon/bin/moon run cmd/main -- workbench out/simple.elf -o out/workbench.html
+~/.moon/bin/moon run cmd/main -- asm example/simple.s -o out/simple.raw --format raw
+~/.moon/bin/moon run cmd/main -- info out/simple.raw --raw --base 0x10000 --xlen 64 --format json > out/simple.raw.info.json
+grep '"input_format":"raw"' out/simple.raw.info.json
+grep '"xlen":64' out/simple.raw.info.json
+~/.moon/bin/moon run cmd/main -- run out/simple.raw --raw --base 0x10000 --xlen 64 --format json > out/simple.raw.run.json
+grep '"xlen":64' out/simple.raw.run.json
+~/.moon/bin/moon run cmd/main -- run out/simple.raw --raw --base 0x10000 --xlen 64 --max-steps 20
+~/.moon/bin/moon run cmd/main -- workbench out/simple.raw --raw --base 0x10000 --xlen 64 -o out/simple_raw.html
 ```
 
 预期结果：
@@ -32,6 +40,10 @@ grep '"xlen":64' out/simple.run.json
 - `out/simple.run.json` 中的 `xlen` 固定为 `64`。
 - `run out/simple.elf --max-steps 20` 能在给定步数内完成。
 - `out/workbench.html` 成功生成。
+- `out/simple.raw` 可以由同一份源码稳定生成，且 RAW 默认验收参数固定为 `base=0x10000`、`xlen=64`。
+- `out/simple.raw.info.json` 与 `out/simple.raw.run.json` 都明确记录 RAW 输入和 `xlen=64`。
+- `run out/simple.raw --raw --base 0x10000 --xlen 64 --max-steps 20` 能在给定步数内完成。
+- `out/simple_raw.html` 成功生成。
 
 Windows 本地说明：
 
@@ -41,7 +53,7 @@ Windows 本地说明：
 ## Windows MSVC 补充校验
 
 Windows 原生补充校验对应 workflow `.github/workflows/windows-msvc-native.yml`。
-它的目标是验证 `cmd/server` 的 MSVC 原生测试链路，同时补一条最小 CLI smoke；Linux `.github/workflows/stable-smoke.yml` 仍然是主门禁。
+它的目标是验证 `cmd/server` 的 MSVC 原生测试链路，并补一条覆盖 ELF 与 RAW 的 CLI smoke；Linux `.github/workflows/stable-smoke.yml` 仍然是主门禁。
 
 GitHub Actions 中的命令顺序：
 
@@ -51,13 +63,17 @@ moon test cmd/server --target native
 moon test cmd/main --target native
 moon run cmd/main -- asm example/simple.s -o out/simple.elf
 moon run cmd/main -- run out/simple.elf --max-steps 20
+moon run cmd/main -- asm example/simple.s -o out/simple.raw --format raw
+moon run cmd/main -- info out/simple.raw --raw --base 0x10000 --xlen 64
+moon run cmd/main -- run out/simple.raw --raw --base 0x10000 --xlen 64 --max-steps 20
+moon run cmd/main -- workbench out/simple.raw --raw --base 0x10000 --xlen 64 -o out/simple_raw.html
 ```
 
 Windows 本地执行要求：
 
 - 优先使用 Visual Studio Developer Command Prompt for VS 2022。
 - 如果当前终端不是该环境，先执行 `vcvars64.bat`，再运行上面的命令。
-- 该补充校验主要用于确认 MSVC 原生编译链路可用，不改变 Linux smoke 的发布优先级。
+- 该补充校验主要用于确认 MSVC 原生编译链路可用，以及 RAW 离线路径不会在 Windows 上回退，不改变 Linux smoke 的发布优先级。
 
 ## 重型 / 完整回归
 

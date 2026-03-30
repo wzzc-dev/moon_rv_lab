@@ -32,7 +32,7 @@
 | TODO-28 | 已完成 | 为离线 `workbench` 打通 RAW 输入，保持现有离线 HTML 交互模型不变 | `moon test workbench --target native`<br>`moon test cmd/main --target native`<br>`moon run cmd/main -- workbench out/simple.raw --raw --base 0x10000 --xlen 64 -o out/simple_raw.html` | `feat: 为离线 workbench 增加 RAW 输入` |
 | TODO-29 | 已完成 | 明确 RAW 下 `symbols/callgraph` 的受限输出和 CLI 帮助文案，不伪造不存在的符号与函数边界 | `moon test cmd/main --target native`<br>`moon run cmd/main -- symbols out/simple.raw --raw --format json`<br>`moon run cmd/main -- callgraph out/simple.raw --raw --format json` | `docs: 明确 RAW 受限输出与 CLI 帮助文案` |
 | TODO-30 | 已完成 | 同步 README、用户文档、API 文档和样例索引，形成 ELF/RAW 双路径说明 | `moon run cmd/main -- asm example/simple.s -o out/simple.elf`<br>`moon run cmd/main -- asm example/simple.s -o out/simple.raw --format raw`<br>`moon run cmd/main -- run out/simple.elf --max-steps 20`<br>`moon run cmd/main -- run out/simple.raw --raw --base 0x10000 --xlen 64 --max-steps 20`<br>`moon run cmd/main -- workbench out/simple.raw --raw --base 0x10000 --xlen 64 -o out/simple_raw.html` | `docs: 补齐 RAW 与 ELF 双路径样例矩阵` |
-| TODO-31 | 待开始 | 扩展 Linux smoke 与 Windows supplemental check，覆盖 RAW 主路径和核心 CLI 命令矩阵 | `moon test`<br>`moon run cmd/main -- asm example/simple.s -o out/simple.raw --format raw`<br>`moon run cmd/main -- info out/simple.raw --raw --base 0x10000 --xlen 64`<br>`moon run cmd/main -- run out/simple.raw --raw --base 0x10000 --xlen 64 --max-steps 20`<br>`moon run cmd/main -- workbench out/simple.raw --raw --base 0x10000 --xlen 64 -o out/simple_raw.html` | `ci: 扩展 smoke 覆盖 RAW 与核心命令` |
+| TODO-31 | 已完成 | 扩展 Linux smoke 与 Windows supplemental check，覆盖 RAW 主路径和核心 CLI 命令矩阵 | `moon test`<br>`moon run cmd/main -- asm example/simple.s -o out/simple.raw --format raw`<br>`moon run cmd/main -- info out/simple.raw --raw --base 0x10000 --xlen 64`<br>`moon run cmd/main -- run out/simple.raw --raw --base 0x10000 --xlen 64 --max-steps 20`<br>`moon run cmd/main -- workbench out/simple.raw --raw --base 0x10000 --xlen 64 -o out/simple_raw.html` | `ci: 扩展 smoke 覆盖 RAW 与核心命令` |
 | TODO-32 | 待开始 | 编写答辩 runbook 与最终验收清单，固化 clean repo 到 CLI、离线 workbench、在线演示的完整复现顺序 | `moon test`<br>`moon run cmd/main -- asm example/file_open_read_close.s -o out/file_open_read_close.elf`<br>`moon run cmd/main -- run out/file_open_read_close.elf --trace out/file_open_read_close.trace.json`<br>`moon run cmd/main -- workbench out/simple.elf -o out/workbench.html` | `docs: 补齐答辩 runbook 与最终验收清单` |
 
 ## 执行约定
@@ -75,3 +75,4 @@
 - `feat: 为离线 workbench 增加 RAW 输入`
 - `docs: 明确 RAW 受限输出与 CLI 帮助文案`
 - `docs: 补齐 RAW 与 ELF 双路径样例矩阵`
+- `ci: 扩展 smoke 覆盖 RAW 与核心命令`

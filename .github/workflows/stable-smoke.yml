@@ -34,3 +34,11 @@ jobs:
           grep '"xlen":64' out/simple.run.json
           moon run cmd/main -- run out/simple.elf --max-steps 20
           moon run cmd/main -- workbench out/simple.elf -o out/workbench.html
+          moon run cmd/main -- asm example/simple.s -o out/simple.raw --format raw
+          moon run cmd/main -- info out/simple.raw --raw --base 0x10000 --xlen 64 --format json > out/simple.raw.info.json
+          grep '"input_format":"raw"' out/simple.raw.info.json
+          grep '"xlen":64' out/simple.raw.info.json
+          moon run cmd/main -- run out/simple.raw --raw --base 0x10000 --xlen 64 --format json > out/simple.raw.run.json
+          grep '"xlen":64' out/simple.raw.run.json
+          moon run cmd/main -- run out/simple.raw --raw --base 0x10000 --xlen 64 --max-steps 20
+          moon run cmd/main -- workbench out/simple.raw --raw --base 0x10000 --xlen 64 -o out/simple_raw.html

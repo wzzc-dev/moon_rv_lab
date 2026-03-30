@@ -34,3 +34,7 @@ jobs:
           moon test cmd/main --target native
           moon run cmd/main -- asm example/simple.s -o out/simple.elf
           moon run cmd/main -- run out/simple.elf --max-steps 20
+          moon run cmd/main -- asm example/simple.s -o out/simple.raw --format raw
+          moon run cmd/main -- info out/simple.raw --raw --base 0x10000 --xlen 64
+          moon run cmd/main -- run out/simple.raw --raw --base 0x10000 --xlen 64 --max-steps 20
+          moon run cmd/main -- workbench out/simple.raw --raw --base 0x10000 --xlen 64 -o out/simple_raw.html
