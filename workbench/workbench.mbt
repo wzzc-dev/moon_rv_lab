@@ -8,11 +8,20 @@ const DEFAULT_MAX_INSTRUCTIONS : Int = 1200
 pub struct WorkbenchOptions {
   title : String
   max_instructions : Int
+  raw_mode : Bool
+  base_addr : UInt
+  xlen : Int
 } derive(Show)
 
 ///|
 pub fn default_options() -> WorkbenchOptions {
-  { title: "", max_instructions: DEFAULT_MAX_INSTRUCTIONS }
+  {
+    title: "",
+    max_instructions: DEFAULT_MAX_INSTRUCTIONS,
+    raw_mode: false,
+    base_addr: 0x10000U,
+    xlen: 64,
+  }
 }
 
 ///|
@@ -21,7 +30,18 @@ pub fn create_options(
   title : String,
   max_instructions : Int,
 ) -> WorkbenchOptions {
-  { title, max_instructions }
+  { title, max_instructions, raw_mode: false, base_addr: 0x10000U, xlen: 64 }
+}
+
+///|
+pub fn create_input_options(
+  title : String,
+  max_instructions : Int,
+  raw_mode : Bool,
+  base_addr : UInt,
+  xlen : Int,
+) -> WorkbenchOptions {
+  { title, max_instructions, raw_mode, base_addr, xlen }
 }
 
 ///|
@@ -239,7 +259,7 @@ priv enum LoadStaticProgramResult {
 }
 
 ///|
-/// Generate a standalone Web workbench page from an ELF input.
+/// Generate a standalone Web workbench page from an input program.
 /// Returns `Some(error)` on failure; `None` means success.
 pub fn generate_from_file(
   input_file : String,
@@ -248,13 +268,15 @@ pub fn generate_from_file(
 ) -> WorkbenchError? {
   let page_title = resolve_page_title(options.title)
   let max_inst = normalize_max_instructions(options.max_instructions)
-  match load_static_program_index(input_file, page_title) {
+  match
+    load_static_program_index_with_options(input_file, page_title, options) {
     StaticProgramErr(err) => Some(err)
     StaticProgramOk(index) => {
-      let (runtime, events) = load_runtime_trace(
+      let (runtime, events) = load_runtime_trace_with_options(
         input_file,
         max_inst,
         index.blocks,
+        options,
       )
       let functions = build_workbench_functions(index, events)
       let overview = build_workbench_overview(
@@ -514,6 +536,90 @@ fn load_static_program_index(
           })
         }
       }
+    }
+  }
+}
+
+///|
+fn load_static_program_index_with_options(
+  input_file : String,
+  title : String,
+  options : WorkbenchOptions,
+) -> LoadStaticProgramResult {
+  if options.raw_mode {
+    load_static_program_index_raw(
+      input_file,
+      title,
+      options.base_addr,
+      options.xlen,
+    )
+  } else {
+    load_static_program_index(input_file, title)
+  }
+}
+
+///|
+fn load_static_program_index_raw(
+  input_file : String,
+  title : String,
+  base_addr : UInt,
+  xlen : Int,
+) -> LoadStaticProgramResult {
+  match read_file_bytes(input_file) {
+    None => StaticProgramErr(WorkbenchError::FileNotFound(input_file))
+    Some(bytes) => {
+      let raw = @format.parse_raw_binary(bytes, base_addr)
+      if raw.code.length() == 0 {
+        return StaticProgramErr(WorkbenchError::NoCodeSection(input_file))
+      }
+
+      let instructions = @analysis.decode_instructions(raw.code, raw.base_addr)
+      if instructions.length() == 0 {
+        return StaticProgramErr(WorkbenchError::NoCodeSection(input_file))
+      }
+
+      let cfg = @analysis.build_cfg(instructions, raw.base_addr)
+      let code_section = {
+        index: 0,
+        name: ".text.raw",
+        start_addr: raw.base_addr,
+        end_addr: raw.base_addr + raw.code.length().reinterpret_as_uint(),
+        instructions,
+        blocks: collect_blocks(cfg),
+        edges: collect_edges(cfg),
+      }
+      let code_sections = [code_section]
+      StaticProgramOk({
+        title,
+        source_file: input_file,
+        entry_point: raw.base_addr,
+        file_class: "RAW",
+        xlen,
+        architecture: "RISC-V",
+        section_count: 1,
+        program_count: 1,
+        sections: [
+          {
+            index: 0,
+            name: ".text.raw",
+            addr: format_hex(raw.base_addr),
+            size: format_hex(raw.code.length().reinterpret_as_uint()),
+          },
+        ],
+        code_sections,
+        all_instructions: collect_all_program_instructions(code_sections),
+        blocks: collect_all_program_blocks(code_sections),
+        edges: collect_all_program_edges(code_sections),
+        function_ranges: [
+          {
+            name: "entry",
+            addr: raw.base_addr,
+            size: raw.code.length().reinterpret_as_uint(),
+            end_addr: raw.base_addr + raw.code.length().reinterpret_as_uint(),
+            section_index: 0,
+          },
+        ],
+      })
     }
   }
 }
@@ -1240,6 +1346,42 @@ fn load_runtime_trace(
         { initial_pc: "0x0", stop_reason: "load failed", initial_registers: [] },
         [],
       )
+  }
+}
+
+///|
+fn load_runtime_trace_with_options(
+  input_file : String,
+  step_limit : Int,
+  blocks : Array[WorkbenchBlock],
+  options : WorkbenchOptions,
+) -> (WorkbenchRuntime, Array[WorkbenchTraceEvent]) {
+  if options.raw_mode {
+    match @simulator.load_raw(input_file, options.base_addr, options.xlen) {
+      @simulator.Loaded(initial_state) => {
+        let initial_snapshot = @simulator.snapshot(initial_state)
+        let finished = @simulator.run_with_limit(initial_state, step_limit)
+        (
+          {
+            initial_pc: format_hex(initial_snapshot.pc),
+            stop_reason: @simulator.stop_reason_to_string(finished.stop_reason),
+            initial_registers: collect_initial_registers(initial_snapshot),
+          },
+          collect_runtime_events(finished.trace, blocks),
+        )
+      }
+      @simulator.LoadFailed(_) =>
+        (
+          {
+            initial_pc: "0x0",
+            stop_reason: "load failed",
+            initial_registers: [],
+          },
+          [],
+        )
+    }
+  } else {
+    load_runtime_trace(input_file, step_limit, blocks)
   }
 }
 

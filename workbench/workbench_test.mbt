@@ -48,6 +48,26 @@ fn write_test_elf_with_xlen(
 }
 
 ///|
+fn write_test_raw(name : String, source : String) -> String {
+  ensure_test_dir()
+  let path = TEST_DIR + "/" + name + ".raw"
+  if @fs.path_exists(path) {
+    @fs.remove_file(path) catch {
+      _ => ()
+    }
+  }
+  let assembled = @asm.assemble_with_symbols(source, TEST_BASE)
+  if assembled.errors.length() != 0 {
+    abort("assembly failed")
+  }
+  let bytes = @asm.encode_to_bytes(assembled)
+  @fs.write_bytes_to_file(path, Bytes::from_array(bytes)) catch {
+    _ => abort("failed to write raw")
+  }
+  path
+}
+
+///|
 fn branch_trace_program() -> String {
   "addi a0, x0, 1\nbeq a0, a0, 8\naddi a1, x0, 9\naddi a2, x0, 3\nebreak"
 }
@@ -183,6 +203,31 @@ test "generated workbench html keeps navigation and actionable hint hooks" {
   assert_true(html.contains("Prev step baseline"))
   assert_true(html.contains("Initial baseline"))
   assert_true(html.contains("compareRegistersToInitial"))
+}
+
+///|
+test "generated workbench html supports raw offline inputs" {
+  let path = write_test_raw("raw_workbench", branch_trace_program())
+  let output = TEST_DIR + "/raw_workbench.html"
+  match
+    generate_from_file(
+      path,
+      output,
+      create_input_options("Raw Workbench", 20, true, TEST_BASE, 64),
+    ) {
+    None => ()
+    Some(err) => abort(err.to_string())
+  }
+
+  let html = read_text_file(output)
+  assert_true(html.contains("class=\"workbench-shell\""))
+  assert_true(html.contains("\"file_class\":\"RAW\""))
+  assert_true(html.contains("\"xlen\":64"))
+  assert_true(html.contains("\"entry_point\":\"0x10000\""))
+  assert_true(html.contains("\"name\":\"entry\""))
+  assert_true(
+    html.contains("\"source_file\":\"tmp_workbench_tests/raw_workbench.raw\""),
+  )
 }
 
 ///|

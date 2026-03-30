@@ -59,6 +59,9 @@ pub struct WorkbenchCmdOptions {
   output : String
   title : String
   max_instructions : Int
+  raw_mode : Bool
+  base_addr : UInt
+  xlen : Int
 } derive(Show)
 
 ///|
@@ -424,6 +427,9 @@ fn parse_workbench_args(args : Array[String]) -> Command? {
   let mut output = "workbench.html"
   let mut title = ""
   let mut max_instructions = 1200
+  let mut raw_mode = false
+  let mut base_addr = 0x10000U
+  let mut xlen = 64
   let mut i = 1
 
   while i < args.length() {
@@ -452,6 +458,34 @@ fn parse_workbench_args(args : Array[String]) -> Command? {
       } else {
         return None
       }
+    } else if arg == "--base" || arg == "-b" {
+      if i + 1 < args.length() {
+        match parse_number(args[i + 1]) {
+          Some(addr) => base_addr = addr
+          None => return None
+        }
+        i = i + 2
+      } else {
+        return None
+      }
+    } else if arg == "--raw" || arg == "-r" {
+      raw_mode = true
+      i = i + 1
+    } else if arg == "--xlen" {
+      if i + 1 < args.length() {
+        match parse_uint_dec(args[i + 1]) {
+          Some(value) =>
+            if value == 32U || value == 64U {
+              xlen = value.reinterpret_as_int()
+            } else {
+              return None
+            }
+          None => return None
+        }
+        i = i + 2
+      } else {
+        return None
+      }
     } else if arg[0] != '-' {
       file_path = arg
       i = i + 1
@@ -464,7 +498,17 @@ fn parse_workbench_args(args : Array[String]) -> Command? {
     return None
   }
 
-  Some(Command::Workbench({ file_path, output, title, max_instructions }))
+  Some(
+    Command::Workbench({
+      file_path,
+      output,
+      title,
+      max_instructions,
+      raw_mode,
+      base_addr,
+      xlen,
+    }),
+  )
 }
 
 ///|
@@ -1143,6 +1187,13 @@ fn print_usage() -> Unit {
   println(
     "  --max-inst <n>          Max instructions embedded in page (default: 1200)",
   )
+  println(
+    "  --base, -b <addr>       Base address for raw binaries (default: 0x10000)",
+  )
+  println("  --raw, -r               Treat as raw binary (not ELF)")
+  println(
+    "  --xlen <32|64>          Raw binary word size metadata (default: 64)",
+  )
   println("")
   println("Examples:")
   println("  rvkit disasm program.elf")
@@ -1167,6 +1218,9 @@ fn print_usage() -> Unit {
   println("  rvkit asm code.s -o program.elf")
   println("  rvkit asm code.s -f hex")
   println("  rvkit workbench example/hello.elf -o out/workbench.html")
+  println(
+    "  rvkit workbench firmware.bin --raw --base 0x8000 --xlen 64 -o out/workbench.html",
+  )
 }
 
 ///|
@@ -2242,7 +2296,13 @@ fn execute_workbench(opts : WorkbenchCmdOptions) -> Unit {
 ///|
 /// Execute workbench command and return the rendered CLI output.
 fn execute_workbench_result(opts : WorkbenchCmdOptions) -> CommandExecResult {
-  let wb_opts = @workbench.create_options(opts.title, opts.max_instructions)
+  let wb_opts = @workbench.create_input_options(
+    opts.title,
+    opts.max_instructions,
+    opts.raw_mode,
+    opts.base_addr,
+    opts.xlen,
+  )
 
   match @workbench.generate_from_file(opts.file_path, opts.output, wb_opts) {
     Some(err) => Failure("Error: \{err}")

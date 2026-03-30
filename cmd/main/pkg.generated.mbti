@@ -160,6 +160,9 @@ pub struct WorkbenchCmdOptions {
   output : String
   title : String
   max_instructions : Int
+  raw_mode : Bool
+  base_addr : UInt
+  xlen : Int
 }
 pub impl Show for WorkbenchCmdOptions
 

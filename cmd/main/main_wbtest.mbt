@@ -224,6 +224,24 @@ test "parse info args supports raw metadata options" {
 }
 
 ///|
+test "parse workbench args supports raw metadata options" {
+  match
+    parse_workbench_args([
+      "workbench", "out/simple.raw", "--raw", "--base", "0x20000", "--xlen", "32",
+      "--output", "out/simple_raw.html",
+    ]) {
+    Some(Command::Workbench(opts)) => {
+      assert_eq(opts.file_path, "out/simple.raw")
+      assert_true(opts.raw_mode)
+      assert_eq(opts.base_addr, 0x20000U)
+      assert_eq(opts.xlen, 32)
+      assert_eq(opts.output, "out/simple_raw.html")
+    }
+    _ => abort("expected workbench command")
+  }
+}
+
+///|
 test "info command writes elf metadata json" {
   ensure_cli_test_dir()
   let output_path = CLI_TEST_DIR + "/info.json"
@@ -628,6 +646,9 @@ test "workbench command generates offline html artifact" {
       output: output_path,
       title: "CLI Test Workbench",
       max_instructions: 64,
+      raw_mode: false,
+      base_addr: 0x10000U,
+      xlen: 64,
     }) {
     Success(output) => {
       assert_true(output.contains("Workbench generated: " + output_path))
@@ -638,6 +659,36 @@ test "workbench command generates offline html artifact" {
       assert_true(html.contains("const WORKBENCH_BOOT = "))
       assert_true(html.contains("\"mode\":\"embedded\""))
       assert_true(html.contains("\"embedded_overview\""))
+    }
+    Failure(err) => abort(err)
+  }
+}
+
+///|
+test "workbench command generates offline html artifact for raw input" {
+  ensure_cli_test_dir()
+  let output_path = CLI_TEST_DIR + "/simple_raw_workbench.html"
+  reset_cli_test_file(output_path)
+  let simple_raw = must_prepare_simple_raw()
+
+  match
+    execute_workbench_result({
+      file_path: simple_raw,
+      output: output_path,
+      title: "CLI RAW Workbench",
+      max_instructions: 64,
+      raw_mode: true,
+      base_addr: 0x10000U,
+      xlen: 64,
+    }) {
+    Success(output) => {
+      assert_true(output.contains("Workbench generated: " + output_path))
+      assert_true(@fs.path_exists(output_path))
+      let html = must_read_text(output_path)
+      assert_true(html.contains("class=\"workbench-shell\""))
+      assert_true(html.contains("\"file_class\":\"RAW\""))
+      assert_true(html.contains("\"xlen\":64"))
+      assert_true(html.contains("\"name\":\"entry\""))
     }
     Failure(err) => abort(err)
   }
