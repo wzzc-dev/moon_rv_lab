@@ -2045,6 +2045,9 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    nextBtn: document.getElementById("next-btn"),
   #|    playBtn: document.getElementById("play-btn"),
   #|    followPc: document.getElementById("follow-pc"),
+  #|    toolbarToggleNav: document.getElementById("toolbar-toggle-nav"),
+  #|    toolbarToggleBottom: document.getElementById("toolbar-toggle-bottom"),
+  #|    toolbarToggleInspector: document.getElementById("toolbar-toggle-inspector"),
   #|    changedRegistersToggle: document.getElementById("changed-registers-toggle"),
   #|    paneTabs: document.getElementById("pane-tabs"),
   #|    navPane: document.getElementById("nav-pane"),
@@ -2932,6 +2935,9 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|
   #|  function applyLayout() {
   #|    const root = document.documentElement;
+  #|    const navExpanded = !state.layout.navCollapsed;
+  #|    const bottomExpanded = !state.layout.bottomCollapsed;
+  #|    const inspectorExpanded = !state.layout.inspectorCollapsed;
   #|    root.style.setProperty("--nav-width", state.layout.navCollapsed ? "0px" : `${state.layout.navWidth}px`);
   #|    root.style.setProperty("--inspector-width", state.layout.inspectorCollapsed ? "0px" : `${state.layout.inspectorWidth}px`);
   #|    root.style.setProperty("--bottom-height", state.layout.bottomCollapsed ? "0px" : `${state.layout.bottomHeight}px`);
@@ -2944,9 +2950,21 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    refs.navSplitter.classList.toggle("collapsed-pane", state.layout.navCollapsed && window.innerWidth > 1100);
   #|    refs.inspectorSplitter.classList.toggle("collapsed-pane", state.layout.inspectorCollapsed && window.innerWidth > 1100);
   #|    refs.bottomSplitter.classList.toggle("collapsed-pane", state.layout.bottomCollapsed && window.innerWidth > 1100);
-  #|    refs.toggleNavPane.textContent = state.layout.navCollapsed ? "展开" : "折叠";
-  #|    refs.toggleBottomPane.textContent = state.layout.bottomCollapsed ? "展开" : "折叠";
-  #|    refs.toggleInspectorPane.textContent = state.layout.inspectorCollapsed ? "展开" : "折叠";
+  #|    refs.toggleNavPane.textContent = navExpanded ? "折叠" : "展开";
+  #|    refs.toggleBottomPane.textContent = bottomExpanded ? "折叠" : "展开";
+  #|    refs.toggleInspectorPane.textContent = inspectorExpanded ? "折叠" : "展开";
+  #|    refs.toggleNavPane.title = navExpanded ? "收起导航面板" : "展开导航面板";
+  #|    refs.toggleBottomPane.title = bottomExpanded ? "收起结果面板" : "展开结果面板";
+  #|    refs.toggleInspectorPane.title = inspectorExpanded ? "收起检查器面板" : "展开检查器面板";
+  #|    refs.toolbarToggleNav.textContent = navExpanded ? "收起导航" : "展开导航";
+  #|    refs.toolbarToggleBottom.textContent = bottomExpanded ? "收起结果" : "展开结果";
+  #|    refs.toolbarToggleInspector.textContent = inspectorExpanded ? "收起检查器" : "展开检查器";
+  #|    refs.toolbarToggleNav.classList.toggle("active", navExpanded);
+  #|    refs.toolbarToggleBottom.classList.toggle("active", bottomExpanded);
+  #|    refs.toolbarToggleInspector.classList.toggle("active", inspectorExpanded);
+  #|    refs.toolbarToggleNav.setAttribute("aria-pressed", navExpanded ? "true" : "false");
+  #|    refs.toolbarToggleBottom.setAttribute("aria-pressed", bottomExpanded ? "true" : "false");
+  #|    refs.toolbarToggleInspector.setAttribute("aria-pressed", inspectorExpanded ? "true" : "false");
   #|  }
   #|
   #|  function maybeFollowPc() {
@@ -3397,6 +3415,24 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|  refs.nextBtn.addEventListener("click", async () => { await step(1); });
   #|  refs.playBtn.addEventListener("click", togglePlay);
   #|
+  #|  function toggleNavPaneVisibility() {
+  #|    state.layout.navCollapsed = !state.layout.navCollapsed;
+  #|    saveUiState();
+  #|    applyLayout();
+  #|  }
+  #|
+  #|  function toggleBottomPaneVisibility() {
+  #|    state.layout.bottomCollapsed = !state.layout.bottomCollapsed;
+  #|    saveUiState();
+  #|    applyLayout();
+  #|  }
+  #|
+  #|  function toggleInspectorPaneVisibility() {
+  #|    state.layout.inspectorCollapsed = !state.layout.inspectorCollapsed;
+  #|    saveUiState();
+  #|    applyLayout();
+  #|  }
+  #|
   #|  refs.followPc.addEventListener("click", () => {
   #|    state.followPcEnabled = !state.followPcEnabled;
   #|    saveUiState();
@@ -3432,23 +3468,14 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    renderStateCompare();
   #|  });
   #|
-  #|  refs.toggleNavPane.addEventListener("click", () => {
-  #|    state.layout.navCollapsed = !state.layout.navCollapsed;
-  #|    saveUiState();
-  #|    applyLayout();
-  #|  });
+  #|  refs.toggleNavPane.addEventListener("click", toggleNavPaneVisibility);
+  #|  refs.toolbarToggleNav.addEventListener("click", toggleNavPaneVisibility);
   #|
-  #|  refs.toggleBottomPane.addEventListener("click", () => {
-  #|    state.layout.bottomCollapsed = !state.layout.bottomCollapsed;
-  #|    saveUiState();
-  #|    applyLayout();
-  #|  });
+  #|  refs.toggleBottomPane.addEventListener("click", toggleBottomPaneVisibility);
+  #|  refs.toolbarToggleBottom.addEventListener("click", toggleBottomPaneVisibility);
   #|
-  #|  refs.toggleInspectorPane.addEventListener("click", () => {
-  #|    state.layout.inspectorCollapsed = !state.layout.inspectorCollapsed;
-  #|    saveUiState();
-  #|    applyLayout();
-  #|  });
+  #|  refs.toggleInspectorPane.addEventListener("click", toggleInspectorPaneVisibility);
+  #|  refs.toolbarToggleInspector.addEventListener("click", toggleInspectorPaneVisibility);
   #|
   #|  bindSplitter(refs.navSplitter, "x", 1, () => state.layout.navWidth, (value) => { state.layout.navWidth = value; }, () => [180, Math.max(220, Math.floor(window.innerWidth * 0.35))]);
   #|  bindSplitter(refs.inspectorSplitter, "x", -1, () => state.layout.inspectorWidth, (value) => { state.layout.inspectorWidth = value; }, () => [240, Math.max(280, Math.floor(window.innerWidth * 0.42))]);
@@ -4236,6 +4263,12 @@ fn build_html_page(title : String, boot_json : String) -> String {
   html = html + "        <div class=\"toolbar-toggles\">\n"
   html = html +
     "          <button id=\"follow-pc\" class=\"toggle-btn\">Follow PC</button>\n"
+  html = html +
+    "          <button id=\"toolbar-toggle-nav\" class=\"toggle-btn\" title=\"切换导航面板\">导航</button>\n"
+  html = html +
+    "          <button id=\"toolbar-toggle-bottom\" class=\"toggle-btn\" title=\"切换结果面板\">结果</button>\n"
+  html = html +
+    "          <button id=\"toolbar-toggle-inspector\" class=\"toggle-btn\" title=\"切换检查器面板\">检查器</button>\n"
   html = html + "        </div>\n"
   html = html + "      </div>\n"
   html = html + "    </header>\n"

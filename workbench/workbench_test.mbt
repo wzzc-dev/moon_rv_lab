@@ -153,6 +153,9 @@ test "generated workbench html includes godbolt style panes and controls" {
   assert_true(html.contains("class=\"pane-tabs\""))
   assert_true(html.contains("class=\"main-grid\""))
   assert_true(html.contains("id=\"follow-pc\""))
+  assert_true(html.contains("id=\"toolbar-toggle-nav\""))
+  assert_true(html.contains("id=\"toolbar-toggle-bottom\""))
+  assert_true(html.contains("id=\"toolbar-toggle-inspector\""))
   assert_true(html.contains("id=\"cfg-subtitle\""))
   assert_true(html.contains("id=\"recent-writes\""))
   assert_true(html.contains("id=\"breakpoint-summary\""))
@@ -174,6 +177,9 @@ test "generated workbench html includes godbolt style panes and controls" {
   assert_true(html.contains("replayBreakpointHit"))
   assert_true(html.contains("compareMode"))
   assert_true(html.contains("renderStateCompare"))
+  assert_true(html.contains("toggleNavPaneVisibility"))
+  assert_true(html.contains("toggleBottomPaneVisibility"))
+  assert_true(html.contains("toggleInspectorPaneVisibility"))
   assert_false(html.contains("id=\"current-function-only\""))
 }
 
