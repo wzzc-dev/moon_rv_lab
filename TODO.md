@@ -25,7 +25,7 @@
 | TODO-21 | 已完成 | 为 workbench 增加状态对比视图 | `moon test workbench --target native` | `feat: 为 workbench 增加状态对比视图` |
 | TODO-22 | 已完成 | 同步 workbench 断点与状态对比说明 | `moon test workbench --target native`<br>`moon test cmd/server --target native`<br>`moon run cmd/main -- asm example/simple.s -o out/simple.elf`<br>`moon run cmd/main -- workbench out/simple.elf -o out/workbench.html` | `docs: 同步 workbench 断点与状态对比说明` |
 | TODO-23 | 已完成 | 建立下一轮 TODO 基线，并对齐版本元数据与提交记录结构 | `moon test cmd/main --target native`<br>`moon run cmd/main -- version` | `chore: 建立下一轮 TODO 基线并对齐版本元数据` |
-| TODO-24 | 待开始 | 为现有 ELF 主线补齐 `info/disasm/cfg/callgraph/analyze/decompile` 命令级回归，先把当前已支持能力测稳 | `moon test cmd/main --target native`<br>`moon run cmd/main -- asm example/simple.s -o out/simple.elf`<br>`moon run cmd/main -- info out/simple.elf`<br>`moon run cmd/main -- decompile out/simple.elf` | `test: 为核心 CLI 命令补齐 ELF 回归基线` |
+| TODO-24 | 已完成 | 为现有 ELF 主线补齐 `info/disasm/cfg/callgraph/analyze/decompile` 命令级回归，先把当前已支持能力测稳 | `moon test cmd/main --target native`<br>`moon run cmd/main -- asm example/simple.s -o out/simple.elf`<br>`moon run cmd/main -- info out/simple.elf`<br>`moon run cmd/main -- decompile out/simple.elf` | `test: 为核心 CLI 命令补齐 ELF 回归基线` |
 | TODO-25 | 待开始 | 抽取共享输入装载抽象，统一现有 ELF 与 `disasm --raw` 的入口，消除当前“半开半关”的 RAW 路径 | `moon test format`<br>`moon test cmd/main --target native`<br>`moon run cmd/main -- asm example/simple.s -o out/simple.raw --format raw`<br>`moon run cmd/main -- disasm out/simple.raw --raw --base 0x10000` | `refactor: 统一 ELF 与 RAW 输入装载抽象` |
 | TODO-26 | 待开始 | 为 `info/cfg/analyze/decompile` 打通 RAW 输入闭环，统一使用共享装载抽象 | `moon test cmd/main --target native`<br>`moon run cmd/main -- info out/simple.raw --raw --base 0x10000 --xlen 64`<br>`moon run cmd/main -- cfg out/simple.raw --raw --base 0x10000 --format json`<br>`moon run cmd/main -- analyze out/simple.raw --raw --base 0x10000 --format json`<br>`moon run cmd/main -- decompile out/simple.raw --raw --base 0x10000` | `feat: 为分析命令打通 RAW 输入` |
 | TODO-27 | 待开始 | 为 `simulator/run` 打通 RAW 输入，并在 RAW 缺少 ELF 元信息时提供清晰的 `base/xlen` 诊断 | `moon test simulator --target native`<br>`moon test cmd/main --target native`<br>`moon run cmd/main -- run out/simple.raw --raw --base 0x10000 --xlen 64 --max-steps 20`<br>`moon run cmd/main -- run out/simple.raw --raw --base 0x10000 --xlen 32 --max-steps 20` | `feat: 为 run 命令增加 RAW 输入支持` |
@@ -68,3 +68,4 @@
 ## 本轮提交记录
 
 - `chore: 建立下一轮 TODO 基线并对齐版本元数据`
+- `test: 为核心 CLI 命令补齐 ELF 回归基线`

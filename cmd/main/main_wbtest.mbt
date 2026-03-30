@@ -5,10 +5,16 @@ const CLI_TEST_DIR : String = "tmp_cli_tests"
 const SIMPLE_SOURCE_PATH : String = "example/simple.s"
 
 ///|
+const CALL_CHAIN_SOURCE_PATH : String = "example/call_chain.s"
+
+///|
 const SIMPLE_ELF_PATH : String = CLI_TEST_DIR + "/simple.elf"
 
 ///|
 const SIMPLE_ELF32_PATH : String = CLI_TEST_DIR + "/simple32.elf"
+
+///|
+const CALL_CHAIN_ELF_PATH : String = CLI_TEST_DIR + "/call_chain.elf"
 
 ///|
 fn ensure_cli_test_dir() -> Unit {
@@ -37,15 +43,18 @@ fn must_read_text(path : String) -> String {
 }
 
 ///|
-fn must_prepare_simple_elf_with_xlen(xlen : Int) -> String {
-  let output_path = if xlen == 32 { SIMPLE_ELF32_PATH } else { SIMPLE_ELF_PATH }
+fn must_prepare_elf_fixture(
+  source_path : String,
+  output_path : String,
+  xlen : Int,
+) -> String {
   ensure_cli_test_dir()
   reset_cli_test_file(output_path)
-  match read_file_string(SIMPLE_SOURCE_PATH) {
+  match read_file_string(source_path) {
     Some(source) => {
       let result = @asm.assemble_with_symbols(source, 0x10000U)
       if result.errors.length() > 0 {
-        abort("failed to assemble example/simple.s")
+        abort("failed to assemble cli fixture")
       }
       let bytes = @asm.encode_to_bytes(result)
       let elf = if xlen == 32 {
@@ -58,13 +67,24 @@ fn must_prepare_simple_elf_with_xlen(xlen : Int) -> String {
       }
       output_path
     }
-    None => abort("failed to read example/simple.s")
+    None => abort("failed to read cli fixture source")
   }
+}
+
+///|
+fn must_prepare_simple_elf_with_xlen(xlen : Int) -> String {
+  let output_path = if xlen == 32 { SIMPLE_ELF32_PATH } else { SIMPLE_ELF_PATH }
+  must_prepare_elf_fixture(SIMPLE_SOURCE_PATH, output_path, xlen)
 }
 
 ///|
 fn must_prepare_simple_elf() -> String {
   must_prepare_simple_elf_with_xlen(64)
+}
+
+///|
+fn must_prepare_call_chain_elf() -> String {
+  must_prepare_elf_fixture(CALL_CHAIN_SOURCE_PATH, CALL_CHAIN_ELF_PATH, 64)
 }
 
 ///|
@@ -118,6 +138,134 @@ test "parse asm args supports xlen selection" {
     }
     _ => abort("expected asm command")
   }
+}
+
+///|
+test "info command writes elf metadata json" {
+  ensure_cli_test_dir()
+  let output_path = CLI_TEST_DIR + "/info.json"
+  reset_cli_test_file(output_path)
+  let simple_elf = must_prepare_simple_elf()
+
+  execute_info({
+    file_path: simple_elf,
+    format: OutputFormat::Json,
+    output: output_path,
+  })
+
+  assert_true(@fs.path_exists(output_path))
+  let output = must_read_text(output_path)
+  assert_true(output.contains("\"class\": \"ELF64\""))
+  assert_true(output.contains("\"architecture\": \"RISC-V\""))
+  assert_true(output.contains("\"entry_point\": \"0x10000\""))
+}
+
+///|
+test "disasm command writes elf disassembly json" {
+  ensure_cli_test_dir()
+  let output_path = CLI_TEST_DIR + "/disasm.json"
+  reset_cli_test_file(output_path)
+  let simple_elf = must_prepare_simple_elf()
+
+  execute_disasm({
+    file_path: simple_elf,
+    base_addr: 0U,
+    format: OutputFormat::Json,
+    raw_mode: false,
+    output: output_path,
+  })
+
+  assert_true(@fs.path_exists(output_path))
+  let output = must_read_text(output_path)
+  assert_true(output.contains("\"addr\": \"0x10000\""))
+  assert_true(output.contains("\"inst\": \"addi a0, zero, 42\""))
+  assert_true(output.contains("\"addr\": \"0x1002c\""))
+}
+
+///|
+test "cfg command writes elf cfg json" {
+  ensure_cli_test_dir()
+  let output_path = CLI_TEST_DIR + "/cfg.json"
+  reset_cli_test_file(output_path)
+  let simple_elf = must_prepare_simple_elf()
+
+  execute_cfg({
+    file_path: simple_elf,
+    function: "",
+    format: OutputFormat::Json,
+    output: output_path,
+  })
+
+  assert_true(@fs.path_exists(output_path))
+  let output = must_read_text(output_path)
+  assert_true(output.contains("\"blocks\": ["))
+  assert_true(output.contains("\"start_addr\": \"0x10000\""))
+  assert_true(output.contains("\"entry_points\": ["))
+}
+
+///|
+test "callgraph command writes elf callgraph json" {
+  ensure_cli_test_dir()
+  let output_path = CLI_TEST_DIR + "/callgraph.json"
+  reset_cli_test_file(output_path)
+  let call_chain_elf = must_prepare_call_chain_elf()
+
+  execute_callgraph({
+    file_path: call_chain_elf,
+    format: OutputFormat::Json,
+    output: output_path,
+  })
+
+  assert_true(@fs.path_exists(output_path))
+  let output = must_read_text(output_path)
+  assert_true(output.contains("\"entry_point\": \"0x10000\""))
+  assert_true(output.contains("\"functions\": ["))
+  assert_true(output.contains("\"address\": \"0x10000\""))
+  assert_true(output.contains("\"name\": \"0x10000\""))
+  assert_true(output.contains("\"size\": 16"))
+}
+
+///|
+test "analyze command writes elf analysis json" {
+  ensure_cli_test_dir()
+  let output_path = CLI_TEST_DIR + "/analyze.json"
+  reset_cli_test_file(output_path)
+  let simple_elf = must_prepare_simple_elf()
+
+  execute_analyze({
+    file_path: simple_elf,
+    format: OutputFormat::Json,
+    output: output_path,
+    detailed: true,
+  })
+
+  assert_true(@fs.path_exists(output_path))
+  let output = must_read_text(output_path)
+  assert_true(output.contains("\"file_type\": \"ELF64\""))
+  assert_true(output.contains("\"architecture\": \"RISC-V\""))
+  assert_true(output.contains("\"instruction_count\": 12"))
+  assert_true(output.contains("\"basic_blocks\": 1"))
+}
+
+///|
+test "decompile command writes elf control flow summary" {
+  ensure_cli_test_dir()
+  let output_path = CLI_TEST_DIR + "/decompile.txt"
+  reset_cli_test_file(output_path)
+  let simple_elf = must_prepare_simple_elf()
+
+  execute_decompile({
+    file_path: simple_elf,
+    function: "",
+    output: output_path,
+    show_code: false,
+  })
+
+  assert_true(@fs.path_exists(output_path))
+  let output = must_read_text(output_path)
+  assert_true(output.contains("// Function: _start @ 0x10000"))
+  assert_true(output.contains("// Basic Blocks: 1"))
+  assert_true(output.contains("Block 0x10000:"))
 }
 
 ///|
