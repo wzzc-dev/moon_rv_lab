@@ -1,5 +1,7 @@
 # Testing
 
+如果你需要按“clean repo -> CLI -> 离线 workbench -> 在线演示”的顺序复现一遍最终验收，请直接使用 `docs/RUNBOOK.md`；本页主要负责自动化回归和 smoke 门禁。
+
 ## 稳定 Smoke 回归
 
 稳定 smoke 回归是当前发布门禁，对应 workflow 为 `.github/workflows/stable-smoke.yml`。

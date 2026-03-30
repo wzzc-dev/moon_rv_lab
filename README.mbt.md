@@ -91,6 +91,7 @@ RAW 支持范围补充:
 - [docs/USER_GUIDE.md](docs/USER_GUIDE.md): CLI、离线 workbench、在线 workbench 使用路径
 - [docs/API_REFERENCE.md](docs/API_REFERENCE.md): CLI JSON、workbench API、HTTP 路由说明
 - [docs/TESTING.md](docs/TESTING.md): 自动化回归、验收命令、在线 smoke check
+- [docs/RUNBOOK.md](docs/RUNBOOK.md): clean repo 到 CLI / 离线 / 在线演示的答辩 runbook
 - [example/INDEX.md](example/INDEX.md): 样例集索引
 
 ## 样例说明
