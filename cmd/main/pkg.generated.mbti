@@ -39,6 +39,7 @@ pub struct CallGraphOptions {
   file_path : String
   format : OutputFormat
   output : String
+  raw_mode : Bool
 }
 pub impl Show for CallGraphOptions
 
@@ -152,6 +153,7 @@ pub struct SymbolsOptions {
   format : OutputFormat
   show_all : Bool
   output : String
+  raw_mode : Bool
 }
 pub impl Show for SymbolsOptions
 

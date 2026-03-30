@@ -242,6 +242,36 @@ test "parse workbench args supports raw metadata options" {
 }
 
 ///|
+test "parse symbols args supports raw flag" {
+  match
+    parse_symbols_args([
+      "symbols", "out/simple.raw", "--raw", "--format", "json",
+    ]) {
+    Some(Command::Symbols(opts)) => {
+      assert_eq(opts.file_path, "out/simple.raw")
+      assert_true(opts.raw_mode)
+      assert_eq(opts.format, OutputFormat::Json)
+    }
+    _ => abort("expected symbols command")
+  }
+}
+
+///|
+test "parse callgraph args supports raw flag" {
+  match
+    parse_callgraph_args([
+      "callgraph", "out/simple.raw", "--raw", "--format", "json",
+    ]) {
+    Some(Command::CallGraph(opts)) => {
+      assert_eq(opts.file_path, "out/simple.raw")
+      assert_true(opts.raw_mode)
+      assert_eq(opts.format, OutputFormat::Json)
+    }
+    _ => abort("expected callgraph command")
+  }
+}
+
+///|
 test "info command writes elf metadata json" {
   ensure_cli_test_dir()
   let output_path = CLI_TEST_DIR + "/info.json"
@@ -389,6 +419,7 @@ test "callgraph command writes elf callgraph json" {
     file_path: call_chain_elf,
     format: OutputFormat::Json,
     output: output_path,
+    raw_mode: false,
   })
 
   assert_true(@fs.path_exists(output_path))
@@ -398,6 +429,51 @@ test "callgraph command writes elf callgraph json" {
   assert_true(output.contains("\"address\": \"0x10000\""))
   assert_true(output.contains("\"name\": \"0x10000\""))
   assert_true(output.contains("\"size\": 16"))
+}
+
+///|
+test "symbols command returns explicit raw empty result" {
+  ensure_cli_test_dir()
+  let output_path = CLI_TEST_DIR + "/symbols_raw.json"
+  reset_cli_test_file(output_path)
+  let simple_raw = must_prepare_simple_raw()
+
+  execute_symbols({
+    file_path: simple_raw,
+    format: OutputFormat::Json,
+    show_all: true,
+    output: output_path,
+    raw_mode: true,
+  })
+
+  assert_true(@fs.path_exists(output_path))
+  let output = must_read_text(output_path)
+  assert_true(output.contains("\"input_format\": \"raw\""))
+  assert_true(output.contains("\"supported\": false"))
+  assert_true(output.contains("\"symbols\": []"))
+  assert_true(output.contains("symbol table"))
+}
+
+///|
+test "callgraph command returns explicit raw unsupported result" {
+  ensure_cli_test_dir()
+  let output_path = CLI_TEST_DIR + "/callgraph_raw.json"
+  reset_cli_test_file(output_path)
+  let simple_raw = must_prepare_simple_raw()
+
+  execute_callgraph({
+    file_path: simple_raw,
+    format: OutputFormat::Json,
+    output: output_path,
+    raw_mode: true,
+  })
+
+  assert_true(@fs.path_exists(output_path))
+  let output = must_read_text(output_path)
+  assert_true(output.contains("\"input_format\": \"raw\""))
+  assert_true(output.contains("\"supported\": false"))
+  assert_true(output.contains("\"functions\": []"))
+  assert_true(output.contains("function boundaries"))
 }
 
 ///|

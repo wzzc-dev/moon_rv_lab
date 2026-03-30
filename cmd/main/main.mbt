@@ -106,6 +106,7 @@ pub struct SymbolsOptions {
   format : OutputFormat
   show_all : Bool // Show all symbols including local
   output : String
+  raw_mode : Bool
 } derive(Show)
 
 ///|
@@ -125,6 +126,7 @@ pub struct CallGraphOptions {
   file_path : String
   format : OutputFormat
   output : String
+  raw_mode : Bool
 } derive(Show)
 
 ///|
@@ -654,6 +656,7 @@ fn parse_symbols_args(args : Array[String]) -> Command? {
   let mut format = OutputFormat::Text
   let mut show_all = false
   let mut output = ""
+  let mut raw_mode = false
   let mut i = 1
 
   while i < args.length() {
@@ -675,6 +678,9 @@ fn parse_symbols_args(args : Array[String]) -> Command? {
     } else if arg == "--all" || arg == "-a" {
       show_all = true
       i = i + 1
+    } else if arg == "--raw" || arg == "-r" {
+      raw_mode = true
+      i = i + 1
     } else if arg[0] != '-' {
       file_path = arg
       i = i + 1
@@ -687,7 +693,7 @@ fn parse_symbols_args(args : Array[String]) -> Command? {
     return None
   }
 
-  Some(Command::Symbols({ file_path, format, show_all, output }))
+  Some(Command::Symbols({ file_path, format, show_all, output, raw_mode }))
 }
 
 ///|
@@ -768,6 +774,7 @@ fn parse_callgraph_args(args : Array[String]) -> Command? {
   let mut file_path = ""
   let mut format = OutputFormat::Dot
   let mut output = ""
+  let mut raw_mode = false
   let mut i = 1
 
   while i < args.length() {
@@ -786,6 +793,9 @@ fn parse_callgraph_args(args : Array[String]) -> Command? {
       } else {
         return None
       }
+    } else if arg == "--raw" || arg == "-r" {
+      raw_mode = true
+      i = i + 1
     } else if arg[0] != '-' {
       file_path = arg
       i = i + 1
@@ -798,7 +808,7 @@ fn parse_callgraph_args(args : Array[String]) -> Command? {
     return None
   }
 
-  Some(Command::CallGraph({ file_path, format, output }))
+  Some(Command::CallGraph({ file_path, format, output, raw_mode }))
 }
 
 ///|
@@ -1135,6 +1145,9 @@ fn print_usage() -> Unit {
   println("")
   println("Symbols Options:")
   println("  --all, -a               Show all symbols including local")
+  println(
+    "  --raw, -r               Return explicit no-symbol-table result for raw input",
+  )
   println("")
   println("CFG Options:")
   println("  --function, -n <name>   Function name or address to analyze")
@@ -1149,6 +1162,11 @@ fn print_usage() -> Unit {
     "  --base, -b <addr>       Base address for raw binaries (default: 0x10000)",
   )
   println("  --raw, -r               Treat as raw binary (not ELF)")
+  println("")
+  println("Callgraph Options:")
+  println(
+    "  --raw, -r               Return explicit unsupported result for raw input",
+  )
   println("")
   println("Run Options:")
   println("  --entry <name|addr>     Override entry with symbol or address")
@@ -1201,9 +1219,11 @@ fn print_usage() -> Unit {
   println("  rvkit info program.elf")
   println("  rvkit info --raw --base 0x8000 --xlen 64 firmware.bin")
   println("  rvkit symbols program.elf")
+  println("  rvkit symbols firmware.bin --raw --format json")
   println("  rvkit cfg program.elf --function main -o cfg.dot")
   println("  rvkit cfg --raw --base 0x8000 firmware.bin --format json")
   println("  rvkit callgraph program.elf -o callgraph.dot")
+  println("  rvkit callgraph firmware.bin --raw --format json")
   println("  rvkit run program.elf --entry main --max-steps 200")
   println("  rvkit run program.elf --break main+0x10 --trace out/trace.json")
   println(
@@ -1715,12 +1735,38 @@ fn sym_type_to_str(sym_type : @format.SymbolType) -> String {
 }
 
 ///|
+fn format_raw_symbols_text() -> String {
+  "Symbols\n=======\n\nRAW input does not provide a symbol table.\nNo symbols available.\n"
+}
+
+///|
+fn format_raw_symbols_json() -> String {
+  "{\n" +
+  "  \"input_format\": \"raw\",\n" +
+  "  \"supported\": false,\n" +
+  "  \"message\": \"RAW input does not provide a symbol table.\",\n" +
+  "  \"symbols\": []\n" +
+  "}"
+}
+
+///|
 /// Execute symbols command
 fn execute_symbols(opts : SymbolsOptions) -> Unit {
+  if opts.raw_mode {
+    let output = match opts.format {
+      OutputFormat::Json => format_raw_symbols_json()
+      OutputFormat::Text | OutputFormat::Dot => format_raw_symbols_text()
+    }
+    write_or_print(output, opts.output)
+    return
+  }
+
   match read_file_bytes(opts.file_path) {
     Some(bytes) => {
       if !@format.is_elf(bytes) {
-        println("Error: Not a valid ELF file: \{opts.file_path}")
+        println(
+          "Error: Not a valid ELF file: \{opts.file_path}\nUse --raw option for raw binary files",
+        )
         return
       }
       match @format.parse_elf(bytes) {
@@ -1889,10 +1935,29 @@ fn execute_cfg(opts : CfgOptions) -> Unit {
 ///|
 /// Execute callgraph command
 fn execute_callgraph(opts : CallGraphOptions) -> Unit {
+  if opts.raw_mode {
+    let output = match opts.format {
+      OutputFormat::Json =>
+        "{\n" +
+        "  \"input_format\": \"raw\",\n" +
+        "  \"supported\": false,\n" +
+        "  \"message\": \"RAW input lacks reliable function boundaries, so call graph generation is unavailable.\",\n" +
+        "  \"functions\": [],\n" +
+        "  \"edges\": []\n" +
+        "}"
+      OutputFormat::Text | OutputFormat::Dot =>
+        "Call Graph\n==========\n\nRAW input lacks reliable function boundaries, so call graph generation is unavailable.\n"
+    }
+    write_or_print(output, opts.output)
+    return
+  }
+
   match read_file_bytes(opts.file_path) {
     Some(bytes) => {
       if !@format.is_elf(bytes) {
-        println("Error: Not a valid ELF file: \{opts.file_path}")
+        println(
+          "Error: Not a valid ELF file: \{opts.file_path}\nUse --raw option for raw binary files",
+        )
         return
       }
       match @format.parse_elf(bytes) {
