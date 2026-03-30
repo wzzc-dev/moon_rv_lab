@@ -133,6 +133,9 @@ pub struct RunOptions {
   breakpoints : Array[String]
   trace : String
   format : OutputFormat
+  raw_mode : Bool
+  base_addr : UInt
+  xlen : Int
 } derive(Show)
 
 ///|
@@ -767,6 +770,9 @@ fn parse_run_args(args : Array[String]) -> Command? {
   let breakpoints : Array[String] = []
   let mut trace = ""
   let mut format = OutputFormat::Text
+  let mut raw_mode = false
+  let mut base_addr = 0x10000U
+  let mut xlen = 64
   let mut i = 1
 
   while i < args.length() {
@@ -809,6 +815,34 @@ fn parse_run_args(args : Array[String]) -> Command? {
       } else {
         return None
       }
+    } else if arg == "--base" || arg == "-b" {
+      if i + 1 < args.length() {
+        match parse_number(args[i + 1]) {
+          Some(addr) => base_addr = addr
+          None => return None
+        }
+        i = i + 2
+      } else {
+        return None
+      }
+    } else if arg == "--raw" || arg == "-r" {
+      raw_mode = true
+      i = i + 1
+    } else if arg == "--xlen" {
+      if i + 1 < args.length() {
+        match parse_uint_dec(args[i + 1]) {
+          Some(value) =>
+            if value == 32U || value == 64U {
+              xlen = value.reinterpret_as_int()
+            } else {
+              return None
+            }
+          None => return None
+        }
+        i = i + 2
+      } else {
+        return None
+      }
     } else if arg[0] != '-' {
       file_path = arg
       i = i + 1
@@ -822,7 +856,17 @@ fn parse_run_args(args : Array[String]) -> Command? {
   }
 
   Some(
-    Command::Run({ file_path, entry, max_steps, breakpoints, trace, format }),
+    Command::Run({
+      file_path,
+      entry,
+      max_steps,
+      breakpoints,
+      trace,
+      format,
+      raw_mode,
+      base_addr,
+      xlen,
+    }),
   )
 }
 
@@ -1067,6 +1111,13 @@ fn print_usage() -> Unit {
   println("  --max-steps <n>         Stop after n executed instructions")
   println("  --break <name|addr>     Stop before executing this address")
   println("  --trace <file>          Write structured trace JSON to file")
+  println(
+    "  --base, -b <addr>       Base address for raw binaries (default: 0x10000)",
+  )
+  println("  --raw, -r               Treat as raw binary (not ELF)")
+  println(
+    "  --xlen <32|64>          Raw binary word size metadata (default: 64)",
+  )
   println("")
   println("Decompile Options:")
   println("  --function, -n <name>   Function name or address to decompile")
@@ -1104,6 +1155,9 @@ fn print_usage() -> Unit {
   println("  rvkit callgraph program.elf -o callgraph.dot")
   println("  rvkit run program.elf --entry main --max-steps 200")
   println("  rvkit run program.elf --break main+0x10 --trace out/trace.json")
+  println(
+    "  rvkit run firmware.bin --raw --base 0x8000 --xlen 64 --max-steps 200",
+  )
   println("  rvkit hex 0x123452B7")
   println("  rvkit analyze program.elf --detailed")
   println("  rvkit analyze --raw --base 0x8000 firmware.bin --format json")
@@ -1889,6 +1943,44 @@ fn resolve_run_selector(
 }
 
 ///|
+fn run_load_error_message(
+  err : @simulator.LoadError,
+  raw_mode : Bool,
+) -> String {
+  match err {
+    @simulator.LoadError::FileNotFound(file_path) =>
+      "Error: Cannot read file: \{file_path}"
+    @simulator.LoadError::InvalidElf(file_path) =>
+      if raw_mode {
+        "Error: Not a valid raw input file: \{file_path}"
+      } else {
+        "Error: Not a valid ELF file: \{file_path}\nUse --raw --base <addr> --xlen <32|64> for raw binary files"
+      }
+    @simulator.LoadError::ParseElfFailed(_file_path) =>
+      "Error: Failed to parse ELF file"
+    @simulator.LoadError::NotRiscV(_file_path) => "Error: Not a RISC-V ELF file"
+    @simulator.LoadError::NoLoadableSegments(_file_path) =>
+      "Error: No loadable program segments found"
+    @simulator.LoadError::InvalidEntry(entry_addr) =>
+      if raw_mode {
+        "Error: RAW entry address is not executable: \{format_hex(entry_addr)}\nCheck --base and --xlen settings."
+      } else {
+        "Error: Invalid entry point: \{format_hex(entry_addr)}"
+      }
+  }
+}
+
+///|
+fn raw_run_selector_error(
+  flag : String,
+  selector : String,
+  base_addr : UInt,
+  xlen : Int,
+) -> String {
+  "Error: RAW input does not provide symbol metadata; use an address with \{flag} instead of '\{selector}'.\nCurrent RAW settings: base=\{format_hex(base_addr)}, xlen=\{xlen}"
+}
+
+///|
 /// Format run output as plain text.
 fn format_run_text(state : @simulator.ExecState) -> String {
   let snapshot = @simulator.snapshot(state)
@@ -1945,13 +2037,31 @@ fn execute_run(opts : RunOptions) -> Unit {
 ///|
 /// Execute run command and return the rendered CLI output.
 fn execute_run_result(opts : RunOptions) -> CommandExecResult {
-  match @simulator.load(opts.file_path) {
+  let loaded = if opts.raw_mode {
+    @simulator.load_raw(opts.file_path, opts.base_addr, opts.xlen)
+  } else {
+    @simulator.load(opts.file_path)
+  }
+
+  match loaded {
     @simulator.Loaded(initial_state) => {
       let mut state = initial_state
       if opts.entry != "" {
         match resolve_run_selector(opts.entry, state.image) {
           Some(entry_addr) => state = @simulator.with_entry(state, entry_addr)
-          None => return Failure("Error: Entry not found: \{opts.entry}")
+          None =>
+            return Failure(
+              if opts.raw_mode {
+                raw_run_selector_error(
+                  "--entry",
+                  opts.entry,
+                  opts.base_addr,
+                  opts.xlen,
+                )
+              } else {
+                "Error: Entry not found: \{opts.entry}"
+              },
+            )
         }
       }
 
@@ -1959,7 +2069,19 @@ fn execute_run_result(opts : RunOptions) -> CommandExecResult {
       for selector in opts.breakpoints {
         match resolve_run_selector(selector, state.image) {
           Some(addr) => breakpoints.push(@simulator.breakpoint(addr))
-          None => return Failure("Error: Breakpoint not found: \{selector}")
+          None =>
+            return Failure(
+              if opts.raw_mode {
+                raw_run_selector_error(
+                  "--break",
+                  selector,
+                  opts.base_addr,
+                  opts.xlen,
+                )
+              } else {
+                "Error: Breakpoint not found: \{selector}"
+              },
+            )
         }
       }
 
@@ -1979,7 +2101,8 @@ fn execute_run_result(opts : RunOptions) -> CommandExecResult {
         _ => Success(format_run_text(finished))
       }
     }
-    @simulator.LoadFailed(err) => Failure("Error: \{err}")
+    @simulator.LoadFailed(err) =>
+      Failure(run_load_error_message(err, opts.raw_mode))
   }
 }
 

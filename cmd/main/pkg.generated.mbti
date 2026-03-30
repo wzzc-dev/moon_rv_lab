@@ -141,6 +141,9 @@ pub struct RunOptions {
   breakpoints : Array[String]
   trace : String
   format : OutputFormat
+  raw_mode : Bool
+  base_addr : UInt
+  xlen : Int
 }
 pub impl Show for RunOptions
 

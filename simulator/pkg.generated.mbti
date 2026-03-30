@@ -17,6 +17,8 @@ pub fn exec_snapshot_to_json(ExecSnapshot) -> String
 
 pub fn load(String, entry_override? : UInt) -> LoadResult
 
+pub fn load_raw(String, UInt, Int) -> LoadResult
+
 pub fn run_until_break(ExecState, Int) -> ExecState
 
 pub fn run_with_limit(ExecState, Int) -> ExecState

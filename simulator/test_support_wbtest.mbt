@@ -23,6 +23,30 @@ fn assemble_test_elf(source : String) -> FixedArray[Byte] {
 }
 
 ///|
+fn assemble_test_raw(source : String) -> FixedArray[Byte] {
+  let assembled = @asm.assemble_with_symbols(source, TEST_BASE)
+  if assembled.errors.length() != 0 {
+    abort("assembly failed")
+  }
+  @asm.encode_to_bytes(assembled)
+}
+
+///|
+fn write_test_raw_file(name : String, source : String) -> String {
+  ensure_test_dir()
+  let path = TEST_DIR + "/" + name + ".raw"
+  if @fs.path_exists(path) {
+    @fs.remove_file(path) catch {
+      _ => ()
+    }
+  }
+  @fs.write_bytes_to_file(path, Bytes::from_array(assemble_test_raw(source))) catch {
+    _ => abort("failed to write raw")
+  }
+  path
+}
+
+///|
 fn load_state_from_elf_bytes(
   name : String,
   elf_bytes : FixedArray[Byte],
@@ -57,6 +81,20 @@ fn load_state_from_program_bytes(
     name,
     @format.assemble_to_elf(program_bytes, TEST_BASE),
   )
+}
+
+///|
+fn load_state_from_raw_source(
+  name : String,
+  source : String,
+  base_addr : UInt,
+  xlen : Int,
+) -> ExecState {
+  let path = write_test_raw_file(name, source)
+  match load_raw(path, base_addr, xlen) {
+    Loaded(state) => state
+    LoadFailed(err) => abort("load raw failed: \{err}")
+  }
 }
 
 ///|

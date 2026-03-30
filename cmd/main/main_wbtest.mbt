@@ -124,6 +124,29 @@ fn simple_run_options(
     breakpoints,
     trace,
     format,
+    raw_mode: false,
+    base_addr: 0x10000U,
+    xlen,
+  }
+}
+
+///|
+fn simple_raw_run_options(
+  xlen : Int,
+  format : OutputFormat,
+  trace : String,
+  breakpoints : Array[String],
+) -> RunOptions {
+  {
+    file_path: must_prepare_simple_raw(),
+    entry: "",
+    max_steps: 20,
+    breakpoints,
+    trace,
+    format,
+    raw_mode: true,
+    base_addr: 0x10000U,
+    xlen,
   }
 }
 
@@ -143,6 +166,24 @@ test "parse run args supports entry break trace and format" {
       assert_eq(opts.breakpoints[1], "0x10018")
       assert_eq(opts.trace, "out/trace.json")
       assert_eq(opts.format, OutputFormat::Json)
+    }
+    _ => abort("expected run command")
+  }
+}
+
+///|
+test "parse run args supports raw metadata options" {
+  match
+    parse_run_args([
+      "run", "out/simple.raw", "--raw", "--base", "0x20000", "--xlen", "32", "--max-steps",
+      "12",
+    ]) {
+    Some(Command::Run(opts)) => {
+      assert_eq(opts.file_path, "out/simple.raw")
+      assert_true(opts.raw_mode)
+      assert_eq(opts.base_addr, 0x20000U)
+      assert_eq(opts.xlen, 32)
+      assert_eq(opts.max_steps, 12)
     }
     _ => abort("expected run command")
   }
@@ -455,6 +496,22 @@ test "run command text output summarizes execution" {
 }
 
 ///|
+test "run command executes raw input with configured metadata" {
+  match
+    execute_run_result(simple_raw_run_options(64, OutputFormat::Text, "", [])) {
+    Success(output) => {
+      assert_true(output.contains("Execution Summary"))
+      assert_true(output.contains("Entry: 0x10000"))
+      assert_true(output.contains("PC: 0x1002c"))
+      assert_true(output.contains("XLEN: 64"))
+      assert_true(output.contains("Stop Reason: ebreak @0x1002c"))
+      assert_true(output.contains("a0: 0x2a"))
+    }
+    Failure(err) => abort(err)
+  }
+}
+
+///|
 test "run command json output includes snapshot and trace" {
   match execute_run_result(simple_run_options(64, OutputFormat::Json, "", [])) {
     Success(output) => {
@@ -471,6 +528,30 @@ test "run command json output includes snapshot and trace" {
 }
 
 ///|
+test "run command surfaces raw hint for non-elf inputs" {
+  match
+    execute_run_result({
+      file_path: must_prepare_simple_raw(),
+      entry: "",
+      max_steps: 20,
+      breakpoints: [],
+      trace: "",
+      format: OutputFormat::Text,
+      raw_mode: false,
+      base_addr: 0x10000U,
+      xlen: 64,
+    }) {
+    Success(_) => abort("expected failure")
+    Failure(err) => {
+      assert_true(err.contains("Not a valid ELF file"))
+      assert_true(err.contains("--raw"))
+      assert_true(err.contains("--base"))
+      assert_true(err.contains("--xlen"))
+    }
+  }
+}
+
+///|
 test "run command stops before configured breakpoint" {
   match
     execute_run_result(
@@ -482,6 +563,19 @@ test "run command stops before configured breakpoint" {
       assert_true(output.contains("Stop Reason: breakpoint @0x10010"))
       assert_true(output.contains("a3: 0xa"))
       assert_false(output.contains("a4:"))
+    }
+    Failure(err) => abort(err)
+  }
+}
+
+///|
+test "run command preserves rv32 metadata for raw execution" {
+  match
+    execute_run_result(simple_raw_run_options(32, OutputFormat::Json, "", [])) {
+    Success(output) => {
+      assert_true(output.contains("\"xlen\":32"))
+      assert_true(output.contains("\"entry\":\"0x10000\""))
+      assert_true(output.contains("\"stop_reason\":\"ebreak @0x1002c\""))
     }
     Failure(err) => abort(err)
   }

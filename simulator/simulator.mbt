@@ -244,6 +244,26 @@ pub fn load(input_file : String, entry_override? : UInt = 0U) -> LoadResult {
 }
 
 ///|
+pub fn load_raw(
+  input_file : String,
+  base_addr : UInt,
+  xlen : Int,
+) -> LoadResult {
+  if !@fs.path_exists(input_file) {
+    return LoadFailed(LoadError::FileNotFound(input_file))
+  }
+  let bytes = @fs.read_file_to_bytes(input_file).to_fixedarray() catch {
+    _ => return LoadFailed(LoadError::FileNotFound(input_file))
+  }
+  let raw = @format.parse_raw_binary(bytes, base_addr)
+  let image = build_raw_program_image(input_file, raw, xlen)
+  match image.instruction_by_addr.get(image.entry_point) {
+    Some(_) => Loaded(make_initial_state(image))
+    None => LoadFailed(LoadError::InvalidEntry(image.entry_point))
+  }
+}
+
+///|
 pub fn with_breakpoints(
   state : ExecState,
   breakpoints : Array[Breakpoint],
@@ -1271,6 +1291,45 @@ fn build_program_image(
   entry_point : UInt,
   xlen : Int,
 ) -> ProgramImage {
+  build_program_image_from_segments(
+    input_file,
+    segments,
+    entry_point,
+    xlen,
+    elf.get_symbols(),
+  )
+}
+
+///|
+fn build_raw_program_image(
+  input_file : String,
+  raw : @format.RawBinary,
+  xlen : Int,
+) -> ProgramImage {
+  build_program_image_from_segments(
+    input_file,
+    [
+      {
+        start_addr: raw.base_addr,
+        data: raw.code,
+        writable: false,
+        executable: true,
+      },
+    ],
+    raw.base_addr,
+    xlen,
+    [],
+  )
+}
+
+///|
+fn build_program_image_from_segments(
+  input_file : String,
+  segments : Array[MemorySegment],
+  entry_point : UInt,
+  xlen : Int,
+  symbols : Array[@format.Symbol],
+) -> ProgramImage {
   let instructions : Array[@analysis.DecodedInst] = []
   let inst_map : Map[UInt, @analysis.DecodedInst] = Map::new()
   for segment in segments {
@@ -1289,7 +1348,7 @@ fn build_program_image(
     file_path: input_file,
     entry_point,
     xlen,
-    symbols: elf.get_symbols(),
+    symbols,
     instructions: FixedArray::from_array(instructions),
     instruction_by_addr: inst_map,
     segments,
