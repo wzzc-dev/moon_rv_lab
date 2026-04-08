@@ -150,7 +150,7 @@ RAW 离线路径说明:
 - 当前离线 `workbench` 已支持 RAW 输入
 - RAW 页面会保留现有 Godbolt 风格布局、trace 回放、`Replay Breakpoints` 和 `State Compare`
 - RAW 页面使用显式 `base/xlen` 元数据生成 overview 与 runtime
-- 当前在线 `/workbench` 仍然只覆盖 ELF，不在本轮 RAW 支持范围内
+- 在线 `/workbench` 与 `/api/workbench/overview|function` 现已支持同一组 RAW 参数：`raw=1&base=<addr>&xlen=32|64`
 
 ## 路径三: 在线 Workbench
 
@@ -168,18 +168,21 @@ Windows 上请优先使用 Visual Studio 2022 Developer Command Prompt / DevShel
   这里是 Quick Start 首页，会展示默认文件、在线/离线路径、主 API 与兼容 API 的定位，并提供 `Open Online Workbench` 入口。
 - 完整工作台: `http://127.0.0.1:18080/workbench`
 - 指定文件: `http://127.0.0.1:18080/workbench?file=out/simple.elf`
+- RAW 指定文件: `http://127.0.0.1:18080/workbench?file=out/simple.raw&raw=1&base=0x10000&xlen=64`
 
 ### 3. 页面内操作
 
 - 推荐先从入口页进入 `/workbench?file=...`，这样默认文件会直接带入查询参数
-- 在线 workbench 主链路会先加载 `/api/workbench/overview`，再按需请求 `/api/workbench/function`；`/api/snapshot` 与 `/api/stream` 仅保留兼容定位
-- 当前在线链路只支持 ELF；如果需要 RAW，请改走 CLI `run` 或离线 `workbench`
-- 顶部输入框支持切换 ELF 文件，点击 `Load` 后会重新加载 overview 与函数切片
+- 在线 workbench 主链路会先加载 `/api/workbench/overview`，再按需请求 `/api/workbench/function`；`/api/snapshot` 与 `/api/stream` 仅保留 ELF-only 兼容定位
+- 顶部输入框支持切换 `ELF / RAW`；选择 `RAW` 后会额外显示 `Base` 和 `XLEN`
+- 点击 `Load` 后会重新加载 overview 与函数切片；RAW 模式下地址栏会完整保留 `raw/base/xlen`
+- 在线 RAW 继续沿用离线函数模型，只暴露一个 synthetic function `entry`
+- 切回 `ELF` 后，RAW 专属字段会隐藏，不再污染普通加载路径
 - `How to use` 面板默认展开，可关闭；关闭状态同样会写入 `localStorage`
 - 在线/离线 workbench 共用 `Replay Breakpoints` 与 `State Compare` 交互；这两项能力都只依赖已有 overview/function/runtime/event 数据，不新增 `/api/workbench/*` 字段
 - 回放断点只能设置在当前 trace reachable 地址上；`Play` / `Next` 命中后会额外显示 `Replay breakpoint @...`
 - `State Compare` 的 `Prev step` 展示当前 event 的寄存器/内存/输出增量，`Initial` 展示相对初始寄存器的累计变化，并补充最近写内存与累计 stdout/stderr 摘要
-- 切换文件后地址栏会同步写回 `?file=...`
+- 切换文件后地址栏会同步写回 `?file=...`；RAW 模式下会附带 `&raw=1&base=...&xlen=...`
 - pane 尺寸、当前 tab、过滤器、`Follow PC`、帮助面板折叠状态、回放断点和 compare mode 等 UI 状态会写入 `localStorage`
 - 页面内的空态、错误态和截断提示会直接告诉你下一步可以做什么，例如“清空搜索”“选择函数”“调整 `--max-inst`”等
 

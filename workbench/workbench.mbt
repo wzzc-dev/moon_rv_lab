@@ -45,6 +45,21 @@ pub fn create_input_options(
 }
 
 ///|
+fn create_api_options(
+  raw_mode : Bool,
+  base_addr : UInt,
+  xlen : Int,
+) -> WorkbenchOptions {
+  {
+    title: "",
+    max_instructions: DEFAULT_MAX_INSTRUCTIONS,
+    raw_mode,
+    base_addr,
+    xlen,
+  }
+}
+
+///|
 pub enum WorkbenchError {
   FileNotFound(String)
   InvalidElf(String)
@@ -58,6 +73,7 @@ pub enum WorkbenchError {
 struct WorkbenchMeta {
   title : String
   source_file : String
+  input_format : String
   entry_point : String
   file_class : String
   xlen : Int
@@ -221,6 +237,7 @@ priv struct FunctionSymbolCandidate {
 priv struct StaticProgramIndex {
   title : String
   source_file : String
+  input_format : String
   entry_point : UInt
   file_class : String
   xlen : Int
@@ -326,15 +343,30 @@ pub fn overview_api_json_from_file(
   input_file : String,
   max_events : Int,
 ) -> String {
+  overview_api_json_from_file_with_options(
+    input_file,
+    max_events,
+    create_api_options(false, 0x10000U, 64),
+  )
+}
+
+///|
+pub fn overview_api_json_from_file_with_options(
+  input_file : String,
+  max_events : Int,
+  options : WorkbenchOptions,
+) -> String {
   let page_title = resolve_page_title("")
   let event_limit = normalize_max_events(max_events)
-  match load_static_program_index(input_file, page_title) {
+  match
+    load_static_program_index_with_options(input_file, page_title, options) {
     StaticProgramErr(err) => api_error_json(err)
     StaticProgramOk(index) => {
-      let (runtime, events) = load_runtime_trace(
+      let (runtime, events) = load_runtime_trace_with_options(
         input_file,
         event_limit,
         index.blocks,
+        options,
       )
       let functions = build_workbench_functions(index, events)
       let overview = build_workbench_overview(
@@ -354,8 +386,22 @@ pub fn function_api_json_from_file(
   input_file : String,
   function : String,
 ) -> String {
+  function_api_json_from_file_with_options(
+    input_file,
+    function,
+    create_api_options(false, 0x10000U, 64),
+  )
+}
+
+///|
+pub fn function_api_json_from_file_with_options(
+  input_file : String,
+  function : String,
+  options : WorkbenchOptions,
+) -> String {
   let page_title = resolve_page_title("")
-  match load_static_program_index(input_file, page_title) {
+  match
+    load_static_program_index_with_options(input_file, page_title, options) {
     StaticProgramErr(err) => api_error_json(err)
     StaticProgramOk(index) =>
       match build_function_slice_response(index, function, true) {
@@ -421,15 +467,46 @@ pub fn online_page_html(
   max_instructions : Int,
   overview_endpoint : String,
 ) -> String {
+  online_page_html_with_options(
+    default_file,
+    initial_file,
+    max_instructions,
+    overview_endpoint,
+    "/api/workbench/function",
+    create_api_options(false, 0x10000U, 64),
+  )
+}
+
+///|
+pub fn online_page_html_with_options(
+  default_file : String,
+  initial_file : String,
+  max_instructions : Int,
+  overview_endpoint : String,
+  function_endpoint : String,
+  options : WorkbenchOptions,
+) -> String {
   let resolved_overview_endpoint = if overview_endpoint == "" {
     "/api/workbench/overview"
   } else {
     overview_endpoint
   }
+  let resolved_function_endpoint = if function_endpoint == "" {
+    "/api/workbench/function"
+  } else {
+    function_endpoint
+  }
   build_html_page(
     "MoonRV Lab Online Workbench",
     remote_boot_json(
-      default_file, initial_file, max_instructions, resolved_overview_endpoint, "/api/workbench/function",
+      default_file,
+      initial_file,
+      max_instructions,
+      resolved_overview_endpoint,
+      resolved_function_endpoint,
+      options.raw_mode,
+      options.base_addr,
+      options.xlen,
     ),
   )
 }
@@ -441,13 +518,15 @@ fn load_workbench_data(
 ) -> LoadWorkbenchResult {
   let page_title = resolve_page_title(options.title)
   let max_inst = normalize_max_instructions(options.max_instructions)
-  match load_static_program_index(input_file, page_title) {
+  match
+    load_static_program_index_with_options(input_file, page_title, options) {
     StaticProgramErr(err) => Err(err)
     StaticProgramOk(index) => {
-      let (runtime, events) = load_runtime_trace(
+      let (runtime, events) = load_runtime_trace_with_options(
         input_file,
         max_inst,
         index.blocks,
+        options,
       )
       let functions = build_workbench_functions(index, events)
       let meta = build_workbench_meta(
@@ -509,6 +588,7 @@ fn load_static_program_index(
           StaticProgramOk({
             title,
             source_file: input_file,
+            input_format: "elf",
             entry_point: elf.entry_point(),
             file_class: if elf.is_64bit {
               "ELF64"
@@ -592,6 +672,7 @@ fn load_static_program_index_raw(
       StaticProgramOk({
         title,
         source_file: input_file,
+        input_format: "raw",
         entry_point: raw.base_addr,
         file_class: "RAW",
         xlen,
@@ -1091,6 +1172,7 @@ fn build_workbench_meta(
   {
     title: index.title,
     source_file: index.source_file,
+    input_format: index.input_format,
     entry_point: format_hex(index.entry_point),
     file_class: index.file_class,
     xlen: index.xlen,
@@ -1532,6 +1614,7 @@ fn to_json_meta(meta : WorkbenchMeta) -> String {
   let mut json = "{"
   json = json + "\"title\":" + json_string(meta.title)
   json = json + ",\"source_file\":" + json_string(meta.source_file)
+  json = json + ",\"input_format\":" + json_string(meta.input_format)
   json = json + ",\"entry_point\":" + json_string(meta.entry_point)
   json = json + ",\"file_class\":" + json_string(meta.file_class)
   json = json + ",\"xlen\":" + meta.xlen.to_string()
@@ -1946,6 +2029,7 @@ fn embedded_boot_json(
   overview_json +
   ",\"embedded_function_slices\":" +
   function_slices_json +
+  ",\"raw_mode\":false,\"base_addr\":\"0x10000\",\"xlen\":64" +
   "}"
 }
 
@@ -1956,6 +2040,9 @@ fn remote_boot_json(
   max_instructions : Int,
   overview_endpoint : String,
   function_endpoint : String,
+  raw_mode : Bool,
+  base_addr : UInt,
+  xlen : Int,
 ) -> String {
   let max_inst = normalize_max_instructions(max_instructions)
   let resolved_overview_endpoint = if overview_endpoint == "" {
@@ -1978,7 +2065,22 @@ fn remote_boot_json(
   json_string(resolved_overview_endpoint) +
   ",\"function_endpoint\":" +
   json_string(resolved_function_endpoint) +
+  ",\"raw_mode\":" +
+  bool_to_json(raw_mode) +
+  ",\"base_addr\":" +
+  json_string(format_hex(base_addr)) +
+  ",\"xlen\":" +
+  normalize_remote_xlen(xlen).to_string() +
   ",\"embedded_overview\":null,\"embedded_function_slices\":{}}"
+}
+
+///|
+fn normalize_remote_xlen(xlen : Int) -> Int {
+  if xlen == 32 {
+    32
+  } else {
+    64
+  }
 }
 
 ///|
@@ -1986,6 +2088,10 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|(() => {
   #|  const boot = WORKBENCH_BOOT || {};
   #|  const REMOTE_MODE = (boot.mode || "embedded") === "remote";
+  #|  const DEFAULT_RAW_BASE = typeof boot.base_addr === "string" && boot.base_addr.trim()
+  #|    ? boot.base_addr.trim()
+  #|    : "0x10000";
+  #|  const DEFAULT_RAW_XLEN = Number(boot.xlen) === 32 ? 32 : 64;
   #|  const WINDOW_ROWS = 200;
   #|  const PROGRAM_ROW_LIMIT = 1200;
   #|  const CFG_BLOCK_LIMIT = 120;
@@ -2006,6 +2112,12 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    source: document.getElementById("source"),
   #|    statusPill: document.getElementById("status-pill"),
   #|    fileToolbarField: document.getElementById("file-toolbar-field"),
+  #|    inputModeField: document.getElementById("input-mode-field"),
+  #|    inputMode: document.getElementById("input-mode"),
+  #|    rawBaseField: document.getElementById("raw-base-field"),
+  #|    rawBaseInput: document.getElementById("raw-base-input"),
+  #|    rawXlenField: document.getElementById("raw-xlen-field"),
+  #|    rawXlenInput: document.getElementById("raw-xlen-input"),
   #|    fileInput: document.getElementById("file-input"),
   #|    fileLoadBtn: document.getElementById("file-load-btn"),
   #|    summaryGrid: document.getElementById("summary-grid"),
@@ -2063,7 +2175,12 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|
   #|  let overview = createEmptyOverview("");
   #|  const sliceCache = new Map();
-  #|  let storageKey = storageKeyFor(boot.initial_file || boot.default_file || "default");
+  #|  let storageKey = storageKeyFor(
+  #|    boot.initial_file || boot.default_file || "default",
+  #|    boot.raw_mode === true,
+  #|    DEFAULT_RAW_BASE,
+  #|    DEFAULT_RAW_XLEN,
+  #|  );
   #|  let initialRegisters = {};
   #|  let eventIndexByAddr = new Map();
   #|  let tracedAddrSet = new Set();
@@ -2095,6 +2212,9 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    stdout: "",
   #|    stderr: "",
   #|    currentFile: boot.initial_file || boot.default_file || "",
+  #|    remoteRawMode: boot.raw_mode === true,
+  #|    remoteBaseAddr: DEFAULT_RAW_BASE,
+  #|    remoteXlen: DEFAULT_RAW_XLEN,
   #|    loadError: "",
   #|    loading: false,
   #|    timer: null
@@ -2103,6 +2223,9 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|  applyStoredUi(readUiState());
   #|  refs.searchInput.value = state.searchText;
   #|  refs.fileInput.value = state.currentFile;
+  #|  refs.inputMode.value = state.remoteRawMode ? "raw" : "elf";
+  #|  refs.rawBaseInput.value = state.remoteBaseAddr;
+  #|  refs.rawXlenInput.value = String(state.remoteXlen);
   #|
   #|  function escapeHtml(value) {
   #|    return String(value || "")
@@ -2141,11 +2264,45 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    return String(value || "").toLowerCase();
   #|  }
   #|
+  #|  function normalizeRemoteXlen(value) {
+  #|    return Number(value) === 32 ? 32 : 64;
+  #|  }
+  #|
+  #|  function parseAddressInput(value) {
+  #|    const text = String(value || "").trim();
+  #|    if (!text) {
+  #|      return null;
+  #|    }
+  #|    if (/^0x[0-9a-f]+$/i.test(text)) {
+  #|      const parsed = Number.parseInt(text.slice(2), 16);
+  #|      return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+  #|    }
+  #|    if (/^[0-9]+$/.test(text)) {
+  #|      const parsed = Number.parseInt(text, 10);
+  #|      return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+  #|    }
+  #|    return null;
+  #|  }
+  #|
+  #|  function normalizedRemoteBaseAddr(value) {
+  #|    const parsed = parseAddressInput(value);
+  #|    return parsed === null ? null : `0x${parsed.toString(16)}`;
+  #|  }
+  #|
+  #|  function currentRequestConfig() {
+  #|    return {
+  #|      rawMode: REMOTE_MODE && state.remoteRawMode,
+  #|      baseAddr: normalizedRemoteBaseAddr(state.remoteBaseAddr),
+  #|      xlen: normalizeRemoteXlen(state.remoteXlen)
+  #|    };
+  #|  }
+  #|
   #|  function createEmptyOverview(sourceFile) {
   #|    return {
   #|      meta: {
   #|        title: REMOTE_MODE ? "MoonRV Lab Online Workbench" : "MoonRV Lab Workbench",
   #|        source_file: sourceFile || boot.initial_file || boot.default_file || "",
+  #|        input_format: "",
   #|        entry_point: "0x0",
   #|        file_class: "",
   #|        xlen: 0,
@@ -2187,8 +2344,9 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    };
   #|  }
   #|
-  #|  function storageKeyFor(file) {
-  #|    return `moonrv-workbench-ui:${file || "default"}`;
+  #|  function storageKeyFor(file, rawMode, baseAddr, xlen) {
+  #|    const mode = rawMode ? `raw:${baseAddr || DEFAULT_RAW_BASE}:${normalizeRemoteXlen(xlen)}` : "elf";
+  #|    return `moonrv-workbench-ui:${file || "default"}:${mode}`;
   #|  }
   #|
   #|  function readUiState() {
@@ -2571,15 +2729,21 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|      : (state.currentFile || "未选择文件");
   #|    refs.statusPill.textContent = statusLabel();
   #|    refs.fileToolbarField.classList.toggle("hidden", !REMOTE_MODE);
+  #|    refs.inputModeField.classList.toggle("hidden", !REMOTE_MODE);
   #|  }
   #|
   #|  function renderHelpPanel() {
+  #|    const request = currentRequestConfig();
   #|    const modeText = REMOTE_MODE
-  #|      ? "在线模式：可输入 ELF 路径并通过 workbench API 拉取 overview 与函数切片。"
+  #|      ? (request.rawMode
+  #|        ? "在线模式：当前按 RAW 加载，可输入 raw 路径并显式指定 Base/XLEN，再通过 workbench API 拉取 overview 与函数切片。"
+  #|        : "在线模式：当前按 ELF 加载，可输入 ELF 路径并通过 workbench API 拉取 overview 与函数切片。")
   #|      : "离线模式：当前 HTML 已嵌入 overview 与函数切片，打开后即可直接浏览。";
   #|    const fileText = overview.meta.source_file || state.currentFile || boot.default_file || "未选择文件";
   #|    refs.helpPanel.classList.toggle("collapsed", state.helpCollapsed);
-  #|    refs.helpSubtitle.textContent = `${modeText} 当前文件：${fileText}`;
+  #|    refs.helpSubtitle.textContent = request.rawMode
+  #|      ? `${modeText} 当前文件：${fileText} | base=${request.baseAddr || DEFAULT_RAW_BASE} | xlen=${request.xlen}`
+  #|      : `${modeText} 当前文件：${fileText}`;
   #|    refs.helpToggle.textContent = state.helpCollapsed ? "展开使用说明" : "收起使用说明";
   #|    refs.helpToggle.classList.toggle("active", !state.helpCollapsed);
   #|  }
@@ -2616,7 +2780,7 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    refs.sectionListCount.textContent = `${(overview.sections || []).length} items | 点击地址同步搜索`;
   #|    refs.sectionList.innerHTML = (overview.sections || []).map((section) => {
   #|      return `<button class="nav-row" data-section-query="${escapeHtml(section.addr)}"><div class="nav-row-title"><span>#${section.index} ${escapeHtml(section.name)}</span></div><div class="nav-row-meta">${escapeHtml(section.addr)} / ${escapeHtml(section.size)} | click to focus</div></button>`;
-  #|    }).join("") || panelEmptyState("当前 ELF 未提供节区信息。", "请确认输入文件是有效的 RISC-V ELF，或先回到默认文件重新加载。");
+  #|    }).join("") || panelEmptyState("当前输入未提供节区信息。", "请确认路径存在，且 ELF 或 RAW 元数据配置正确。");
   #|  }
   #|
   #|  function renderFunctions() {
@@ -2640,7 +2804,7 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    refs.functionListCount.textContent = `${visibleFunctions.length}/${(overview.functions || []).length}${currentFn ? ` | PC=${currentFn.name}` : ""}${activeFilter ? ` | filter=${activeFilter}` : ""}`;
   #|    const emptyMessage = queryText()
   #|      ? panelEmptyState("当前过滤条件下没有匹配函数。", "可清空搜索，或输入精确地址后按 Enter 跳转。")
-  #|      : panelEmptyState("当前 ELF 没有函数符号。", "可先点击节区地址，或在搜索框输入地址后按 Enter 浏览。");
+  #|      : panelEmptyState("当前输入没有可用函数信息。", "ELF 会显示符号函数；RAW 默认会暴露 synthetic entry。");
   #|    refs.functionList.innerHTML = visibleFunctions.map((fn) => {
   #|      const active = state.selectedFunctionAddr === fn.addr;
   #|      const current = currentFn && currentFn.addr === fn.addr;
@@ -2718,6 +2882,7 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|  }
   #|
   #|  function renderToolbarState() {
+  #|    const request = currentRequestConfig();
   #|    refs.prevBtn.disabled = state.cursor < 0;
   #|    refs.resetBtn.disabled = state.cursor < 0;
   #|    refs.nextBtn.disabled = state.cursor >= (overview.events || []).length - 1;
@@ -2726,9 +2891,18 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    refs.followPc.classList.toggle("active", state.followPcEnabled);
   #|    refs.changedRegistersToggle.classList.toggle("active", state.showChangedRegistersOnly);
   #|    refs.fileLoadBtn.classList.toggle("hidden", !REMOTE_MODE);
-  #|    refs.fileLoadBtn.disabled = state.loading || refs.fileInput.value.trim() === "";
+  #|    refs.fileLoadBtn.disabled = state.loading || refs.fileInput.value.trim() === "" || (request.rawMode && !request.baseAddr);
   #|    refs.fileLoadBtn.textContent = state.loading ? "Loading..." : "Load";
   #|    refs.fileInput.disabled = !REMOTE_MODE || state.loading;
+  #|    refs.fileInput.placeholder = request.rawMode ? "RAW file path" : "ELF file path";
+  #|    refs.inputMode.disabled = !REMOTE_MODE || state.loading;
+  #|    refs.inputMode.value = request.rawMode ? "raw" : "elf";
+  #|    refs.rawBaseField.classList.toggle("hidden", !REMOTE_MODE || !request.rawMode);
+  #|    refs.rawXlenField.classList.toggle("hidden", !REMOTE_MODE || !request.rawMode);
+  #|    refs.rawBaseInput.disabled = !REMOTE_MODE || !request.rawMode || state.loading;
+  #|    refs.rawXlenInput.disabled = !REMOTE_MODE || !request.rawMode || state.loading;
+  #|    refs.rawBaseInput.value = state.remoteBaseAddr;
+  #|    refs.rawXlenInput.value = String(request.xlen);
   #|    refs.breakpointClearBtn.disabled = state.breakpoints.length === 0;
   #|  }
   #|
@@ -3020,18 +3194,45 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    renderRuntimePanels();
   #|  }
   #|
+  #|  function buildRemoteParams(file, extra = {}) {
+  #|    const params = new URLSearchParams();
+  #|    const targetFile = String(file || "").trim();
+  #|    if (targetFile) {
+  #|      params.set("file", targetFile);
+  #|    }
+  #|    const request = currentRequestConfig();
+  #|    if (request.rawMode) {
+  #|      params.set("raw", "1");
+  #|      params.set("base", request.baseAddr || DEFAULT_RAW_BASE);
+  #|      params.set("xlen", String(request.xlen));
+  #|    }
+  #|    Object.entries(extra).forEach(([key, value]) => {
+  #|      if (value !== null && value !== undefined && String(value) !== "") {
+  #|        params.set(key, String(value));
+  #|      }
+  #|    });
+  #|    return params;
+  #|  }
+  #|
   #|  function syncUrl(file) {
   #|    if (!REMOTE_MODE || !window.history || !window.history.replaceState) {
   #|      return;
   #|    }
-  #|    const next = file ? `${window.location.pathname}?file=${encodeURIComponent(file)}` : window.location.pathname;
+  #|    const query = buildRemoteParams(file).toString();
+  #|    const next = query ? `${window.location.pathname}?${query}` : window.location.pathname;
   #|    window.history.replaceState(null, "", next);
   #|  }
   #|
   #|  function applyOverviewData(nextOverview, file, restoreUi) {
   #|    overview = nextOverview || createEmptyOverview(file);
   #|    state.currentFile = overview.meta.source_file || file || state.currentFile;
-  #|    storageKey = storageKeyFor(state.currentFile || file || "default");
+  #|    const request = currentRequestConfig();
+  #|    storageKey = storageKeyFor(
+  #|      state.currentFile || file || "default",
+  #|      request.rawMode,
+  #|      request.baseAddr || DEFAULT_RAW_BASE,
+  #|      request.xlen,
+  #|    );
   #|    if (restoreUi) {
   #|      applyStoredUi(readUiState());
   #|    }
@@ -3061,7 +3262,7 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|      return sliceCache.get(key);
   #|    }
   #|    const endpoint = boot.function_endpoint || "/api/workbench/function";
-  #|    const url = `${endpoint}?file=${encodeURIComponent(state.currentFile || boot.default_file || "")}&addr=${encodeURIComponent(key)}`;
+  #|    const url = `${endpoint}?${buildRemoteParams(state.currentFile || boot.default_file || "", { addr: key }).toString()}`;
   #|    try {
   #|      const resp = await fetch(url);
   #|      const payload = await resp.json();
@@ -3140,22 +3341,36 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|
   #|  async function loadOverview(file, syncHistory) {
   #|    const targetFile = String(file || "").trim();
+  #|    const request = currentRequestConfig();
   #|    if (!targetFile) {
-  #|      state.loadError = "文件路径为空。请先输入 ELF 路径，或回到默认文件后重新加载。";
+  #|      state.loadError = request.rawMode
+  #|        ? "文件路径为空。请先输入 RAW 路径，并确认 base/xlen 后重新加载。"
+  #|        : "文件路径为空。请先输入 ELF 路径，或回到默认文件后重新加载。";
   #|      applyOverviewData(createEmptyOverview(""), "", false);
+  #|      renderAll();
+  #|      return;
+  #|    }
+  #|    if (request.rawMode && !request.baseAddr) {
+  #|      state.currentFile = targetFile;
+  #|      state.loadError = "RAW Base 无效。请输入十进制或 0x 前缀地址，并确认 XLEN 为 32 或 64。";
+  #|      applyOverviewData(createEmptyOverview(targetFile), targetFile, false);
   #|      renderAll();
   #|      return;
   #|    }
   #|    state.loading = true;
   #|    state.loadError = "";
   #|    state.currentFile = targetFile;
+  #|    if (request.rawMode) {
+  #|      state.remoteBaseAddr = request.baseAddr || DEFAULT_RAW_BASE;
+  #|    }
+  #|    state.remoteXlen = request.xlen;
   #|    refs.fileInput.value = targetFile;
   #|    if (syncHistory !== false) {
   #|      syncUrl(targetFile);
   #|    }
   #|    renderAll();
   #|    const endpoint = boot.overview_endpoint || "/api/workbench/overview";
-  #|    const url = `${endpoint}?file=${encodeURIComponent(targetFile)}&max_events=${String(boot.max_inst || 400)}`;
+  #|    const url = `${endpoint}?${buildRemoteParams(targetFile, { max_events: String(boot.max_inst || 400) }).toString()}`;
   #|    try {
   #|      const resp = await fetch(url);
   #|      const payload = await resp.json();
@@ -3168,7 +3383,9 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|      await ensureDefaultSelection();
   #|    } catch (err) {
   #|      state.loading = false;
-  #|      state.loadError = `文件加载失败：${String(err)}。请确认路径存在、文件可读且是有效的 RISC-V ELF。`;
+  #|      state.loadError = request.rawMode
+  #|        ? `RAW 文件加载失败：${String(err)}。请确认路径存在、文件可读，且当前输入是有效 RAW，base/xlen 配置正确。`
+  #|        : `ELF 文件加载失败：${String(err)}。请确认路径存在、文件可读且是有效的 RISC-V ELF。`;
   #|      applyOverviewData(createEmptyOverview(targetFile), targetFile, false);
   #|    }
   #|    renderAll();
@@ -3381,6 +3598,40 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    }
   #|    event.preventDefault();
   #|    await loadOverview(refs.fileInput.value, true);
+  #|  });
+  #|
+  #|  refs.inputMode.addEventListener("change", () => {
+  #|    state.remoteRawMode = refs.inputMode.value === "raw";
+  #|    state.remoteXlen = normalizeRemoteXlen(refs.rawXlenInput.value);
+  #|    state.loadError = "";
+  #|    renderHeader();
+  #|    renderHelpPanel();
+  #|    renderToolbarState();
+  #|    renderBanner();
+  #|  });
+  #|
+  #|  refs.rawBaseInput.addEventListener("input", () => {
+  #|    state.remoteBaseAddr = refs.rawBaseInput.value;
+  #|    state.loadError = "";
+  #|    renderHelpPanel();
+  #|    renderToolbarState();
+  #|    renderBanner();
+  #|  });
+  #|
+  #|  refs.rawBaseInput.addEventListener("keydown", async (event) => {
+  #|    if (!REMOTE_MODE || !state.remoteRawMode || event.key !== "Enter") {
+  #|      return;
+  #|    }
+  #|    event.preventDefault();
+  #|    await loadOverview(refs.fileInput.value, true);
+  #|  });
+  #|
+  #|  refs.rawXlenInput.addEventListener("change", () => {
+  #|    state.remoteXlen = normalizeRemoteXlen(refs.rawXlenInput.value);
+  #|    state.loadError = "";
+  #|    renderHelpPanel();
+  #|    renderToolbarState();
+  #|    renderBanner();
   #|  });
   #|
   #|  refs.functionSelect.addEventListener("change", async (event) => {
@@ -3641,7 +3892,7 @@ fn build_html_page(title : String, boot_json : String) -> String {
   html = html + "    .toolbar-controls {\n"
   html = html + "      display: grid;\n"
   html = html +
-    "      grid-template-columns: minmax(220px, 1.2fr) minmax(180px, 240px) minmax(180px, 1fr) auto auto;\n"
+    "      grid-template-columns: minmax(220px, 1.2fr) minmax(96px, 120px) minmax(148px, 180px) minmax(92px, 110px) minmax(180px, 240px) minmax(180px, 1fr) auto auto;\n"
   html = html + "      gap: 8px;\n"
   html = html + "      align-items: end;\n"
   html = html + "    }\n"
@@ -4244,6 +4495,26 @@ fn build_html_page(title : String, boot_json : String) -> String {
   html = html + "            <button id=\"file-load-btn\">Load</button>\n"
   html = html + "          </div>\n"
   html = html + "        </div>\n"
+  html = html +
+    "        <div class=\"toolbar-field\" id=\"input-mode-field\">\n"
+  html = html + "          <span>格式</span>\n"
+  html = html + "          <select id=\"input-mode\">\n"
+  html = html + "            <option value=\"elf\">ELF</option>\n"
+  html = html + "            <option value=\"raw\">RAW</option>\n"
+  html = html + "          </select>\n"
+  html = html + "        </div>\n"
+  html = html + "        <div class=\"toolbar-field\" id=\"raw-base-field\">\n"
+  html = html + "          <span>Base</span>\n"
+  html = html +
+    "          <input id=\"raw-base-input\" type=\"text\" placeholder=\"0x10000\" />\n"
+  html = html + "        </div>\n"
+  html = html + "        <div class=\"toolbar-field\" id=\"raw-xlen-field\">\n"
+  html = html + "          <span>XLEN</span>\n"
+  html = html + "          <select id=\"raw-xlen-input\">\n"
+  html = html + "            <option value=\"64\">64</option>\n"
+  html = html + "            <option value=\"32\">32</option>\n"
+  html = html + "          </select>\n"
+  html = html + "        </div>\n"
   html = html + "        <div class=\"toolbar-field\">\n"
   html = html + "          <span>函数</span>\n"
   html = html + "          <select id=\"function-select\"></select>\n"
@@ -4289,7 +4560,7 @@ fn build_html_page(title : String, boot_json : String) -> String {
   html = html + "      <div class=\"help-body\">\n"
   html = html + "        <div class=\"help-grid\">\n"
   html = html +
-    "          <article class=\"help-card\"><h3>1. 载入文件</h3><p>在线模式在文件框输入 ELF 路径后点击 Load；离线模式直接使用当前嵌入数据。</p></article>\n"
+    "          <article class=\"help-card\"><h3>1. 载入文件</h3><p>在线模式可切换 ELF / RAW；RAW 需要同时指定 Base 和 XLEN；离线模式直接使用当前嵌入数据。</p></article>\n"
   html = html +
     "          <article class=\"help-card\"><h3>2. 选择函数</h3><p>先看左侧函数列表或顶部函数选择框，再进入当前函数的反汇编与 CFG。</p></article>\n"
   html = html +

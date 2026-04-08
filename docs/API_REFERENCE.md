@@ -122,8 +122,8 @@
 
 说明:
 
-- RAW 仅覆盖离线 `workbench` HTML 生成
-- 当前在线 `/workbench` 与 `/api/workbench/*` 仍然按 ELF 设计，不包含 RAW 输入
+- RAW 已覆盖离线 `workbench` HTML、在线 `/workbench`、`/api/workbench/overview` 与 `/api/workbench/function`
+- `/api/snapshot` 与 `/api/stream` 继续保持 ELF-only 兼容接口
 
 这些交互全部在客户端完成，不会修改 `/api/workbench/overview`、`/api/workbench/function`、`/api/snapshot`、`/api/stream` 的 wire format。
 
@@ -179,6 +179,12 @@ pub fn overview_api_json_from_file(
 
 在线 workbench 首屏与导航以该接口为主。
 
+RAW 模式补充:
+
+- `meta.input_format` 固定为 `"raw"`
+- `meta.file_class` 固定为 `"RAW"`
+- 函数列表只暴露一个 synthetic function `entry`
+
 回放断点与 `State Compare` 继续复用现有字段，不新增 schema，客户端主要读取：
 
 - `runtime.initial_registers`
@@ -213,6 +219,35 @@ pub fn function_api_json_from_file(
 - `available`
 
 在线 workbench 的函数级 CFG 与明细面板以该接口为主。
+
+RAW 模式补充:
+
+- 支持用 `entry`、`0x10000` 或落在该 synthetic range 内的地址请求切片
+- 不新增函数恢复逻辑
+
+### `overview_api_json_from_file_with_options`
+
+```moonbit
+pub fn overview_api_json_from_file_with_options(
+  input_file : String,
+  max_events : Int,
+  options : WorkbenchOptions
+) -> String
+```
+
+用于把在线 `/api/workbench/overview` 与共享 ELF/RAW 装载路径统一到同一组 `WorkbenchOptions`。
+
+### `function_api_json_from_file_with_options`
+
+```moonbit
+pub fn function_api_json_from_file_with_options(
+  input_file : String,
+  addr_or_name : String,
+  options : WorkbenchOptions
+) -> String
+```
+
+用于把在线 `/api/workbench/function` 与共享 ELF/RAW 装载路径统一到同一组 `WorkbenchOptions`。
 
 ### `snapshot_api_json_from_file`
 
@@ -291,6 +326,21 @@ pub fn online_page_html(
 
 页面首屏默认展开 `How to use` 面板；`/api/snapshot` 与 `/api/stream` 保留为兼容接口，不再作为在线 workbench 的主入口。
 
+### `online_page_html_with_options`
+
+```moonbit
+pub fn online_page_html_with_options(
+  default_file : String,
+  initial_file : String,
+  max_instructions : Int,
+  overview_endpoint : String,
+  function_endpoint : String,
+  options : WorkbenchOptions
+) -> String
+```
+
+用于给 `/workbench` 注入 `raw_mode`、`base_addr`、`xlen` 等在线 boot metadata。
+
 ## HTTP 路由
 
 Windows 上启动或验证 `cmd/server` 时，请使用 Visual Studio 2022 Developer Command Prompt / DevShell，或先初始化 MSVC 环境。普通 PowerShell + GCC 失败不视为接口问题。
@@ -304,11 +354,12 @@ Windows 上启动或验证 `cmd/server` 时，请使用 Visual Studio 2022 Devel
 ### `GET /workbench`
 
 - 返回完整在线工作台 HTML
-- 支持 `?file=<path>`
+- 支持 `?file=<path>&raw=1&base=<addr>&xlen=32|64`
+- `raw=1` 时默认值固定为 `base=0x10000`、`xlen=64`
 - 首屏默认展示 `How to use` 面板
 - 页面主数据源为 `/api/workbench/overview`
 - 函数切片按需从 `/api/workbench/function` 加载
-- `/api/snapshot` 与 `/api/stream` 仅保留兼容定位
+- `/api/snapshot` 与 `/api/stream` 仅保留 ELF-only 兼容定位
 - 页面交互围绕“载入文件 -> 选择函数 -> 搜索/跳转 -> 浏览 Trace/Memory/Syscalls”展开
 - 页面内的 `Replay Breakpoints` 和 `State Compare` 都是纯客户端能力，不新增查询参数，也不新增响应字段
 - 回放断点只在当前 trace reachable 地址上生效，命中后额外显示 `Replay breakpoint @...`
@@ -323,24 +374,32 @@ Windows 上启动或验证 `cmd/server` 时，请使用 Visual Studio 2022 Devel
 }
 ```
 
-### `GET /api/workbench/overview?file=<path>&max_events=<n>`
+### `GET /api/workbench/overview?file=<path>&max_events=<n>[&raw=1&base=<addr>&xlen=32|64]`
 
 示例：
 
 ```bash
 curl -sS "http://127.0.0.1:18080/api/workbench/overview?file=out/simple.elf&max_events=20"
+curl -sS "http://127.0.0.1:18080/api/workbench/overview?file=out/simple.raw&raw=1&base=0x10000&xlen=64&max_events=20"
 ```
 
 返回在线 workbench 的概览载荷。
 
+当 `raw=1` 时:
+
+- 非法 `base` 或 `xlen` 会直接返回 `400` JSON 错误
+- 响应中的 `meta.input_format` 为 `"raw"`
+- 函数列表只包含 synthetic `entry`
+
 当前 workbench 的回放断点和状态对比继续消费已有 `runtime` / `events` 字段，不新增响应字段。
 
-### `GET /api/workbench/function?file=<path>&addr=<hex-or-name>`
+### `GET /api/workbench/function?file=<path>&addr=<hex-or-name>[&raw=1&base=<addr>&xlen=32|64]`
 
 示例：
 
 ```bash
 curl -sS "http://127.0.0.1:18080/api/workbench/function?file=out/simple.elf&addr=0x10000"
+curl -sS "http://127.0.0.1:18080/api/workbench/function?file=out/simple.raw&raw=1&base=0x10000&xlen=64&addr=entry"
 ```
 
 返回指定函数的切片载荷。
@@ -353,7 +412,7 @@ curl -sS "http://127.0.0.1:18080/api/workbench/function?file=out/simple.elf&addr
 curl -sS "http://127.0.0.1:18080/api/snapshot?file=out/simple.elf&max_inst=20"
 ```
 
-兼容接口，返回一次性快照载荷。
+兼容接口，返回一次性快照载荷。当前保持 ELF-only。
 
 ### `GET /api/stream?file=<path>&max_inst=<n>&max_events=<n>&interval_ms=<ms>`
 
@@ -363,7 +422,7 @@ curl -sS "http://127.0.0.1:18080/api/snapshot?file=out/simple.elf&max_inst=20"
 curl -sN "http://127.0.0.1:18080/api/stream?file=out/simple.elf&max_inst=12&max_events=4&interval_ms=10"
 ```
 
-兼容接口，返回事件流或 SSE 事件输出。
+兼容接口，返回事件流或 SSE 事件输出。当前保持 ELF-only。
 
 ## 稳定兼容接口
 

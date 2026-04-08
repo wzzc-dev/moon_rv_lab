@@ -6,6 +6,11 @@ test "index html exposes online workbench entry" {
     html.contains("面向演示、回归和课堂实验的在线入口"),
   )
   assert_true(html.contains("/workbench?file=out/simple.elf"))
+  assert_true(
+    html.contains(
+      "/workbench?file=out/simple.raw&amp;raw=1&amp;base=0x10000&amp;xlen=64",
+    ),
+  )
   assert_true(html.contains("Open Online Workbench"))
   assert_true(html.contains("查看 Quick Start"))
   assert_true(html.contains("Quick Start"))
@@ -30,9 +35,21 @@ test "index html exposes online workbench entry" {
   assert_true(
     html.contains("Windows 上的 server 原生回归依赖 MSVC 工具链"),
   )
-  assert_true(html.contains("GET /workbench?file=&lt;path&gt;"))
-  assert_true(html.contains("/api/workbench/overview"))
-  assert_true(html.contains("/api/workbench/function"))
+  assert_true(
+    html.contains(
+      "GET /workbench?file=&lt;path&gt;[&amp;raw=1&amp;base=&lt;addr&gt;&amp;xlen=32|64]",
+    ),
+  )
+  assert_true(
+    html.contains(
+      "/api/workbench/overview?file=&lt;path&gt;&amp;max_events=&lt;n&gt;[&amp;raw=1&amp;base=&lt;addr&gt;&amp;xlen=32|64]",
+    ),
+  )
+  assert_true(
+    html.contains(
+      "/api/workbench/function?file=&lt;path&gt;&amp;addr=&lt;hex-or-name&gt;[&amp;raw=1&amp;base=&lt;addr&gt;&amp;xlen=32|64]",
+    ),
+  )
   assert_true(html.contains("/api/snapshot"))
   assert_true(html.contains("/api/stream"))
   assert_false(html.contains("window.__RVR_CONFIG__"))
@@ -58,7 +75,13 @@ test "workbench route html embeds online bootstrap config" {
   assert_true(html.contains("class=\"workbench-shell\""))
   assert_true(html.contains("id=\"file-input\""))
   assert_true(html.contains("id=\"file-load-btn\""))
+  assert_true(html.contains("id=\"input-mode\""))
+  assert_true(html.contains("id=\"raw-base-input\""))
+  assert_true(html.contains("id=\"raw-xlen-input\""))
   assert_true(html.contains("\"default_file\":\"out/simple.elf\""))
+  assert_true(html.contains("\"raw_mode\":false"))
+  assert_true(html.contains("\"base_addr\":\"0x10000\""))
+  assert_true(html.contains("\"xlen\":64"))
   assert_true(html.contains("boot.default_file"))
   assert_true(html.contains("id=\"help-panel\""))
   assert_true(html.contains("How to use"))
@@ -77,4 +100,67 @@ test "workbench route html embeds online bootstrap config" {
   assert_false(html.contains("\"embedded_data\""))
   assert_false(html.contains("/api/snapshot"))
   assert_true(html.contains("id=\"cfg-subtitle\""))
+}
+
+///|
+test "workbench route html embeds raw bootstrap config" {
+  let opts = {
+    ..default_options(),
+    default_file: "out/simple.elf",
+    max_inst: 96,
+  }
+  let html = build_workbench_route_html_with_input(opts, {
+    file: "out/simple.raw",
+    raw_mode: true,
+    base_addr: 0x10000U,
+    xlen: 32,
+  })
+  assert_true(html.contains("\"initial_file\":\"out/simple.raw\""))
+  assert_true(html.contains("\"raw_mode\":true"))
+  assert_true(html.contains("\"base_addr\":\"0x10000\""))
+  assert_true(html.contains("\"xlen\":32"))
+  assert_true(html.contains("id=\"input-mode\""))
+  assert_true(html.contains("id=\"raw-base-input\""))
+  assert_true(html.contains("id=\"raw-xlen-input\""))
+}
+
+///|
+test "workbench route query parsing validates raw parameters" {
+  match
+    parse_workbench_route_input_strict(
+      "out/simple.raw",
+      Some("1"),
+      Some("0x20000"),
+      Some("32"),
+    ) {
+    WorkbenchRouteOk(input) => {
+      assert_true(input.raw_mode)
+      assert_eq(input.file, "out/simple.raw")
+      assert_eq(input.base_addr, 0x20000U)
+      assert_eq(input.xlen, 32)
+    }
+    WorkbenchRouteErr(err) => abort(err)
+  }
+
+  match
+    parse_workbench_route_input_strict(
+      "out/simple.raw",
+      Some("1"),
+      Some("bad"),
+      Some("64"),
+    ) {
+    WorkbenchRouteOk(_) => abort("expected raw base parse failure")
+    WorkbenchRouteErr(err) => assert_true(err.contains("invalid raw base"))
+  }
+
+  match
+    parse_workbench_route_input_strict(
+      "out/simple.raw",
+      Some("1"),
+      Some("0x10000"),
+      Some("128"),
+    ) {
+    WorkbenchRouteOk(_) => abort("expected raw xlen parse failure")
+    WorkbenchRouteErr(err) => assert_true(err.contains("invalid raw xlen"))
+  }
 }

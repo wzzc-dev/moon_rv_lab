@@ -33,6 +33,13 @@ grep '"xlen":64' out/simple.raw.info.json
 grep '"xlen":64' out/simple.raw.run.json
 ~/.moon/bin/moon run cmd/main -- run out/simple.raw --raw --base 0x10000 --xlen 64 --max-steps 20
 ~/.moon/bin/moon run cmd/main -- workbench out/simple.raw --raw --base 0x10000 --xlen 64 -o out/simple_raw.html
+# 另开一个终端，或后台启动在线 server
+~/.moon/bin/moon run cmd/server --target native -- --file out/simple.elf --port 18080 > out/server.log 2>&1 &
+curl -sS "http://127.0.0.1:18080/api/workbench/overview?file=out/simple.raw&raw=1&base=0x10000&xlen=64&max_events=20" > out/simple.raw.overview.api.json
+grep '"input_format":"raw"' out/simple.raw.overview.api.json
+grep '"file_class":"RAW"' out/simple.raw.overview.api.json
+curl -sS "http://127.0.0.1:18080/api/workbench/function?file=out/simple.raw&raw=1&base=0x10000&xlen=64&addr=entry" > out/simple.raw.function.api.json
+grep '"name":"entry"' out/simple.raw.function.api.json
 ```
 
 预期结果：
@@ -46,6 +53,7 @@ grep '"xlen":64' out/simple.raw.run.json
 - `out/simple.raw.info.json` 与 `out/simple.raw.run.json` 都明确记录 RAW 输入和 `xlen=64`。
 - `run out/simple.raw --raw --base 0x10000 --xlen 64 --max-steps 20` 能在给定步数内完成。
 - `out/simple_raw.html` 成功生成。
+- 在线 `/api/workbench/overview` 与 `/api/workbench/function` 的 RAW 请求返回稳定结果，且 `entry` synthetic function 不回退。
 
 Windows 本地说明：
 
@@ -144,6 +152,9 @@ Windows 本地执行要求：
 5. 检查寄存器、Trace、Memory Writes、Syscalls/Output 联动
 6. 切换 `?file=` 后确认页面重载并同步更新 URL
 7. 刷新后确认 pane 尺寸、tab、过滤器和 `Follow PC` 状态恢复
+8. 打开 `http://127.0.0.1:18080/workbench?file=out/simple.raw&raw=1&base=0x10000&xlen=64`
+9. 检查函数列表出现 `entry`，且 `Load` 后 URL 继续保留 `raw/base/xlen`
+10. 检查切回 `ELF` 后 RAW 专属字段隐藏，普通加载路径不受污染
 
 ## RV32 兼容说明
 

@@ -269,6 +269,22 @@ test "overview api json preserves rv32 xlen metadata" {
 }
 
 ///|
+test "overview api json supports raw online inputs" {
+  let path = write_test_raw("overview_api_raw", branch_trace_program())
+  let json = overview_api_json_from_file_with_options(
+    path,
+    200,
+    create_input_options("", 200, true, TEST_BASE, 64),
+  )
+  assert_true(json.contains("\"ok\":true"))
+  assert_true(json.contains("\"input_format\":\"raw\""))
+  assert_true(json.contains("\"file_class\":\"RAW\""))
+  assert_true(json.contains("\"entry_point\":\"0x10000\""))
+  assert_true(json.contains("\"name\":\"entry\""))
+  assert_true(json.contains("\"xlen\":64"))
+}
+
+///|
 test "function api json returns per-function slice payload" {
   let path = write_test_elf("function_api", branch_trace_program())
   let json = function_api_json_from_file(path, "0x10000")
@@ -279,6 +295,21 @@ test "function api json returns per-function slice payload" {
   assert_true(json.contains("\"blocks\""))
   assert_true(json.contains("\"edges\""))
   assert_true(json.contains("\"available\":true"))
+}
+
+///|
+test "function api json supports raw synthetic entry slices" {
+  let path = write_test_raw("function_api_raw", branch_trace_program())
+  let json = function_api_json_from_file_with_options(
+    path,
+    "entry",
+    create_input_options("", 200, true, TEST_BASE, 64),
+  )
+  assert_true(json.contains("\"ok\":true"))
+  assert_true(json.contains("\"function\":{\"name\":\"entry\""))
+  assert_true(json.contains("\"addr\":\"0x10000\""))
+  assert_true(json.contains("\"available\":true"))
+  assert_true(json.contains("\"instructions\""))
 }
 
 ///|
@@ -298,14 +329,23 @@ test "online workbench html bootstraps from overview and function apis" {
   assert_true(html.contains("boot.overview_endpoint"))
   assert_true(html.contains("boot.function_endpoint"))
   assert_true(html.contains("xlen: 0"))
+  assert_true(html.contains("\"raw_mode\":false"))
+  assert_true(html.contains("\"base_addr\":\"0x10000\""))
+  assert_true(html.contains("\"xlen\":64"))
   assert_true(html.contains("id=\"file-input\""))
   assert_true(html.contains("id=\"file-load-btn\""))
+  assert_true(html.contains("id=\"input-mode-field\""))
+  assert_true(html.contains("id=\"input-mode\""))
+  assert_true(html.contains("id=\"raw-base-field\""))
+  assert_true(html.contains("id=\"raw-base-input\""))
+  assert_true(html.contains("id=\"raw-xlen-field\""))
+  assert_true(html.contains("id=\"raw-xlen-input\""))
   assert_true(html.contains("\"default_file\":\"out/simple.elf\""))
   assert_true(html.contains("boot.default_file"))
   assert_true(html.contains("id=\"help-panel\""))
   assert_true(html.contains("id=\"help-toggle\""))
   assert_true(html.contains("How to use"))
-  assert_true(html.contains("1. 载入文件"))
+  assert_true(html.contains("在线模式可切换 ELF / RAW"))
   assert_true(html.contains("3. 搜索 / 跳转"))
   assert_true(html.contains("6. Trace / Memory / Syscalls"))
   assert_true(html.contains("点击地址同步搜索"))
@@ -328,4 +368,25 @@ test "online workbench html bootstraps from overview and function apis" {
   assert_false(html.contains("\"embedded_data\""))
   assert_false(html.contains("/api/snapshot"))
   assert_true(html.contains("id=\"cfg-subtitle\""))
+}
+
+///|
+test "online workbench html preserves raw boot metadata" {
+  let html = online_page_html_with_options(
+    "out/simple.elf",
+    "out/simple.raw",
+    64,
+    "/api/workbench/overview",
+    "/api/workbench/function",
+    create_input_options("", 64, true, TEST_BASE, 32),
+  )
+
+  assert_true(html.contains("\"initial_file\":\"out/simple.raw\""))
+  assert_true(html.contains("\"raw_mode\":true"))
+  assert_true(html.contains("\"base_addr\":\"0x10000\""))
+  assert_true(html.contains("\"xlen\":32"))
+  assert_true(html.contains("buildRemoteParams"))
+  assert_true(html.contains("id=\"input-mode\""))
+  assert_true(html.contains("id=\"raw-base-input\""))
+  assert_true(html.contains("id=\"raw-xlen-input\""))
 }

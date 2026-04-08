@@ -63,6 +63,7 @@ format / asm / decode / disasm / analysis   cmd/server
 - 在线和离线页面共用同一套 HTML/CSS/JS 壳，只是启动模式不同:
   - 离线模式内嵌完整 `WorkbenchData`
   - 在线模式先拉取 `/api/workbench/overview`，再按需请求 `/api/workbench/function`
+- 在线主接口通过同一组 `WorkbenchOptions` 统一装载 ELF 与 RAW；`/api/snapshot` / `/api/stream` 继续保持 ELF-only 兼容接口
 
 ### `cmd/main/`
 
@@ -100,9 +101,9 @@ format / asm / decode / disasm / analysis   cmd/server
 ### 在线 `/workbench`
 
 1. `cmd/server` 返回在线 workbench HTML 壳。
-2. 页面读取 `?file=` 或 server 默认文件。
-3. 前端请求 `/api/workbench/overview?file=...` 获取概览与 runtime/events。
-4. 用户选择函数或地址后，再按需请求 `/api/workbench/function?file=...&addr=...`。
+2. 页面读取 `?file=`，并在 RAW 模式下同时读取 `raw/base/xlen`，或退回 server 默认文件。
+3. 前端请求 `/api/workbench/overview?file=...`，RAW 时再附带 `raw/base/xlen`，获取概览与 runtime/events。
+4. 用户选择函数或地址后，再按需请求 `/api/workbench/function?file=...&addr=...`；RAW 继续沿用 synthetic `entry` 函数模型。
 5. 页面在本地根据 overview 的 `events` 和函数切片数据做播放、单步和 inspector 联动。
 
 ## 设计边界

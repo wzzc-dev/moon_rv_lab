@@ -13,8 +13,8 @@
 
 本轮范围保持不变：
 
-- 在线 `/workbench` 继续只演示 ELF 输入，不纳入 RAW 在线支持
-- RAW 主路径已经纳入 smoke，见 `docs/TESTING.md`
+- 在线 `/workbench` 与 `/api/workbench/overview|function` 已纳入 RAW 主路径
+- `/api/snapshot` 与 `/api/stream` 仍保持 ELF-only 兼容接口
 - 最终答辩主线仍以 `example/simple.s` 和 `example/file_open_read_close.s` 为主
 
 ## 环境准备
@@ -53,7 +53,7 @@ git status --short
 预期：
 
 - 所有测试通过
-- 当前基线应为 `Total tests: 461, passed: 461, failed: 0.`
+- 当前基线应为 `Total tests: 464, passed: 464, failed: 0.`
 
 ## Step 3: CLI 主路径演示
 
@@ -74,8 +74,8 @@ git status --short
 如果需要补一句本轮范围说明，可以直接说明：
 
 - 默认演示 ELF 为 RV64
-- RAW 路径已经支持 `info/cfg/analyze/decompile/run/离线 workbench`
-- 在线 workbench 仍然只展示 ELF 输入
+- RAW 路径已经支持 `info/cfg/analyze/decompile/run/离线 workbench/在线 workbench 主路径`
+- `/api/snapshot` 与 `/api/stream` 继续保持 ELF-only 兼容接口
 
 ## Step 4: Syscall / Trace 演示
 
@@ -119,6 +119,7 @@ git status --short
 1. `http://127.0.0.1:18080/`
 2. 点击 `Open Online Workbench`
 3. 或直接打开 `http://127.0.0.1:18080/workbench?file=out/simple.elf`
+4. 再打开 `http://127.0.0.1:18080/workbench?file=out/simple.raw&raw=1&base=0x10000&xlen=64`
 
 现场观察点：
 
@@ -126,6 +127,9 @@ git status --short
 - `/workbench` 首屏包含 `How to use`
 - `Reset / Prev / Next / Play` 正常工作
 - 函数切换、搜索过滤、`Follow PC`、trace 与寄存器联动正常
+- RAW 页面函数列表会出现 synthetic `entry`
+- RAW 地址栏在刷新后仍保留 `raw/base/xlen`
+- 切回 `ELF` 后 RAW 专属字段会隐藏
 
 ## 最终验收清单
 
@@ -138,7 +142,8 @@ git status --short
 - `out/file_open_read_close.elf` 与 `out/file_open_read_close.trace.json` 成功生成
 - `out/workbench.html` 成功生成并可本地打开
 - 在线 `cmd/server --target native` 能启动，首页与 `/workbench?file=out/simple.elf` 可访问
-- 如被问到 RAW 支持范围，可说明：CLI 与离线 workbench 已支持，在线 `/workbench` 不在本轮范围
+- 在线 RAW 路径 `/workbench?file=out/simple.raw&raw=1&base=0x10000&xlen=64` 可访问且出现 `entry`
+- 如被问到兼容接口边界，可说明：`/api/snapshot` 与 `/api/stream` 仍保持 ELF-only
 
 ## 最小复现命令组
 

@@ -17,6 +17,12 @@ const DEFAULT_MAX_EVENTS : Int = 400
 const DEFAULT_INTERVAL_MS : Int = 350
 
 ///|
+const DEFAULT_RAW_BASE : UInt = 0x10000U
+
+///|
+const DEFAULT_RAW_XLEN : Int = 64
+
+///|
 const INDEX_STYLE : String =
   #|:root {
   #|  --bg: #eef5f4;
@@ -267,6 +273,20 @@ struct ServeOptions {
 }
 
 ///|
+priv struct WorkbenchRouteInput {
+  file : String
+  raw_mode : Bool
+  base_addr : UInt
+  xlen : Int
+}
+
+///|
+priv enum WorkbenchRouteParseResult {
+  WorkbenchRouteOk(WorkbenchRouteInput)
+  WorkbenchRouteErr(String)
+}
+
+///|
 fn default_options() -> ServeOptions {
   {
     host: DEFAULT_HOST,
@@ -276,6 +296,11 @@ fn default_options() -> ServeOptions {
     max_events: DEFAULT_MAX_EVENTS,
     interval_ms: DEFAULT_INTERVAL_MS,
   }
+}
+
+///|
+fn default_workbench_route_input(file : String) -> WorkbenchRouteInput {
+  { file, raw_mode: false, base_addr: DEFAULT_RAW_BASE, xlen: DEFAULT_RAW_XLEN }
 }
 
 ///|
@@ -301,6 +326,49 @@ fn parse_uint_dec(s : String) -> UInt? {
     }
   }
   Some(result)
+}
+
+///|
+fn parse_hex_uint(s : String) -> UInt? {
+  if s.length() >= 2 && s[0] == '0' && (s[1] == 'x' || s[1] == 'X') {
+    let mut result : UInt = 0U
+    for i = 2; i < s.length(); i = i + 1 {
+      let digit = match s[i] {
+        '0' => Some(0U)
+        '1' => Some(1U)
+        '2' => Some(2U)
+        '3' => Some(3U)
+        '4' => Some(4U)
+        '5' => Some(5U)
+        '6' => Some(6U)
+        '7' => Some(7U)
+        '8' => Some(8U)
+        '9' => Some(9U)
+        'a' | 'A' => Some(10U)
+        'b' | 'B' => Some(11U)
+        'c' | 'C' => Some(12U)
+        'd' | 'D' => Some(13U)
+        'e' | 'E' => Some(14U)
+        'f' | 'F' => Some(15U)
+        _ => None
+      }
+      match digit {
+        Some(d) => result = result * 16U + d
+        None => return None
+      }
+    }
+    Some(result)
+  } else {
+    None
+  }
+}
+
+///|
+fn parse_number(value : String) -> UInt? {
+  match parse_hex_uint(value) {
+    Some(parsed) => Some(parsed)
+    None => parse_uint_dec(value)
+  }
 }
 
 ///|
@@ -398,10 +466,14 @@ fn print_usage() -> Unit {
   println("  --interval-ms <ms>      Stream interval in milliseconds")
   println("")
   println("API:")
-  println("  GET /workbench?file=<path>")
+  println("  GET /workbench?file=<path>[&raw=1&base=<addr>&xlen=32|64]")
   println("  GET /api/health")
-  println("  GET /api/workbench/overview?file=<path>&max_events=<n>")
-  println("  GET /api/workbench/function?file=<path>&addr=<hex-or-name>")
+  println(
+    "  GET /api/workbench/overview?file=<path>&max_events=<n>[&raw=1&base=<addr>&xlen=32|64]",
+  )
+  println(
+    "  GET /api/workbench/function?file=<path>&addr=<hex-or-name>[&raw=1&base=<addr>&xlen=32|64]",
+  )
   println("  GET /api/snapshot?file=<path>&max_inst=<n>")
   println(
     "  GET /api/stream?file=<path>&max_inst=<n>&max_events=<n>&interval_ms=<ms>",
@@ -422,7 +494,7 @@ fn render_page_body(opts : ServeOptions) -> String {
         @luna.h("h1", [], [@luna.text("MoonRV Lab Online Workbench")]),
         @luna.h("p", [("class", @luna.attr_static("subtitle"))], [
           @luna.text(
-            "面向演示、回归和课堂实验的在线入口。推荐先打开在线 workbench，再按需切换 ELF；离线路径和 API 契约也在这里给出。",
+            "面向演示、回归和课堂实验的在线入口。推荐先打开在线 workbench，再按需在 ELF / RAW 间切换；离线路径和 API 契约也在这里给出。",
           ),
         ]),
         @luna.h("div", [("class", @luna.attr_static("cta-row"))], [
@@ -495,11 +567,13 @@ fn render_page_body(opts : ServeOptions) -> String {
                 @luna.h("h3", [], [@luna.text("在线工作台")]),
                 @luna.h("p", [], [
                   @luna.text(
-                    "直接打开浏览器工作台，适合演示、调试和多 ELF 切换。默认文件会自动带入查询参数。",
+                    "直接打开浏览器工作台，适合演示、调试，以及在 ELF / RAW 间切换。默认文件会自动带入查询参数。",
                   ),
                 ]),
                 @luna.h("div", [("class", @luna.attr_static("code-block"))], [
-                  @luna.text("/workbench?file=out/simple.elf"),
+                  @luna.text(
+                    "/workbench?file=out/simple.elf\n/workbench?file=out/simple.raw&raw=1&base=0x10000&xlen=64",
+                  ),
                 ]),
               ]),
               @luna.h("article", [("class", @luna.attr_static("card"))], [
@@ -540,7 +614,7 @@ fn render_page_body(opts : ServeOptions) -> String {
                   ]),
                   @luna.h("li", [], [
                     @luna.text(
-                      "打开 online workbench，先看 overview，再选择函数。",
+                      "打开 online workbench，按输入格式选择 ELF 或 RAW，再查看 overview 与函数。",
                     ),
                   ]),
                   @luna.h("li", [], [
@@ -561,20 +635,24 @@ fn render_page_body(opts : ServeOptions) -> String {
                 ]),
                 @luna.h("p", [], [
                   @luna.text(
-                    "Primary APIs: /api/workbench/overview 提供首屏概要，/api/workbench/function 提供函数切片；Compatibility APIs: /api/snapshot 与 /api/stream 继续服务现有集成。",
+                    "Primary APIs: /api/workbench/overview 提供首屏概要，/api/workbench/function 提供函数切片；Compatibility APIs: /api/snapshot 与 /api/stream 继续服务现有集成，当前保持 ELF-only 兼容接口。",
                   ),
                 ]),
                 @luna.h("ul", [("class", @luna.attr_static("route-list"))], [
-                  @luna.h("li", [], [@luna.text("GET /workbench?file=<path>")]),
+                  @luna.h("li", [], [
+                    @luna.text(
+                      "GET /workbench?file=<path>[&raw=1&base=<addr>&xlen=32|64]",
+                    ),
+                  ]),
                   @luna.h("li", [], [@luna.text("GET /api/health")]),
                   @luna.h("li", [], [
                     @luna.text(
-                      "GET /api/workbench/overview?file=<path>&max_events=<n>",
+                      "GET /api/workbench/overview?file=<path>&max_events=<n>[&raw=1&base=<addr>&xlen=32|64]",
                     ),
                   ]),
                   @luna.h("li", [], [
                     @luna.text(
-                      "GET /api/workbench/function?file=<path>&addr=<hex-or-name>",
+                      "GET /api/workbench/function?file=<path>&addr=<hex-or-name>[&raw=1&base=<addr>&xlen=32|64]",
                     ),
                   ]),
                   @luna.h("li", [], [
@@ -779,12 +857,39 @@ fn build_workbench_href(file : String) -> String {
 }
 
 ///|
-fn build_workbench_route_html(opts : ServeOptions, file : String) -> String {
-  @workbench.online_page_html(
+fn build_workbench_options(
+  max_instructions : Int,
+  input : WorkbenchRouteInput,
+) -> @workbench.WorkbenchOptions {
+  @workbench.create_input_options(
+    "",
+    max_instructions,
+    input.raw_mode,
+    input.base_addr,
+    input.xlen,
+  )
+}
+
+///|
+fn build_workbench_route_html_with_input(
+  opts : ServeOptions,
+  input : WorkbenchRouteInput,
+) -> String {
+  @workbench.online_page_html_with_options(
     opts.default_file,
-    file,
+    input.file,
     opts.max_inst,
     "/api/workbench/overview",
+    "/api/workbench/function",
+    build_workbench_options(opts.max_inst, input),
+  )
+}
+
+///|
+fn build_workbench_route_html(opts : ServeOptions, file : String) -> String {
+  build_workbench_route_html_with_input(
+    opts,
+    default_workbench_route_input(file),
   )
 }
 
@@ -824,6 +929,99 @@ fn choose_positive_int(value : String?, default_value : Int) -> Int {
         None => default_value
       }
     None => default_value
+  }
+}
+
+///|
+fn raw_query_enabled(value : String?) -> Bool {
+  match value {
+    Some("1") => true
+    Some("true") => true
+    Some("TRUE") => true
+    Some("True") => true
+    _ => false
+  }
+}
+
+///|
+fn parse_raw_base_strict(value : String?) -> UInt? {
+  match value {
+    Some(raw) => parse_number(raw)
+    None => Some(DEFAULT_RAW_BASE)
+  }
+}
+
+///|
+fn choose_raw_base_lenient(value : String?) -> UInt {
+  match parse_raw_base_strict(value) {
+    Some(base_addr) => base_addr
+    None => DEFAULT_RAW_BASE
+  }
+}
+
+///|
+fn parse_raw_xlen_strict(value : String?) -> Int? {
+  match value {
+    Some("32") => Some(32)
+    Some("64") => Some(64)
+    None => Some(DEFAULT_RAW_XLEN)
+    _ => None
+  }
+}
+
+///|
+fn choose_raw_xlen_lenient(value : String?) -> Int {
+  match parse_raw_xlen_strict(value) {
+    Some(xlen) => xlen
+    None => DEFAULT_RAW_XLEN
+  }
+}
+
+///|
+fn parse_workbench_route_input_lenient(
+  file : String,
+  raw : String?,
+  base : String?,
+  xlen : String?,
+) -> WorkbenchRouteInput {
+  if raw_query_enabled(raw) {
+    {
+      file,
+      raw_mode: true,
+      base_addr: choose_raw_base_lenient(base),
+      xlen: choose_raw_xlen_lenient(xlen),
+    }
+  } else {
+    default_workbench_route_input(file)
+  }
+}
+
+///|
+fn parse_workbench_route_input_strict(
+  file : String,
+  raw : String?,
+  base : String?,
+  xlen : String?,
+) -> WorkbenchRouteParseResult {
+  if !raw_query_enabled(raw) {
+    return WorkbenchRouteOk(default_workbench_route_input(file))
+  }
+  match parse_raw_base_strict(base) {
+    Some(base_addr) =>
+      match parse_raw_xlen_strict(xlen) {
+        Some(parsed_xlen) =>
+          WorkbenchRouteOk({
+            file,
+            raw_mode: true,
+            base_addr,
+            xlen: parsed_xlen,
+          })
+        None => WorkbenchRouteErr("invalid raw xlen: expected 32 or 64")
+      }
+    None =>
+      WorkbenchRouteErr(
+        "invalid raw base: expected decimal or 0x-prefixed address",
+      )
   }
 }
 
@@ -908,7 +1106,17 @@ async fn run_server(opts : ServeOptions) -> Unit {
     "/workbench",
     @mars.handler(async fn(ctx) {
       let file = choose_file(ctx.query("file"), opts.default_file)
-      ctx.html(build_workbench_route_html(opts, file))
+      let input = parse_workbench_route_input_lenient(
+        file,
+        ctx.query("raw"),
+        ctx.query("base"),
+        ctx.query("xlen"),
+      )
+      if input.raw_mode {
+        ctx.html(build_workbench_route_html_with_input(opts, input))
+      } else {
+        ctx.html(build_workbench_route_html(opts, input.file))
+      }
     }),
   )
 
@@ -925,10 +1133,24 @@ async fn run_server(opts : ServeOptions) -> Unit {
         ctx.query("max_events"),
         opts.max_events,
       )
-      let payload_text = @workbench.overview_api_json_from_file(
-        file, max_events,
-      )
-      respond_payload_json(ctx, payload_text)
+      match
+        parse_workbench_route_input_strict(
+          file,
+          ctx.query("raw"),
+          ctx.query("base"),
+          ctx.query("xlen"),
+        ) {
+        WorkbenchRouteOk(input) => {
+          let payload_text = @workbench.overview_api_json_from_file_with_options(
+            input.file,
+            max_events,
+            build_workbench_options(opts.max_inst, input),
+          )
+          respond_payload_json(ctx, payload_text)
+        }
+        WorkbenchRouteErr(err) =>
+          ctx.json({ "ok": false, "error": err }, status=400)
+      }
     }),
   )
 
@@ -937,8 +1159,24 @@ async fn run_server(opts : ServeOptions) -> Unit {
     @mars.handler(async fn(ctx) {
       let file = choose_file(ctx.query("file"), opts.default_file)
       let addr = choose_file(ctx.query("addr"), "")
-      let payload_text = @workbench.function_api_json_from_file(file, addr)
-      respond_payload_json(ctx, payload_text)
+      match
+        parse_workbench_route_input_strict(
+          file,
+          ctx.query("raw"),
+          ctx.query("base"),
+          ctx.query("xlen"),
+        ) {
+        WorkbenchRouteOk(input) => {
+          let payload_text = @workbench.function_api_json_from_file_with_options(
+            input.file,
+            addr,
+            build_workbench_options(opts.max_inst, input),
+          )
+          respond_payload_json(ctx, payload_text)
+        }
+        WorkbenchRouteErr(err) =>
+          ctx.json({ "ok": false, "error": err }, status=400)
+      }
     }),
   )
 

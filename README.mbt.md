@@ -13,9 +13,9 @@ MoonBit 编写的 RISC-V 二进制分析与执行实验项目。当前仓库已�
 
 RAW 支持范围补充:
 
-- 已支持: `disasm/info/cfg/analyze/decompile/run/离线 workbench`
+- 已支持: `disasm/info/cfg/analyze/decompile/run/离线 workbench/在线 /workbench 主路径`
 - 受限输出: `symbols --raw` 返回空符号表说明；`callgraph --raw` 返回显式“不支持”
-- 当前不包含: 在线 `/workbench` 的 RAW 输入
+- 兼容接口边界: `/api/snapshot` 与 `/api/stream` 仍保持 ELF-only
 
 ## 快速开始
 
@@ -57,12 +57,14 @@ RAW 支持范围补充:
   `~/.moon/bin/moon run cmd/main -- workbench out/simple.raw --raw --base 0x10000 --xlen 64 -o out/simple_raw.html`
 - 在线路径:
   `~/.moon/bin/moon run cmd/server --target native -- --file out/simple.elf --port 18080`
-  作用: 启动首页 `/` 与在线 `/workbench`。当前在线路径仍以 ELF 为主，不包含 RAW 输入。Windows 上请在 Visual Studio 2022 Developer Command Prompt / DevShell 中运行；普通 PowerShell + GCC 下的 `cmd/server` 失败不视为产品缺陷。
+  作用: 启动首页 `/` 与在线 `/workbench`。在线主路径现已支持 `?file=<path>&raw=1&base=<addr>&xlen=32|64`；`/api/snapshot` 与 `/api/stream` 继续保持 ELF-only 兼容接口。Windows 上请在 Visual Studio 2022 Developer Command Prompt / DevShell 中运行；普通 PowerShell + GCC 下的 `cmd/server` 失败不视为产品缺陷。
 
 - 入口页: `http://127.0.0.1:18080/`
   作用: Quick Start 首页，会展示默认文件、打开在线 workbench 的入口、在线/离线两条使用路径，以及主 API 与兼容 API 的定位。
 - 完整在线工作台: `http://127.0.0.1:18080/workbench?file=out/simple.elf`
   作用: 在线 workbench 首屏带 `How to use` 引导，推荐按“载入文件 -> 选择函数 -> 搜索/跳转 -> Reset / Prev / Next / Play -> Follow PC -> Trace / Memory / Syscalls”使用。
+- RAW 在线等价入口: `http://127.0.0.1:18080/workbench?file=out/simple.raw&raw=1&base=0x10000&xlen=64`
+  作用: 在线 RAW 继续沿用离线语义，只暴露 synthetic function `entry`，并在地址栏保留 `raw/base/xlen` 元数据。
 
 ## 常用命令
 

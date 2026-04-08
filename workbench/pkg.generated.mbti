@@ -10,11 +10,17 @@ pub fn default_options() -> WorkbenchOptions
 
 pub fn function_api_json_from_file(String, String) -> String
 
+pub fn function_api_json_from_file_with_options(String, String, WorkbenchOptions) -> String
+
 pub fn generate_from_file(String, String, WorkbenchOptions) -> WorkbenchError?
 
 pub fn online_page_html(String, String, Int, String) -> String
 
+pub fn online_page_html_with_options(String, String, Int, String, String, WorkbenchOptions) -> String
+
 pub fn overview_api_json_from_file(String, Int) -> String
+
+pub fn overview_api_json_from_file_with_options(String, Int, WorkbenchOptions) -> String
 
 pub fn snapshot_api_json_from_file(String, Int) -> String
 
