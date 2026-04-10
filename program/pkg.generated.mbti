@@ -1,0 +1,182 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "wzzc-dev/rvkit/program"
+
+import {
+  "wzzc-dev/rvkit/analysis",
+  "wzzc-dev/rvkit/format",
+}
+
+// Values
+pub const DEFAULT_RAW_BASE : UInt = 0x10000
+
+pub const DEFAULT_RAW_XLEN : Int = 64
+
+pub fn capability_matrix() -> Array[CapabilityEntry]
+
+pub fn capability_tier_name(CapabilityTier) -> String
+
+pub fn collect_function_ranges(LoadedProgram) -> Array[FunctionRange]
+
+pub fn create_input_spec(String, Bool, UInt, Int) -> InputSpec
+
+pub fn decode_only_tier() -> CapabilityTier
+
+pub fn default_workbench_request(String, String, Int, Int) -> WorkbenchRequest
+
+pub fn elf_input_spec(String) -> InputSpec
+
+pub fn fully_executable_tier() -> CapabilityTier
+
+pub fn load_error_message(ProgramLoadError, InputSpec, Bool) -> String
+
+pub fn load_program(InputSpec) -> ProgramLoadResult
+
+pub fn parse_workbench_request_lenient(String, String?, String?, String?, String, Int, Int) -> WorkbenchRequest
+
+pub fn parse_workbench_request_strict(String, String?, String?, String?, String, Int, Int) -> WorkbenchRequestParseResult
+
+pub fn raw_callgraph_unavailable_json() -> String
+
+pub fn raw_callgraph_unavailable_text() -> String
+
+pub fn raw_input_spec(String, UInt, Int) -> InputSpec
+
+pub fn raw_query_enabled(String?) -> Bool
+
+pub fn raw_selector_error(String, String, InputSpec) -> String
+
+pub fn raw_symbols_unavailable_json() -> String
+
+pub fn raw_symbols_unavailable_text() -> String
+
+pub fn unsupported_tier() -> CapabilityTier
+
+// Errors
+
+// Types and methods
+pub enum CapabilityDomain {
+  Decode
+  Disasm
+  Analyze
+  Execute
+  OfflineWorkbench
+  OnlineWorkbench
+}
+pub impl Eq for CapabilityDomain
+pub impl Show for CapabilityDomain
+
+pub struct CapabilityEntry {
+  domain : CapabilityDomain
+  tier : CapabilityTier
+  formats : String
+  xlen : String
+  isa : String
+  notes : String
+}
+pub impl Show for CapabilityEntry
+
+pub enum CapabilityTier {
+  FullyExecutable
+  DecodeOnly
+  Unsupported
+}
+pub impl Eq for CapabilityTier
+pub impl Show for CapabilityTier
+
+pub struct FunctionRange {
+  name : String
+  addr : UInt
+  size : UInt
+  end_addr : UInt
+  section_index : Int
+}
+pub impl Show for FunctionRange
+
+pub struct InputSpec {
+  file_path : String
+  format : ProgramFormat
+  base_addr : UInt
+  xlen : Int
+}
+pub fn InputSpec::format_name(Self) -> String
+pub fn InputSpec::is_raw(Self) -> Bool
+pub fn InputSpec::normalized_xlen(Self) -> Int
+pub impl Show for InputSpec
+
+pub struct LoadedCodeSection {
+  index : Int
+  name : String
+  start_addr : UInt
+  end_addr : UInt
+  bytes : FixedArray[Byte]
+  instructions : FixedArray[@analysis.DecodedInst]
+  cfg : @analysis.CFG
+}
+pub impl Show for LoadedCodeSection
+
+pub struct LoadedProgram {
+  input : InputSpec
+  entry_point : UInt
+  file_class : String
+  xlen : Int
+  architecture : String
+  section_count : Int
+  program_count : Int
+  sections : Array[SectionInfo]
+  code_sections : Array[LoadedCodeSection]
+  all_instructions : FixedArray[@analysis.DecodedInst]
+  symbols : Array[@format.Symbol]
+}
+pub fn LoadedProgram::input_format_name(Self) -> String
+pub fn LoadedProgram::primary_code(Self) -> LoadedCodeSection?
+pub fn LoadedProgram::supports_symbols(Self) -> Bool
+pub impl Show for LoadedProgram
+
+pub enum ProgramFormat {
+  Elf
+  Raw
+}
+pub impl Eq for ProgramFormat
+pub impl Show for ProgramFormat
+
+pub enum ProgramLoadError {
+  FileNotFound(String)
+  InvalidElf(String)
+  ParseElfFailed(String)
+  NotRiscV(String)
+  NoCodeSection(String)
+}
+pub impl Show for ProgramLoadError
+
+pub enum ProgramLoadResult {
+  ProgramLoaded(LoadedProgram)
+  ProgramLoadFailed(ProgramLoadError)
+}
+pub impl Show for ProgramLoadResult
+
+pub struct SectionInfo {
+  index : Int
+  name : String
+  addr : UInt
+  size : UInt
+}
+pub impl Show for SectionInfo
+
+pub struct WorkbenchRequest {
+  input : InputSpec
+  function_selector : String
+  max_events : Int
+  max_instructions : Int
+}
+pub impl Show for WorkbenchRequest
+
+pub enum WorkbenchRequestParseResult {
+  WorkbenchRequestOk(WorkbenchRequest)
+  WorkbenchRequestErr(String)
+}
+pub impl Show for WorkbenchRequestParseResult
+
+// Type aliases
+
+// Traits
+

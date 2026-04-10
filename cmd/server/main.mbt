@@ -17,10 +17,10 @@ const DEFAULT_MAX_EVENTS : Int = 400
 const DEFAULT_INTERVAL_MS : Int = 350
 
 ///|
-const DEFAULT_RAW_BASE : UInt = 0x10000U
+const DEFAULT_RAW_BASE : UInt = @program.DEFAULT_RAW_BASE
 
 ///|
-const DEFAULT_RAW_XLEN : Int = 64
+const DEFAULT_RAW_XLEN : Int = @program.DEFAULT_RAW_XLEN
 
 ///|
 const INDEX_STYLE : String =
@@ -301,6 +301,18 @@ fn default_options() -> ServeOptions {
 ///|
 fn default_workbench_route_input(file : String) -> WorkbenchRouteInput {
   { file, raw_mode: false, base_addr: DEFAULT_RAW_BASE, xlen: DEFAULT_RAW_XLEN }
+}
+
+///|
+fn workbench_request_to_input(
+  request : @program.WorkbenchRequest,
+) -> WorkbenchRouteInput {
+  {
+    file: request.input.file_path,
+    raw_mode: request.input.is_raw(),
+    base_addr: request.input.base_addr,
+    xlen: request.input.xlen,
+  }
 }
 
 ///|
@@ -857,16 +869,32 @@ fn build_workbench_href(file : String) -> String {
 }
 
 ///|
-fn build_workbench_options(
+fn build_workbench_options_from_input(
   max_instructions : Int,
-  input : WorkbenchRouteInput,
+  input : @program.InputSpec,
 ) -> @workbench.WorkbenchOptions {
   @workbench.create_input_options(
     "",
     max_instructions,
-    input.raw_mode,
+    input.is_raw(),
     input.base_addr,
     input.xlen,
+  )
+}
+
+///|
+fn build_workbench_options(
+  max_instructions : Int,
+  input : WorkbenchRouteInput,
+) -> @workbench.WorkbenchOptions {
+  build_workbench_options_from_input(
+    max_instructions,
+    @program.create_input_spec(
+      input.file,
+      input.raw_mode,
+      input.base_addr,
+      input.xlen,
+    ),
   )
 }
 
@@ -875,13 +903,23 @@ fn build_workbench_route_html_with_input(
   opts : ServeOptions,
   input : WorkbenchRouteInput,
 ) -> String {
-  @workbench.online_page_html_with_options(
+  @workbench.online_page_html_with_request(
     opts.default_file,
-    input.file,
-    opts.max_inst,
+    @program.parse_workbench_request_lenient(
+      input.file,
+      if input.raw_mode {
+        Some("1")
+      } else {
+        None
+      },
+      Some(input.base_addr.to_string()),
+      Some(input.xlen.to_string()),
+      "",
+      opts.max_events,
+      opts.max_inst,
+    ),
     "/api/workbench/overview",
     "/api/workbench/function",
-    build_workbench_options(opts.max_inst, input),
   )
 }
 
@@ -984,16 +1022,17 @@ fn parse_workbench_route_input_lenient(
   base : String?,
   xlen : String?,
 ) -> WorkbenchRouteInput {
-  if raw_query_enabled(raw) {
-    {
+  workbench_request_to_input(
+    @program.parse_workbench_request_lenient(
       file,
-      raw_mode: true,
-      base_addr: choose_raw_base_lenient(base),
-      xlen: choose_raw_xlen_lenient(xlen),
-    }
-  } else {
-    default_workbench_route_input(file)
-  }
+      raw,
+      base,
+      xlen,
+      "",
+      DEFAULT_MAX_EVENTS,
+      DEFAULT_MAX_INST,
+    ),
+  )
 }
 
 ///|
@@ -1003,25 +1042,19 @@ fn parse_workbench_route_input_strict(
   base : String?,
   xlen : String?,
 ) -> WorkbenchRouteParseResult {
-  if !raw_query_enabled(raw) {
-    return WorkbenchRouteOk(default_workbench_route_input(file))
-  }
-  match parse_raw_base_strict(base) {
-    Some(base_addr) =>
-      match parse_raw_xlen_strict(xlen) {
-        Some(parsed_xlen) =>
-          WorkbenchRouteOk({
-            file,
-            raw_mode: true,
-            base_addr,
-            xlen: parsed_xlen,
-          })
-        None => WorkbenchRouteErr("invalid raw xlen: expected 32 or 64")
-      }
-    None =>
-      WorkbenchRouteErr(
-        "invalid raw base: expected decimal or 0x-prefixed address",
-      )
+  match
+    @program.parse_workbench_request_strict(
+      file,
+      raw,
+      base,
+      xlen,
+      "",
+      DEFAULT_MAX_EVENTS,
+      DEFAULT_MAX_INST,
+    ) {
+    @program.WorkbenchRequestOk(request) =>
+      WorkbenchRouteOk(workbench_request_to_input(request))
+    @program.WorkbenchRequestErr(err) => WorkbenchRouteErr(err)
   }
 }
 
@@ -1106,16 +1139,24 @@ async fn run_server(opts : ServeOptions) -> Unit {
     "/workbench",
     @mars.handler(async fn(ctx) {
       let file = choose_file(ctx.query("file"), opts.default_file)
-      let input = parse_workbench_route_input_lenient(
+      let request = @program.parse_workbench_request_lenient(
         file,
         ctx.query("raw"),
         ctx.query("base"),
         ctx.query("xlen"),
+        "",
+        opts.max_events,
+        opts.max_inst,
       )
-      if input.raw_mode {
-        ctx.html(build_workbench_route_html_with_input(opts, input))
+      if request.input.is_raw() {
+        ctx.html(
+          build_workbench_route_html_with_input(
+            opts,
+            workbench_request_to_input(request),
+          ),
+        )
       } else {
-        ctx.html(build_workbench_route_html(opts, input.file))
+        ctx.html(build_workbench_route_html(opts, request.input.file_path))
       }
     }),
   )
@@ -1134,21 +1175,18 @@ async fn run_server(opts : ServeOptions) -> Unit {
         opts.max_events,
       )
       match
-        parse_workbench_route_input_strict(
+        @program.parse_workbench_request_strict(
           file,
           ctx.query("raw"),
           ctx.query("base"),
           ctx.query("xlen"),
+          "",
+          max_events,
+          opts.max_inst,
         ) {
-        WorkbenchRouteOk(input) => {
-          let payload_text = @workbench.overview_api_json_from_file_with_options(
-            input.file,
-            max_events,
-            build_workbench_options(opts.max_inst, input),
-          )
-          respond_payload_json(ctx, payload_text)
-        }
-        WorkbenchRouteErr(err) =>
+        @program.WorkbenchRequestOk(request) =>
+          respond_payload_json(ctx, @workbench.overview_api_json(request))
+        @program.WorkbenchRequestErr(err) =>
           ctx.json({ "ok": false, "error": err }, status=400)
       }
     }),
@@ -1160,21 +1198,18 @@ async fn run_server(opts : ServeOptions) -> Unit {
       let file = choose_file(ctx.query("file"), opts.default_file)
       let addr = choose_file(ctx.query("addr"), "")
       match
-        parse_workbench_route_input_strict(
+        @program.parse_workbench_request_strict(
           file,
           ctx.query("raw"),
           ctx.query("base"),
           ctx.query("xlen"),
+          addr,
+          opts.max_events,
+          opts.max_inst,
         ) {
-        WorkbenchRouteOk(input) => {
-          let payload_text = @workbench.function_api_json_from_file_with_options(
-            input.file,
-            addr,
-            build_workbench_options(opts.max_inst, input),
-          )
-          respond_payload_json(ctx, payload_text)
-        }
-        WorkbenchRouteErr(err) =>
+        @program.WorkbenchRequestOk(request) =>
+          respond_payload_json(ctx, @workbench.function_api_json(request))
+        @program.WorkbenchRequestErr(err) =>
           ctx.json({ "ok": false, "error": err }, status=400)
       }
     }),

@@ -1437,36 +1437,54 @@ priv enum PrimaryCodeLoadResult {
 }
 
 ///|
+fn input_spec_for_cli(
+  file_path : String,
+  raw_mode : Bool,
+  base_addr : UInt,
+  xlen : Int,
+) -> @program.InputSpec {
+  @program.create_input_spec(file_path, raw_mode, base_addr, xlen)
+}
+
+///|
+fn primary_code_load_error_from_program(
+  err : @program.ProgramLoadError,
+) -> PrimaryCodeLoadError {
+  match err {
+    @program.ProgramLoadError::FileNotFound(path) =>
+      PrimaryCodeLoadError::CannotRead(path)
+    @program.ProgramLoadError::InvalidElf(path) =>
+      PrimaryCodeLoadError::NotAnElf(path)
+    @program.ProgramLoadError::ParseElfFailed(path) =>
+      PrimaryCodeLoadError::ParseElfFailed(path)
+    @program.ProgramLoadError::NotRiscV(path) =>
+      PrimaryCodeLoadError::NotRiscV(path)
+    @program.ProgramLoadError::NoCodeSection(path) =>
+      PrimaryCodeLoadError::NoCodeSection(path)
+  }
+}
+
+///|
 fn load_primary_code(
   file_path : String,
   raw_mode : Bool,
   base_addr : UInt,
 ) -> PrimaryCodeLoadResult {
-  match read_file_bytes(file_path) {
-    Some(bytes) =>
-      if raw_mode {
-        let raw = @format.parse_raw_binary(bytes, base_addr)
-        Loaded({ base_addr: raw.base_addr, bytes: raw.code })
-      } else {
-        if !@format.is_elf(bytes) {
-          return LoadFailed(PrimaryCodeLoadError::NotAnElf(file_path))
-        }
-        match @format.parse_elf(bytes) {
-          Some(elf) => {
-            if !elf.is_riscv() {
-              return LoadFailed(PrimaryCodeLoadError::NotRiscV(file_path))
-            }
-            let code_sections = elf.get_code_sections()
-            if code_sections.length() == 0 {
-              return LoadFailed(PrimaryCodeLoadError::NoCodeSection(file_path))
-            }
-            let (vaddr, code) = code_sections[0]
-            Loaded({ base_addr: vaddr, bytes: code })
-          }
-          None => LoadFailed(PrimaryCodeLoadError::ParseElfFailed(file_path))
-        }
+  let input = input_spec_for_cli(
+    file_path,
+    raw_mode,
+    base_addr,
+    @program.DEFAULT_RAW_XLEN,
+  )
+  match @program.load_program(input) {
+    @program.ProgramLoaded(program) =>
+      match program.primary_code() {
+        Some(section) =>
+          Loaded({ base_addr: section.start_addr, bytes: section.bytes })
+        None => LoadFailed(PrimaryCodeLoadError::NoCodeSection(file_path))
       }
-    None => LoadFailed(PrimaryCodeLoadError::CannotRead(file_path))
+    @program.ProgramLoadFailed(err) =>
+      LoadFailed(primary_code_load_error_from_program(err))
   }
 }
 
@@ -1591,112 +1609,92 @@ fn arch_str(elf : @format.ElfFile) -> String {
 ///|
 /// Execute info command
 fn execute_info(opts : InfoOptions) -> Unit {
-  if opts.raw_mode {
-    match load_primary_code(opts.file_path, true, opts.base_addr) {
-      Loaded(input) => {
-        let output = match opts.format {
-          OutputFormat::Json => format_raw_info_json(input, opts.xlen)
-          OutputFormat::Text | OutputFormat::Dot =>
-            format_raw_info_text(input, opts.xlen)
-        }
-        write_or_print(output, opts.output)
+  let input = input_spec_for_cli(
+    opts.file_path,
+    opts.raw_mode,
+    opts.base_addr,
+    opts.xlen,
+  )
+  match @program.load_program(input) {
+    @program.ProgramLoaded(program) => {
+      let output = match opts.format {
+        OutputFormat::Json => format_program_info_json(program)
+        OutputFormat::Text | OutputFormat::Dot =>
+          format_program_info_text(program)
       }
-      LoadFailed(err) => println(primary_code_error_message(err, true))
+      write_or_print(output, opts.output)
     }
-    return
-  }
-
-  match read_file_bytes(opts.file_path) {
-    Some(bytes) => {
-      if !@format.is_elf(bytes) {
-        println("Error: Not a valid ELF file: \{opts.file_path}")
-        return
-      }
-      match @format.parse_elf(bytes) {
-        Some(elf) => {
-          let output = match opts.format {
-            OutputFormat::Json => format_elf_info_json(elf)
-            OutputFormat::Text | OutputFormat::Dot => format_elf_info_text(elf)
-          }
-          write_or_print(output, opts.output)
-        }
-        None => println("Error: Failed to parse ELF file")
-      }
-    }
-    None => println("Error: Cannot read file: \{opts.file_path}")
+    @program.ProgramLoadFailed(err) =>
+      println(@program.load_error_message(err, input, true))
   }
 }
 
 ///|
-/// Format ELF info as text string
-fn format_elf_info_text(elf : @format.ElfFile) -> String {
-  let mut result = ""
-  result = result + "ELF File Information\n"
-  result = result + "====================\n\n"
-  let class_str = elf_class_str(elf)
-  let arch = arch_str(elf)
-  result = result + "Class: \{class_str}\n"
-  result = result + "Architecture: \{arch}\n"
-  result = result + "Entry Point: \{format_hex(elf.entry_point())}\n"
-  result = result + "Sections: \{elf.section_count()}\n"
-  result = result + "Program Headers: \{elf.program_count()}\n\n"
-  result = result + "Sections:\n"
-  for i = 0; i < elf.section_count(); i = i + 1 {
-    let name = elf.get_section_name(i)
-    match elf.get_section(i) {
-      Some((addr, _offset, size)) => {
-        let addr_str = format_hex(addr)
-        result = result + "  [\{i}] \{name}: addr=\{addr_str}, size=\{size}\n"
+fn format_program_info_text(program : @program.LoadedProgram) -> String {
+  if program.input.is_raw() {
+    match program.primary_code() {
+      Some(section) => {
+        let mut result = ""
+        result = result + "Raw Binary Information\n"
+        result = result + "======================\n\n"
+        result = result + "Input Format: raw\n"
+        result = result + "Architecture: \{program.architecture}\n"
+        result = result + "Entry Point: \{format_hex(program.entry_point)}\n"
+        result = result + "Base Address: \{format_hex(section.start_addr)}\n"
+        result = result + "XLEN: \{program.xlen}\n"
+        result = result + "Code Size: \{section.bytes.length()}\n"
+        result = result +
+          "Instruction Count: \{program.all_instructions.length()}\n"
+        result
       }
-      None => ignore(())
+      None => "Error: No executable code decoded from RAW input"
     }
+  } else {
+    let mut result = ""
+    result = result + "ELF File Information\n"
+    result = result + "====================\n\n"
+    result = result + "Class: \{program.file_class}\n"
+    result = result + "Architecture: \{program.architecture}\n"
+    result = result + "Entry Point: \{format_hex(program.entry_point)}\n"
+    result = result + "Sections: \{program.section_count}\n"
+    result = result + "Program Headers: \{program.program_count}\n\n"
+    result = result + "Sections:\n"
+    for section in program.sections {
+      result = result +
+        "  [\{section.index}] \{section.name}: addr=\{format_hex(section.addr)}, size=\{section.size}\n"
+    }
+    result
   }
-  result
 }
 
 ///|
-/// Format ELF info as JSON string
-fn format_elf_info_json(elf : @format.ElfFile) -> String {
-  let class_str = elf_class_str(elf)
-  let arch = arch_str(elf)
-  let entry_str = format_hex(elf.entry_point())
+/// Format loaded program info as JSON string
+fn format_program_info_json(program : @program.LoadedProgram) -> String {
   let mut result = "{\n"
-  result = result + "  \"class\": \"\{class_str}\",\n"
-  result = result + "  \"architecture\": \"\{arch}\",\n"
-  result = result + "  \"entry_point\": \"\{entry_str}\",\n"
-  result = result + "  \"section_count\": \{elf.section_count()},\n"
-  result = result + "  \"program_count\": \{elf.program_count()}\n"
-  result = result + "}"
-  result
-}
-
-///|
-fn format_raw_info_text(input : LoadedPrimaryCode, xlen : Int) -> String {
-  let instructions = @analysis.decode_instructions(input.bytes, input.base_addr)
-  let mut result = ""
-  result = result + "Raw Binary Information\n"
-  result = result + "======================\n\n"
-  result = result + "Input Format: raw\n"
-  result = result + "Architecture: RISC-V\n"
-  result = result + "Entry Point: \{format_hex(input.base_addr)}\n"
-  result = result + "Base Address: \{format_hex(input.base_addr)}\n"
-  result = result + "XLEN: \{xlen}\n"
-  result = result + "Code Size: \{input.bytes.length()}\n"
-  result = result + "Instruction Count: \{instructions.length()}\n"
-  result
-}
-
-///|
-fn format_raw_info_json(input : LoadedPrimaryCode, xlen : Int) -> String {
-  let instructions = @analysis.decode_instructions(input.bytes, input.base_addr)
-  let mut result = "{\n"
-  result = result + "  \"input_format\": \"raw\",\n"
-  result = result + "  \"architecture\": \"RISC-V\",\n"
-  result = result + "  \"entry_point\": \"\{format_hex(input.base_addr)}\",\n"
-  result = result + "  \"base_addr\": \"\{format_hex(input.base_addr)}\",\n"
-  result = result + "  \"xlen\": \{xlen},\n"
-  result = result + "  \"code_size\": \{input.bytes.length()},\n"
-  result = result + "  \"instruction_count\": \{instructions.length()}\n"
+  if program.input.is_raw() {
+    match program.primary_code() {
+      Some(section) => {
+        result = result + "  \"input_format\": \"raw\",\n"
+        result = result + "  \"architecture\": \"\{program.architecture}\",\n"
+        result = result +
+          "  \"entry_point\": \"\{format_hex(program.entry_point)}\",\n"
+        result = result +
+          "  \"base_addr\": \"\{format_hex(section.start_addr)}\",\n"
+        result = result + "  \"xlen\": \{program.xlen},\n"
+        result = result + "  \"code_size\": \{section.bytes.length()},\n"
+        result = result +
+          "  \"instruction_count\": \{program.all_instructions.length()}\n"
+      }
+      None => result = result + "  \"error\": \"no code\"\n"
+    }
+  } else {
+    result = result + "  \"class\": \"\{program.file_class}\",\n"
+    result = result + "  \"architecture\": \"\{program.architecture}\",\n"
+    result = result +
+      "  \"entry_point\": \"\{format_hex(program.entry_point)}\",\n"
+    result = result + "  \"section_count\": \{program.section_count},\n"
+    result = result + "  \"program_count\": \{program.program_count}\n"
+  }
   result = result + "}"
   result
 }
@@ -1752,37 +1750,32 @@ fn format_raw_symbols_json() -> String {
 ///|
 /// Execute symbols command
 fn execute_symbols(opts : SymbolsOptions) -> Unit {
-  if opts.raw_mode {
-    let output = match opts.format {
-      OutputFormat::Json => format_raw_symbols_json()
-      OutputFormat::Text | OutputFormat::Dot => format_raw_symbols_text()
-    }
-    write_or_print(output, opts.output)
-    return
-  }
-
-  match read_file_bytes(opts.file_path) {
-    Some(bytes) => {
-      if !@format.is_elf(bytes) {
-        println(
-          "Error: Not a valid ELF file: \{opts.file_path}\nUse --raw option for raw binary files",
-        )
-        return
-      }
-      match @format.parse_elf(bytes) {
-        Some(elf) => {
-          let symbols = elf.get_symbols()
-          let output = match opts.format {
-            OutputFormat::Json => format_symbols_json(symbols, opts.show_all)
-            OutputFormat::Text | OutputFormat::Dot =>
-              format_symbols_text(symbols, opts.show_all)
-          }
-          write_or_print(output, opts.output)
+  let input = input_spec_for_cli(
+    opts.file_path,
+    opts.raw_mode,
+    @program.DEFAULT_RAW_BASE,
+    @program.DEFAULT_RAW_XLEN,
+  )
+  match @program.load_program(input) {
+    @program.ProgramLoaded(program) =>
+      if program.input.is_raw() {
+        let output = match opts.format {
+          OutputFormat::Json => @program.raw_symbols_unavailable_json()
+          OutputFormat::Text | OutputFormat::Dot =>
+            @program.raw_symbols_unavailable_text()
         }
-        None => println("Error: Failed to parse ELF file")
+        write_or_print(output, opts.output)
+      } else {
+        let output = match opts.format {
+          OutputFormat::Json =>
+            format_symbols_json(program.symbols, opts.show_all)
+          OutputFormat::Text | OutputFormat::Dot =>
+            format_symbols_text(program.symbols, opts.show_all)
+        }
+        write_or_print(output, opts.output)
       }
-    }
-    None => println("Error: Cannot read file: \{opts.file_path}")
+    @program.ProgramLoadFailed(err) =>
+      println(@program.load_error_message(err, input, true))
   }
 }
 
@@ -1859,76 +1852,29 @@ fn format_symbols_json(
 ///|
 /// Execute cfg command
 fn execute_cfg(opts : CfgOptions) -> Unit {
-  if opts.raw_mode {
-    match load_primary_code(opts.file_path, true, opts.base_addr) {
-      Loaded(input) => {
-        let cfg = @analysis.analyze_code(input.bytes, input.base_addr)
-        let name = if opts.function == "" { "main" } else { opts.function }
-        let output = match opts.format {
-          OutputFormat::Dot => @analysis.cfg_to_dot(cfg, name)
-          OutputFormat::Json => @analysis.cfg_to_json(cfg)
-          OutputFormat::Text => {
-            @analysis.print_cfg(cfg)
-            ""
-          }
-        }
-        if opts.output != "" && output != "" {
-          if write_output_file(opts.output, output) {
-            println("Output written to: \{opts.output}")
-          } else {
-            println("Error: Failed to write output file")
-          }
-        } else if output != "" {
-          println(output)
+  match load_primary_code(opts.file_path, opts.raw_mode, opts.base_addr) {
+    Loaded(input) => {
+      let cfg = @analysis.analyze_code(input.bytes, input.base_addr)
+      let name = if opts.function == "" { "main" } else { opts.function }
+      let output = match opts.format {
+        OutputFormat::Dot => @analysis.cfg_to_dot(cfg, name)
+        OutputFormat::Json => @analysis.cfg_to_json(cfg)
+        OutputFormat::Text => {
+          @analysis.print_cfg(cfg)
+          ""
         }
       }
-      LoadFailed(err) => println(primary_code_error_message(err, true))
-    }
-    return
-  }
-
-  match read_file_bytes(opts.file_path) {
-    Some(bytes) => {
-      if !@format.is_elf(bytes) {
-        println("Error: Not a valid ELF file: \{opts.file_path}")
-        return
-      }
-      match @format.parse_elf(bytes) {
-        Some(elf) => {
-          if !elf.is_riscv() {
-            println("Error: Not a RISC-V ELF file")
-            return
-          }
-          let code_sections = elf.get_code_sections()
-          if code_sections.length() == 0 {
-            println("Error: No executable code sections found")
-            return
-          }
-          let (vaddr, code) = code_sections[0]
-          let cfg = @analysis.analyze_code(code, vaddr)
-          let name = if opts.function == "" { "main" } else { opts.function }
-          let output = match opts.format {
-            OutputFormat::Dot => @analysis.cfg_to_dot(cfg, name)
-            OutputFormat::Json => @analysis.cfg_to_json(cfg)
-            OutputFormat::Text => {
-              @analysis.print_cfg(cfg)
-              ""
-            }
-          }
-          if opts.output != "" && output != "" {
-            if write_output_file(opts.output, output) {
-              println("Output written to: \{opts.output}")
-            } else {
-              println("Error: Failed to write output file")
-            }
-          } else if output != "" {
-            println(output)
-          }
+      if opts.output != "" && output != "" {
+        if write_output_file(opts.output, output) {
+          println("Output written to: \{opts.output}")
+        } else {
+          println("Error: Failed to write output file")
         }
-        None => println("Error: Failed to parse ELF file")
+      } else if output != "" {
+        println(output)
       }
     }
-    None => println("Error: Cannot read file: \{opts.file_path}")
+    LoadFailed(err) => println(primary_code_error_message(err, true))
   }
 }
 
@@ -1937,64 +1883,39 @@ fn execute_cfg(opts : CfgOptions) -> Unit {
 fn execute_callgraph(opts : CallGraphOptions) -> Unit {
   if opts.raw_mode {
     let output = match opts.format {
-      OutputFormat::Json =>
-        "{\n" +
-        "  \"input_format\": \"raw\",\n" +
-        "  \"supported\": false,\n" +
-        "  \"message\": \"RAW input lacks reliable function boundaries, so call graph generation is unavailable.\",\n" +
-        "  \"functions\": [],\n" +
-        "  \"edges\": []\n" +
-        "}"
+      OutputFormat::Json => @program.raw_callgraph_unavailable_json()
       OutputFormat::Text | OutputFormat::Dot =>
-        "Call Graph\n==========\n\nRAW input lacks reliable function boundaries, so call graph generation is unavailable.\n"
+        @program.raw_callgraph_unavailable_text()
     }
     write_or_print(output, opts.output)
     return
   }
 
-  match read_file_bytes(opts.file_path) {
-    Some(bytes) => {
-      if !@format.is_elf(bytes) {
-        println(
-          "Error: Not a valid ELF file: \{opts.file_path}\nUse --raw option for raw binary files",
-        )
-        return
-      }
-      match @format.parse_elf(bytes) {
-        Some(elf) => {
-          if !elf.is_riscv() {
-            println("Error: Not a RISC-V ELF file")
-            return
-          }
-          let code_sections = elf.get_code_sections()
-          if code_sections.length() == 0 {
-            println("Error: No executable code sections found")
-            return
-          }
-          let (vaddr, code) = code_sections[0]
-          let instructions = @analysis.decode_instructions(code, vaddr)
-          let cfg = @analysis.build_cfg(instructions, vaddr)
-          let cg = @analysis.build_call_graph(instructions, cfg)
-          let output = match opts.format {
-            OutputFormat::Dot => @analysis.callgraph_to_dot(cg, "callgraph")
-            OutputFormat::Json => @analysis.callgraph_to_json(cg)
-            OutputFormat::Text => {
-              @analysis.print_call_graph(cg)
-              ""
-            }
-          }
-          if opts.output != "" && output != "" {
-            if write_output_file(opts.output, output) {
-              println("Output written to: \{opts.output}")
-            } else {
-              println("Error: Failed to write output file")
-            }
-          }
+  match load_primary_code(opts.file_path, false, @program.DEFAULT_RAW_BASE) {
+    Loaded(input) => {
+      let instructions = @analysis.decode_instructions(
+        input.bytes,
+        input.base_addr,
+      )
+      let cfg = @analysis.build_cfg(instructions, input.base_addr)
+      let cg = @analysis.build_call_graph(instructions, cfg)
+      let output = match opts.format {
+        OutputFormat::Dot => @analysis.callgraph_to_dot(cg, "callgraph")
+        OutputFormat::Json => @analysis.callgraph_to_json(cg)
+        OutputFormat::Text => {
+          @analysis.print_call_graph(cg)
+          ""
         }
-        None => println("Error: Failed to parse ELF file")
+      }
+      if opts.output != "" && output != "" {
+        if write_output_file(opts.output, output) {
+          println("Output written to: \{opts.output}")
+        } else {
+          println("Error: Failed to write output file")
+        }
       }
     }
-    None => println("Error: Cannot read file: \{opts.file_path}")
+    LoadFailed(err) => println(primary_code_error_message(err, true))
   }
 }
 
@@ -2062,41 +1983,17 @@ fn resolve_run_selector(
 }
 
 ///|
-fn run_load_error_message(
-  err : @simulator.LoadError,
-  raw_mode : Bool,
-) -> String {
-  match err {
-    @simulator.LoadError::FileNotFound(file_path) =>
-      "Error: Cannot read file: \{file_path}"
-    @simulator.LoadError::InvalidElf(file_path) =>
-      if raw_mode {
-        "Error: Not a valid raw input file: \{file_path}"
-      } else {
-        "Error: Not a valid ELF file: \{file_path}\nUse --raw --base <addr> --xlen <32|64> for raw binary files"
-      }
-    @simulator.LoadError::ParseElfFailed(_file_path) =>
-      "Error: Failed to parse ELF file"
-    @simulator.LoadError::NotRiscV(_file_path) => "Error: Not a RISC-V ELF file"
-    @simulator.LoadError::NoLoadableSegments(_file_path) =>
-      "Error: No loadable program segments found"
-    @simulator.LoadError::InvalidEntry(entry_addr) =>
-      if raw_mode {
-        "Error: RAW entry address is not executable: \{format_hex(entry_addr)}\nCheck --base and --xlen settings."
-      } else {
-        "Error: Invalid entry point: \{format_hex(entry_addr)}"
-      }
-  }
-}
-
-///|
 fn raw_run_selector_error(
   flag : String,
   selector : String,
   base_addr : UInt,
   xlen : Int,
 ) -> String {
-  "Error: RAW input does not provide symbol metadata; use an address with \{flag} instead of '\{selector}'.\nCurrent RAW settings: base=\{format_hex(base_addr)}, xlen=\{xlen}"
+  @program.raw_selector_error(
+    flag,
+    selector,
+    @program.raw_input_spec("", base_addr, xlen),
+  )
 }
 
 ///|
@@ -2156,11 +2053,13 @@ fn execute_run(opts : RunOptions) -> Unit {
 ///|
 /// Execute run command and return the rendered CLI output.
 fn execute_run_result(opts : RunOptions) -> CommandExecResult {
-  let loaded = if opts.raw_mode {
-    @simulator.load_raw(opts.file_path, opts.base_addr, opts.xlen)
-  } else {
-    @simulator.load(opts.file_path)
-  }
+  let input = input_spec_for_cli(
+    opts.file_path,
+    opts.raw_mode,
+    opts.base_addr,
+    opts.xlen,
+  )
+  let loaded = @simulator.load_input(input)
 
   match loaded {
     @simulator.Loaded(initial_state) => {
@@ -2171,12 +2070,7 @@ fn execute_run_result(opts : RunOptions) -> CommandExecResult {
           None =>
             return Failure(
               if opts.raw_mode {
-                raw_run_selector_error(
-                  "--entry",
-                  opts.entry,
-                  opts.base_addr,
-                  opts.xlen,
-                )
+                @program.raw_selector_error("--entry", opts.entry, input)
               } else {
                 "Error: Entry not found: \{opts.entry}"
               },
@@ -2191,12 +2085,7 @@ fn execute_run_result(opts : RunOptions) -> CommandExecResult {
           None =>
             return Failure(
               if opts.raw_mode {
-                raw_run_selector_error(
-                  "--break",
-                  selector,
-                  opts.base_addr,
-                  opts.xlen,
-                )
+                @program.raw_selector_error("--break", selector, input)
               } else {
                 "Error: Breakpoint not found: \{selector}"
               },
@@ -2221,7 +2110,7 @@ fn execute_run_result(opts : RunOptions) -> CommandExecResult {
       }
     }
     @simulator.LoadFailed(err) =>
-      Failure(run_load_error_message(err, opts.raw_mode))
+      Failure(@simulator.load_error_message(err, input))
   }
 }
 

@@ -4,6 +4,7 @@ import {
   "wzzc-dev/rvkit/decode" @decode,
   "wzzc-dev/rvkit/disasm" @disasm,
   "wzzc-dev/rvkit/format" @format,
+  "wzzc-dev/rvkit/program" @program,
   "wzzc-dev/rvkit/simulator" @simulator,
   "moonbitlang/x/fs" @fs,
 }

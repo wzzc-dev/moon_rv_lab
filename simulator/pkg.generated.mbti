@@ -3,7 +3,9 @@ package "wzzc-dev/rvkit/simulator"
 
 import {
   "wzzc-dev/rvkit/analysis",
+  "wzzc-dev/rvkit/decode",
   "wzzc-dev/rvkit/format",
+  "wzzc-dev/rvkit/program",
 }
 
 // Values
@@ -15,7 +17,13 @@ pub fn exec_diff_to_json(ExecDiff) -> String
 
 pub fn exec_snapshot_to_json(ExecSnapshot) -> String
 
+pub fn instruction_execution_tier(@decode.Instruction, Int) -> @program.CapabilityTier
+
 pub fn load(String, entry_override? : UInt) -> LoadResult
+
+pub fn load_error_message(LoadError, @program.InputSpec) -> String
+
+pub fn load_input(@program.InputSpec) -> LoadResult
 
 pub fn load_raw(String, UInt, Int) -> LoadResult
 

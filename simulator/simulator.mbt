@@ -172,6 +172,15 @@ pub struct ExecState {
 } derive(Show)
 
 ///|
+pub fn load_input(input : @program.InputSpec) -> LoadResult {
+  if input.is_raw() {
+    load_raw(input.file_path, input.base_addr, input.normalized_xlen())
+  } else {
+    load(input.file_path)
+  }
+}
+
+///|
 pub fn RegisterFile::new() -> RegisterFile {
   { regs: FixedArray::make(32, 0U) }
 }
@@ -315,6 +324,87 @@ pub fn diff(before : ExecSnapshot, after : ExecSnapshot) -> ExecDiff {
 }
 
 ///|
+pub fn instruction_execution_tier(
+  inst : @decode.Instruction,
+  xlen : Int,
+) -> @program.CapabilityTier {
+  let normalized = match expand_supported_compressed(inst, xlen) {
+    Some(expanded) => expanded
+    None => inst
+  }
+  match normalized {
+    @decode.LUI(_, _)
+    | @decode.AUIPC(_, _)
+    | @decode.JAL(_, _)
+    | @decode.JALR(_, _, _)
+    | @decode.BEQ(_, _, _)
+    | @decode.BNE(_, _, _)
+    | @decode.BLT(_, _, _)
+    | @decode.BGE(_, _, _)
+    | @decode.BLTU(_, _, _)
+    | @decode.BGEU(_, _, _)
+    | @decode.LB(_, _, _)
+    | @decode.LH(_, _, _)
+    | @decode.LW(_, _, _)
+    | @decode.LBU(_, _, _)
+    | @decode.LHU(_, _, _)
+    | @decode.LD(_, _, _)
+    | @decode.LWU(_, _, _)
+    | @decode.SB(_, _, _)
+    | @decode.SH(_, _, _)
+    | @decode.SW(_, _, _)
+    | @decode.SD(_, _, _)
+    | @decode.ADDI(_, _, _)
+    | @decode.SLTI(_, _, _)
+    | @decode.SLTIU(_, _, _)
+    | @decode.XORI(_, _, _)
+    | @decode.ORI(_, _, _)
+    | @decode.ANDI(_, _, _)
+    | @decode.SLLI(_, _, _)
+    | @decode.SRLI(_, _, _)
+    | @decode.SRAI(_, _, _)
+    | @decode.ADD(_, _, _)
+    | @decode.SUB(_, _, _)
+    | @decode.SLL(_, _, _)
+    | @decode.SLT(_, _, _)
+    | @decode.SLTU(_, _, _)
+    | @decode.XOR(_, _, _)
+    | @decode.SRL(_, _, _)
+    | @decode.SRA(_, _, _)
+    | @decode.OR(_, _, _)
+    | @decode.AND(_, _, _)
+    | @decode.MUL(_, _, _)
+    | @decode.DIV(_, _, _)
+    | @decode.DIVU(_, _, _)
+    | @decode.REM(_, _, _)
+    | @decode.REMU(_, _, _)
+    | @decode.ADDIW(_, _, _)
+    | @decode.SLLIW(_, _, _)
+    | @decode.SRLIW(_, _, _)
+    | @decode.SRAIW(_, _, _)
+    | @decode.ADDW(_, _, _)
+    | @decode.SUBW(_, _, _)
+    | @decode.SLLW(_, _, _)
+    | @decode.SRLW(_, _, _)
+    | @decode.SRAW(_, _, _)
+    | @decode.DIVW(_, _, _)
+    | @decode.DIVUW(_, _, _)
+    | @decode.REMW(_, _, _)
+    | @decode.REMUW(_, _, _)
+    | @decode.FENCE(_, _)
+    | @decode.FENCE_I
+    | @decode.EBREAK
+    | @decode.ECALL => @program.fully_executable_tier()
+    _ =>
+      if is_decode_only_instruction(normalized) {
+        @program.decode_only_tier()
+      } else {
+        @program.unsupported_tier()
+      }
+  }
+}
+
+///|
 pub fn step(state : ExecState) -> ExecState {
   match state.stop_reason {
     Some(_) => state
@@ -367,6 +457,33 @@ pub fn stop_reason_to_string(reason : StopReason?) -> String {
     Some(StopReason::Fault(msg)) => "fault: " + msg
     Some(StopReason::UnsupportedInstruction(msg)) => "unsupported: " + msg
     None => "running"
+  }
+}
+
+///|
+pub fn load_error_message(
+  err : LoadError,
+  input : @program.InputSpec,
+) -> String {
+  match err {
+    LoadError::FileNotFound(file_path) =>
+      "Error: Cannot read file: \{file_path}"
+    LoadError::InvalidElf(file_path) =>
+      if input.is_raw() {
+        "Error: Not a valid raw input file: \{file_path}"
+      } else {
+        "Error: Not a valid ELF file: \{file_path}\nUse --raw --base <addr> --xlen <32|64> for raw binary files"
+      }
+    LoadError::ParseElfFailed(_file_path) => "Error: Failed to parse ELF file"
+    LoadError::NotRiscV(_file_path) => "Error: Not a RISC-V ELF file"
+    LoadError::NoLoadableSegments(_file_path) =>
+      "Error: No loadable program segments found"
+    LoadError::InvalidEntry(entry_addr) =>
+      if input.is_raw() {
+        "Error: RAW entry address is not executable: \{format_hex(entry_addr)}\nCheck --base and --xlen settings."
+      } else {
+        "Error: Invalid entry point: \{format_hex(entry_addr)}"
+      }
   }
 }
 
@@ -864,10 +981,16 @@ fn execute_single_step(
       stop_reason = result.stop_reason
       registers = result.registers
     }
-    _ =>
-      stop_reason = Some(
-        StopReason::UnsupportedInstruction(@disasm.disassemble(decoded.inst)),
-      )
+    _ => {
+      let tier = instruction_execution_tier(decoded.inst, state.image.xlen)
+      let label = @disasm.disassemble(decoded.inst)
+      let detail = if @program.capability_tier_name(tier) == "decode_only" {
+        "decode-only: " + label
+      } else {
+        label
+      }
+      stop_reason = Some(StopReason::UnsupportedInstruction(detail))
+    }
   }
 
   let mut next = {
@@ -964,6 +1087,20 @@ fn expand_supported_compressed(
         None
       }
     _ => None
+  }
+}
+
+///|
+fn is_decode_only_instruction(inst : @decode.Instruction) -> Bool {
+  match inst.category() {
+    @decode.InstructionCategory::Float | @decode.InstructionCategory::Vector =>
+      true
+    _ => {
+      let asm_text = @disasm.disassemble(inst)
+      has_prefix(asm_text, "v") ||
+      has_prefix(asm_text, "f") ||
+      has_prefix(asm_text, "c.f")
+    }
   }
 }
 
@@ -1479,6 +1616,19 @@ fn copy_uint_fixed_array(values : FixedArray[UInt]) -> FixedArray[UInt] {
     copied[i] = values[i]
   }
   copied
+}
+
+///|
+fn has_prefix(value : String, prefix : String) -> Bool {
+  if prefix.length() > value.length() {
+    return false
+  }
+  for i = 0; i < prefix.length(); i = i + 1 {
+    if value[i] != prefix[i] {
+      return false
+    }
+  }
+  true
 }
 
 ///|

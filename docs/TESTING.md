@@ -7,6 +7,8 @@
 稳定 smoke 回归是当前发布门禁，对应 workflow 为 `.github/workflows/stable-smoke.yml`。
 Linux smoke 继续作为主门禁，并同时覆盖默认 ELF 路径与 RAW 主路径；Windows/MSVC 仅作为补充校验，对应 `.github/workflows/windows-msvc-native.yml`，不替代现有 Linux 主线。
 
+共享内部契约新增了 `program/` 包，建议把它和 `simulator` 一起视为基础设施门禁：前者负责统一 ELF / RAW 装载与 request 语义，后者负责统一执行入口与 stop reason。
+
 如果本地没有 `out/` 目录，先创建一次：
 
 ```bash
@@ -100,9 +102,10 @@ Windows 本地执行要求：
 
 ```bash
 ~/.moon/bin/moon test simulator --target native
+~/.moon/bin/moon test program --target native
 ```
 
-`simulator` 当前以 `native` 白盒回归为标准命令；默认 `wasm-gc` 全量通过不属于本轮稳定性目标。
+`simulator` 与 `program` 当前都以 `native` 回归为标准命令；默认 `wasm-gc` 全量通过不属于本轮稳定性目标。
 
 ### 样例驱动回归
 

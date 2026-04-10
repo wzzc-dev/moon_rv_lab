@@ -1,9 +1,6 @@
 import {
   "wzzc-dev/rvkit/asm" @asm,
   "wzzc-dev/rvkit/analysis" @analysis,
-  "wzzc-dev/rvkit/decode" @decode,
-  "wzzc-dev/rvkit/disasm" @disasm,
   "wzzc-dev/rvkit/format" @format,
-  "wzzc-dev/rvkit/program" @program,
   "moonbitlang/x/fs" @fs,
 }

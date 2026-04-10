@@ -46,10 +46,17 @@ format / asm / decode / disasm / analysis   cmd/server
 - 构建 CFG、CallGraph、数据流结果和反编译视图。
 - 为 CLI 静态命令和 workbench 的函数/CFG 面板提供数据。
 
+### `program/`
+
+- 新增的内部共享契约层。
+- 统一维护 `InputSpec`、`LoadedProgram`、`CapabilityMatrix`、`WorkbenchRequest` 等类型。
+- `cmd/main`、`workbench`、`cmd/server` 与 `simulator` 通过这一层共享 ELF / RAW 输入语义，减少重复分支。
+
 ### `simulator/`
 
 - 当前唯一执行后端。
 - 负责 ELF 装载后的初始状态建立、`step`、`run_with_limit`、断点、寄存器/内存 diff、trace 记录。
+- 现在通过共享 `InputSpec` 提供统一 `load_input` 入口，并显式区分 `fully_executable / decode_only / unsupported` 执行支持层级。
 - 按输入 ELF 的位宽建立执行状态；当前默认演示链路走 RV64，显式 `--xlen 32` 仍可生成并执行 RV32 ELF。
 - syscall 覆盖 `exit/read/write/openat/close/lseek/fstat/brk/ioctl`。
 
@@ -63,7 +70,7 @@ format / asm / decode / disasm / analysis   cmd/server
 - 在线和离线页面共用同一套 HTML/CSS/JS 壳，只是启动模式不同:
   - 离线模式内嵌完整 `WorkbenchData`
   - 在线模式先拉取 `/api/workbench/overview`，再按需请求 `/api/workbench/function`
-- 在线主接口通过同一组 `WorkbenchOptions` 统一装载 ELF 与 RAW；`/api/snapshot` / `/api/stream` 继续保持 ELF-only 兼容接口
+- 在线主接口现在通过共享 `WorkbenchRequest` / `InputSpec` 统一装载 ELF 与 RAW；`/api/snapshot` / `/api/stream` 继续保持 ELF-only 兼容接口
 
 ### `cmd/main/`
 
@@ -109,6 +116,7 @@ format / asm / decode / disasm / analysis   cmd/server
 ## 设计边界
 
 - `simulator/` 是唯一执行真相来源，workbench 不再维护独立伪执行逻辑。
+- `program/` 是唯一静态输入契约来源，CLI / workbench / server 不再各自维护分散的 ELF/RAW 解析规则。
 - `cmd/server` 不持有运行态，不做会话级调度。
 - `tools/rvrunner.cpp` 保留为外部对照原型，不是主产品执行链。
 - 当前验收目标不继续扩 ISA，不引入特权级、CSR 或 JIT。
