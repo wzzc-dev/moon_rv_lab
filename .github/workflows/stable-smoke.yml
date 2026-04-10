@@ -25,7 +25,7 @@ jobs:
         shell: bash
         run: |
           SERVER_PID=""
-          trap 'if [ -n "$SERVER_PID" ]; then kill "$SERVER_PID"; fi' EXIT
+          trap 'status=$?; if [ -f out/server.log ]; then echo "===== out/server.log ====="; cat out/server.log; fi; if [ -n "$SERVER_PID" ]; then kill "$SERVER_PID" || true; fi; exit $status' EXIT
           mkdir -p out
           moon update
           moon test cmd/main --target native
@@ -46,7 +46,14 @@ jobs:
           moon run cmd/main -- workbench out/simple.raw --raw --base 0x10000 --xlen 64 -o out/simple_raw.html
           ~/.moon/bin/moon run cmd/server --target native -- --file out/simple.elf --port 18080 > out/server.log 2>&1 &
           SERVER_PID=$!
-          sleep 3
+          for i in $(seq 1 30); do
+            if curl -fsS "http://127.0.0.1:18080/api/health" > /tmp/moonrv_health.json; then
+              break
+            fi
+            sleep 1
+          done
+          curl -fsS "http://127.0.0.1:18080/api/health" > /tmp/moonrv_health.json
+          grep -E '"ok"[[:space:]]*:[[:space:]]*true' /tmp/moonrv_health.json
           curl -sS "http://127.0.0.1:18080/api/workbench/overview?file=out/simple.raw&raw=1&base=0x10000&xlen=64&max_events=20" > out/simple.raw.overview.api.json
           grep -E '"input_format"[[:space:]]*:[[:space:]]*"raw"' out/simple.raw.overview.api.json
           grep -E '"file_class"[[:space:]]*:[[:space:]]*"RAW"' out/simple.raw.overview.api.json

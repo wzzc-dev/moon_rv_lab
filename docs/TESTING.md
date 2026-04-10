@@ -37,6 +37,8 @@ grep -E '"xlen"[[:space:]]*:[[:space:]]*64' out/simple.raw.run.json
 ~/.moon/bin/moon run cmd/main -- workbench out/simple.raw --raw --base 0x10000 --xlen 64 -o out/simple_raw.html
 # 另开一个终端，或后台启动在线 server
 ~/.moon/bin/moon run cmd/server --target native -- --file out/simple.elf --port 18080 > out/server.log 2>&1 &
+for i in $(seq 1 30); do curl -fsS "http://127.0.0.1:18080/api/health" > out/health.json && break; sleep 1; done
+grep -E '"ok"[[:space:]]*:[[:space:]]*true' out/health.json
 curl -sS "http://127.0.0.1:18080/api/workbench/overview?file=out/simple.raw&raw=1&base=0x10000&xlen=64&max_events=20" > out/simple.raw.overview.api.json
 grep -E '"input_format"[[:space:]]*:[[:space:]]*"raw"' out/simple.raw.overview.api.json
 grep -E '"file_class"[[:space:]]*:[[:space:]]*"RAW"' out/simple.raw.overview.api.json
