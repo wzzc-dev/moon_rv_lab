@@ -33,25 +33,25 @@ jobs:
           moon test cmd/server --target native
           moon run cmd/main -- asm example/simple.s -o out/simple.elf
           moon run cmd/main -- run out/simple.elf --format json > out/simple.run.json
-          grep '"xlen":64' out/simple.run.json
+          grep -E '"xlen"[[:space:]]*:[[:space:]]*64' out/simple.run.json
           moon run cmd/main -- run out/simple.elf --max-steps 20
           moon run cmd/main -- workbench out/simple.elf -o out/workbench.html
           moon run cmd/main -- asm example/simple.s -o out/simple.raw --format raw
           moon run cmd/main -- info out/simple.raw --raw --base 0x10000 --xlen 64 --format json > out/simple.raw.info.json
-          grep '"input_format":"raw"' out/simple.raw.info.json
-          grep '"xlen":64' out/simple.raw.info.json
+          grep -E '"input_format"[[:space:]]*:[[:space:]]*"raw"' out/simple.raw.info.json
+          grep -E '"xlen"[[:space:]]*:[[:space:]]*64' out/simple.raw.info.json
           moon run cmd/main -- run out/simple.raw --raw --base 0x10000 --xlen 64 --format json > out/simple.raw.run.json
-          grep '"xlen":64' out/simple.raw.run.json
+          grep -E '"xlen"[[:space:]]*:[[:space:]]*64' out/simple.raw.run.json
           moon run cmd/main -- run out/simple.raw --raw --base 0x10000 --xlen 64 --max-steps 20
           moon run cmd/main -- workbench out/simple.raw --raw --base 0x10000 --xlen 64 -o out/simple_raw.html
           ~/.moon/bin/moon run cmd/server --target native -- --file out/simple.elf --port 18080 > out/server.log 2>&1 &
           SERVER_PID=$!
           sleep 3
           curl -sS "http://127.0.0.1:18080/api/workbench/overview?file=out/simple.raw&raw=1&base=0x10000&xlen=64&max_events=20" > out/simple.raw.overview.api.json
-          grep '"input_format":"raw"' out/simple.raw.overview.api.json
-          grep '"file_class":"RAW"' out/simple.raw.overview.api.json
+          grep -E '"input_format"[[:space:]]*:[[:space:]]*"raw"' out/simple.raw.overview.api.json
+          grep -E '"file_class"[[:space:]]*:[[:space:]]*"RAW"' out/simple.raw.overview.api.json
           curl -sS "http://127.0.0.1:18080/api/workbench/function?file=out/simple.raw&raw=1&base=0x10000&xlen=64&addr=entry" > out/simple.raw.function.api.json
-          grep '"name":"entry"' out/simple.raw.function.api.json
+          grep -E '"name"[[:space:]]*:[[:space:]]*"entry"' out/simple.raw.function.api.json
           curl -sS "http://127.0.0.1:18080/workbench?file=out/simple.raw&raw=1&base=0x10000&xlen=64" > out/simple.raw.workbench.online.html
-          grep '"raw_mode":true' out/simple.raw.workbench.online.html
+          grep -E '"raw_mode"[[:space:]]*:[[:space:]]*true' out/simple.raw.workbench.online.html
           grep 'id="raw-base-input"' out/simple.raw.workbench.online.html
