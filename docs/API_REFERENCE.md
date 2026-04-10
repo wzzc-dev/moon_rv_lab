@@ -359,6 +359,7 @@ Windows 上启动或验证 `cmd/server` 时，请使用 Visual Studio 2022 Devel
 - 首屏默认展示 `How to use` 面板
 - 页面主数据源为 `/api/workbench/overview`
 - 函数切片按需从 `/api/workbench/function` 加载
+- 页面内支持把本地 `ELF` / `RAW` 文件上传到临时目录后再解析
 - `/api/snapshot` 与 `/api/stream` 仅保留 ELF-only 兼容定位
 - 页面交互围绕“载入文件 -> 选择函数 -> 搜索/跳转 -> 浏览 Trace/Memory/Syscalls”展开
 - 页面内的 `Replay Breakpoints` 和 `State Compare` 都是纯客户端能力，不新增查询参数，也不新增响应字段
@@ -441,3 +442,20 @@ curl -sN "http://127.0.0.1:18080/api/stream?file=out/simple.elf&max_inst=12&max_
 - `/api/snapshot`
 - `/api/stream`
 - `/workbench`
+### `POST /api/workbench/upload`
+
+- 上传本地 `ELF` 或 `RAW` 文件到临时目录，返回可供 `/api/workbench/overview` 与 `/api/workbench/function` 继续使用的 `file`
+- 请求体字段:
+  - `filename`
+  - `content_base64`
+  - `input_format`
+  - `base_addr`：RAW 时使用
+  - `xlen`：RAW 时使用
+- 成功响应会返回:
+  - `ok`
+  - `file`
+  - `display_name`
+  - `input_format`
+  - `base_addr`
+  - `xlen`
+- 上传文件默认写入 `/tmp/moonrv_uploads/`，用于本地临时解析，不提供长期持久化保证

@@ -5,6 +5,8 @@ import {
   "mizchi/mars" @mars,
   "moonbitlang/async" @async,
   "moonbitlang/core/json" @json,
+  "moonbitlang/x/codec/base64" @base64,
+  "moonbitlang/x/fs" @fs,
   "moonbitlang/x/sys" @sys,
 }
 

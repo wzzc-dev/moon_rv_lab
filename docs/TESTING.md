@@ -158,6 +158,8 @@ Windows 本地执行要求：
 8. 打开 `http://127.0.0.1:18080/workbench?file=out/simple.raw&raw=1&base=0x10000&xlen=64`
 9. 检查函数列表出现 `entry`，且 `Load` 后 URL 继续保留 `raw/base/xlen`
 10. 检查切回 `ELF` 后 RAW 专属字段隐藏，普通加载路径不受污染
+11. 在 `ELF` 模式点击 `Upload ELF`，上传一个本地样例 ELF，确认页面自动加载
+12. 在 `RAW` 模式点击 `Upload RAW`，上传一个本地 RAW 文件，确认 `Base / XLEN` 被沿用且出现 `entry`
 
 ## RV32 兼容说明
 

@@ -563,12 +563,30 @@ pub fn online_page_html_with_request(
   overview_endpoint : String,
   function_endpoint : String,
 ) -> String {
+  online_page_html_with_request_and_upload(
+    default_file,
+    request,
+    overview_endpoint,
+    function_endpoint,
+    "/api/workbench/upload",
+  )
+}
+
+///|
+pub fn online_page_html_with_request_and_upload(
+  default_file : String,
+  request : @program.WorkbenchRequest,
+  overview_endpoint : String,
+  function_endpoint : String,
+  upload_endpoint : String,
+) -> String {
   online_page_html_with_options(
     default_file,
     request.input.file_path,
     request.max_instructions,
     overview_endpoint,
     function_endpoint,
+    upload_endpoint,
     create_api_options(
       request.input.is_raw(),
       request.input.base_addr,
@@ -584,6 +602,7 @@ pub fn online_page_html_with_options(
   max_instructions : Int,
   overview_endpoint : String,
   function_endpoint : String,
+  upload_endpoint : String,
   options : WorkbenchOptions,
 ) -> String {
   let resolved_overview_endpoint = if overview_endpoint == "" {
@@ -596,6 +615,11 @@ pub fn online_page_html_with_options(
   } else {
     function_endpoint
   }
+  let resolved_upload_endpoint = if upload_endpoint == "" {
+    "/api/workbench/upload"
+  } else {
+    upload_endpoint
+  }
   build_html_page(
     "MoonRV Lab Online Workbench",
     remote_boot_json(
@@ -604,6 +628,7 @@ pub fn online_page_html_with_options(
       max_instructions,
       resolved_overview_endpoint,
       resolved_function_endpoint,
+      resolved_upload_endpoint,
       options.raw_mode,
       options.base_addr,
       options.xlen,
@@ -2100,6 +2125,7 @@ fn remote_boot_json(
   max_instructions : Int,
   overview_endpoint : String,
   function_endpoint : String,
+  upload_endpoint : String,
   raw_mode : Bool,
   base_addr : UInt,
   xlen : Int,
@@ -2115,6 +2141,11 @@ fn remote_boot_json(
   } else {
     function_endpoint
   }
+  let resolved_upload_endpoint = if upload_endpoint == "" {
+    "/api/workbench/upload"
+  } else {
+    upload_endpoint
+  }
   "{\"mode\":\"remote\",\"default_file\":" +
   json_string(default_file) +
   ",\"initial_file\":" +
@@ -2125,6 +2156,8 @@ fn remote_boot_json(
   json_string(resolved_overview_endpoint) +
   ",\"function_endpoint\":" +
   json_string(resolved_function_endpoint) +
+  ",\"upload_endpoint\":" +
+  json_string(resolved_upload_endpoint) +
   ",\"raw_mode\":" +
   bool_to_json(raw_mode) +
   ",\"base_addr\":" +
@@ -2180,6 +2213,8 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    rawXlenInput: document.getElementById("raw-xlen-input"),
   #|    fileInput: document.getElementById("file-input"),
   #|    fileLoadBtn: document.getElementById("file-load-btn"),
+  #|    filePicker: document.getElementById("file-picker"),
+  #|    fileUploadBtn: document.getElementById("file-upload-btn"),
   #|    summaryGrid: document.getElementById("summary-grid"),
   #|    runtimeSummary: document.getElementById("runtime-summary"),
   #|    executionBody: document.getElementById("execution-body"),
@@ -2355,6 +2390,16 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|      baseAddr: normalizedRemoteBaseAddr(state.remoteBaseAddr),
   #|      xlen: normalizeRemoteXlen(state.remoteXlen)
   #|    };
+  #|  }
+
+  #|  function bytesToBase64(bytes) {
+  #|    let binary = "";
+  #|    const chunkSize = 0x8000;
+  #|    for (let i = 0; i < bytes.length; i += chunkSize) {
+  #|      const slice = bytes.subarray(i, i + chunkSize);
+  #|      binary += String.fromCharCode(...slice);
+  #|    }
+  #|    return btoa(binary);
   #|  }
   #|
   #|  function createEmptyOverview(sourceFile) {
@@ -2953,6 +2998,9 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    refs.fileLoadBtn.classList.toggle("hidden", !REMOTE_MODE);
   #|    refs.fileLoadBtn.disabled = state.loading || refs.fileInput.value.trim() === "" || (request.rawMode && !request.baseAddr);
   #|    refs.fileLoadBtn.textContent = state.loading ? "Loading..." : "Load";
+  #|    refs.fileUploadBtn.classList.toggle("hidden", !REMOTE_MODE);
+  #|    refs.fileUploadBtn.disabled = state.loading;
+  #|    refs.fileUploadBtn.textContent = state.loading ? "Uploading..." : (request.rawMode ? "Upload RAW" : "Upload ELF");
   #|    refs.fileInput.disabled = !REMOTE_MODE || state.loading;
   #|    refs.fileInput.placeholder = request.rawMode ? "RAW file path" : "ELF file path";
   #|    refs.inputMode.disabled = !REMOTE_MODE || state.loading;
@@ -3650,6 +3698,63 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|      return;
   #|    }
   #|    await loadOverview(refs.fileInput.value, true);
+  #|  });
+
+  #|  refs.fileUploadBtn.addEventListener("click", () => {
+  #|    if (!REMOTE_MODE || state.loading) {
+  #|      return;
+  #|    }
+  #|    refs.filePicker.click();
+  #|  });
+
+  #|  refs.filePicker.addEventListener("change", async (event) => {
+  #|    if (!REMOTE_MODE || state.loading) {
+  #|      return;
+  #|    }
+  #|    const file = event.target.files && event.target.files[0];
+  #|    if (!file) {
+  #|      return;
+  #|    }
+  #|    state.loading = true;
+  #|    state.loadError = "";
+  #|    renderAll();
+  #|    try {
+  #|      const buffer = await file.arrayBuffer();
+  #|      const contentBase64 = bytesToBase64(new Uint8Array(buffer));
+  #|      const request = currentRequestConfig();
+  #|      const endpoint = boot.upload_endpoint || "/api/workbench/upload";
+  #|      const resp = await fetch(endpoint, {
+  #|        method: "POST",
+  #|        headers: { "Content-Type": "application/json" },
+  #|        body: JSON.stringify({
+  #|          filename: file.name,
+  #|          content_base64: contentBase64,
+  #|          input_format: request.rawMode ? "raw" : "elf",
+  #|          base_addr: request.rawMode ? (request.baseAddr || DEFAULT_RAW_BASE) : "",
+  #|          xlen: request.xlen
+  #|        })
+  #|      });
+  #|      const payload = await resp.json();
+  #|      if (!payload.ok || !payload.file) {
+  #|        throw new Error(payload.error || "upload failed");
+  #|      }
+  #|      refs.fileInput.value = payload.file;
+  #|      state.remoteRawMode = payload.input_format === "raw";
+  #|      state.remoteBaseAddr = payload.base_addr || DEFAULT_RAW_BASE;
+  #|      state.remoteXlen = normalizeRemoteXlen(payload.xlen || DEFAULT_RAW_XLEN);
+  #|      refs.inputMode.value = state.remoteRawMode ? "raw" : "elf";
+  #|      refs.rawBaseInput.value = state.remoteBaseAddr;
+  #|      refs.rawXlenInput.value = String(state.remoteXlen);
+  #|      await loadOverview(payload.file, true);
+  #|    } catch (err) {
+  #|      state.loading = false;
+  #|      state.loadError = state.remoteRawMode
+  #|        ? `RAW 上传失败：${String(err)}。请检查输入格式、Base 和 XLEN。`
+  #|        : `ELF 上传失败：${String(err)}。请确认文件可读且是有效 RISC-V ELF。`;
+  #|      renderAll();
+  #|    } finally {
+  #|      refs.filePicker.value = "";
+  #|    }
   #|  });
   #|
   #|  refs.fileInput.addEventListener("keydown", async (event) => {
@@ -4589,6 +4694,8 @@ fn build_html_page(title : String, boot_json : String) -> String {
   html = html +
     "            <input id=\"file-input\" type=\"text\" placeholder=\"ELF file path\" />\n"
   html = html + "            <button id=\"file-load-btn\">Load</button>\n"
+  html = html + "            <input id=\"file-picker\" type=\"file\" accept=\".elf,application/octet-stream\" class=\"hidden\" />\n"
+  html = html + "            <button id=\"file-upload-btn\">Upload ELF</button>\n"
   html = html + "          </div>\n"
   html = html + "        </div>\n"
   html = html +

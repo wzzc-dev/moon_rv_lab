@@ -176,6 +176,9 @@ Windows 上请优先使用 Visual Studio 2022 Developer Command Prompt / DevShel
 - 在线 workbench 主链路会先加载 `/api/workbench/overview`，再按需请求 `/api/workbench/function`；`/api/snapshot` 与 `/api/stream` 仅保留 ELF-only 兼容定位
 - 顶部输入框支持切换 `ELF / RAW`；选择 `RAW` 后会额外显示 `Base` 和 `XLEN`
 - 点击 `Load` 后会重新加载 overview 与函数切片；RAW 模式下地址栏会完整保留 `raw/base/xlen`
+- `ELF` 模式下可直接点击 `Upload ELF` 上传本地文件；`RAW` 模式下按钮会切换为 `Upload RAW`，并复用当前 `Base / XLEN`
+- 上传成功后，页面会把临时路径写回顶部输入框，再自动走现有 overview/function 加载链路
+- 上传文件会写入 `/tmp/moonrv_uploads/` 供本地临时解析，不是长期持久化文件管理
 - 在线 RAW 继续沿用离线函数模型，只暴露一个 synthetic function `entry`
 - 切回 `ELF` 后，RAW 专属字段会隐藏，不再污染普通加载路径
 - `How to use` 面板默认展开，可关闭；关闭状态同样会写入 `localStorage`

@@ -57,14 +57,15 @@ RAW 支持范围补充:
   `~/.moon/bin/moon run cmd/main -- workbench out/simple.raw --raw --base 0x10000 --xlen 64 -o out/simple_raw.html`
 - 在线路径:
   `~/.moon/bin/moon run cmd/server --target native -- --file out/simple.elf --port 18080`
-  作用: 启动首页 `/` 与在线 `/workbench`。在线主路径现已支持 `?file=<path>&raw=1&base=<addr>&xlen=32|64`；`/api/snapshot` 与 `/api/stream` 继续保持 ELF-only 兼容接口。Windows 上请在 Visual Studio 2022 Developer Command Prompt / DevShell 中运行；普通 PowerShell + GCC 下的 `cmd/server` 失败不视为产品缺陷。
+ 作用: 启动首页 `/` 与在线 `/workbench`。在线主路径现已支持 `?file=<path>&raw=1&base=<addr>&xlen=32|64`，并可在页面内直接上传本地 `ELF` 或 `RAW` 文件到临时目录后解析；`/api/snapshot` 与 `/api/stream` 继续保持 ELF-only 兼容接口。Windows 上请在 Visual Studio 2022 Developer Command Prompt / DevShell 中运行；普通 PowerShell + GCC 下的 `cmd/server` 失败不视为产品缺陷。
 
 - 入口页: `http://127.0.0.1:18080/`
   作用: Quick Start 首页，会展示默认文件、打开在线 workbench 的入口、在线/离线两条使用路径，以及主 API 与兼容 API 的定位。
 - 完整在线工作台: `http://127.0.0.1:18080/workbench?file=out/simple.elf`
-  作用: 在线 workbench 首屏带 `How to use` 引导，推荐按“载入文件 -> 选择函数 -> 搜索/跳转 -> Reset / Prev / Next / Play -> Follow PC -> Trace / Memory / Syscalls”使用。
+ 作用: 在线 workbench 首屏带 `How to use` 引导，推荐按“载入文件或上传文件 -> 选择函数 -> 搜索/跳转 -> Reset / Prev / Next / Play -> Follow PC -> Trace / Memory / Syscalls”使用。
 - RAW 在线等价入口: `http://127.0.0.1:18080/workbench?file=out/simple.raw&raw=1&base=0x10000&xlen=64`
   作用: 在线 RAW 继续沿用离线语义，只暴露 synthetic function `entry`，并在地址栏保留 `raw/base/xlen` 元数据。
+  页面内上传说明: `ELF` 模式下可直接点 `Upload ELF`；`RAW` 模式下可点 `Upload RAW`，并复用当前 `Base` / `XLEN` 配置。上传文件写入 `/tmp/moonrv_uploads/`，用于本地临时解析，不作为长期资源管理方案。
 
 ## 常用命令
 
@@ -105,6 +106,11 @@ RAW 支持范围补充:
 - RAW 主路径:
   `asm example/simple.s -o out/simple.raw --format raw`
 
+如果默认 `simple.elf` 对 workbench / CFG / trace 演示来说过于简单，可以改用更完整的综合样例:
+
+- 复杂演示 ELF:
+  `asm example/complex_demo.s -o out/complex_demo.elf`
+
 运行 `run` / 离线 `workbench` / `cmd/server` 前，请先在 `out/` 下生成对应临时产物。文件 I/O 和 syscall 演示请优先使用以下源码样例并在 `out/` 下生成临时 ELF:
 
 - 默认 `asm example/simple.s -o out/simple.elf` 会生成 RV64 ELF。
@@ -116,5 +122,6 @@ RAW 支持范围补充:
 - `example/file_lseek_read.s`
 - `example/file_fstat_close.s`
 - `example/sys_brk_ioctl.s`
+- `example/complex_demo.s`
 
 完整命令和观察点见 [example/INDEX.md](example/INDEX.md)。

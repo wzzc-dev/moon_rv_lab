@@ -23,6 +23,12 @@ const DEFAULT_RAW_BASE : UInt = @program.DEFAULT_RAW_BASE
 const DEFAULT_RAW_XLEN : Int = @program.DEFAULT_RAW_XLEN
 
 ///|
+const UPLOAD_DIR : String = "/tmp/moonrv_uploads"
+
+///|
+const MAX_UPLOAD_BYTES : Int = 2 * 1024 * 1024
+
+///|
 const INDEX_STYLE : String =
   #|:root {
   #|  --bg: #eef5f4;
@@ -284,6 +290,21 @@ priv struct WorkbenchRouteInput {
 priv enum WorkbenchRouteParseResult {
   WorkbenchRouteOk(WorkbenchRouteInput)
   WorkbenchRouteErr(String)
+}
+
+///|
+priv struct UploadPayload {
+  filename : String
+  content_base64 : String
+  input_format : String
+  base_addr : UInt
+  xlen : Int
+} derive(Show)
+
+///|
+priv enum UploadPayloadParseResult {
+  UploadPayloadOk(UploadPayload)
+  UploadPayloadErr(String)
 }
 
 ///|
@@ -924,8 +945,34 @@ fn build_workbench_route_html_with_input(
 }
 
 ///|
+fn build_workbench_route_html_with_upload(
+  opts : ServeOptions,
+  input : WorkbenchRouteInput,
+) -> String {
+  @workbench.online_page_html_with_request_and_upload(
+    opts.default_file,
+    @program.parse_workbench_request_lenient(
+      input.file,
+      if input.raw_mode {
+        Some("1")
+      } else {
+        None
+      },
+      Some(input.base_addr.to_string()),
+      Some(input.xlen.to_string()),
+      "",
+      opts.max_events,
+      opts.max_inst,
+    ),
+    "/api/workbench/overview",
+    "/api/workbench/function",
+    "/api/workbench/upload",
+  )
+}
+
+///|
 fn build_workbench_route_html(opts : ServeOptions, file : String) -> String {
-  build_workbench_route_html_with_input(
+  build_workbench_route_html_with_upload(
     opts,
     default_workbench_route_input(file),
   )
@@ -1088,6 +1135,251 @@ async fn respond_payload_json(
 }
 
 ///|
+fn parse_upload_input_format(value : Json?) -> String? {
+  match value {
+    Some(String("elf")) | Some(String("ELF")) => Some("elf")
+    Some(String("raw")) | Some(String("RAW")) => Some("raw")
+    Some(String(text)) =>
+      match text.trim().to_string() {
+        "elf" | "ELF" => Some("elf")
+        "raw" | "RAW" => Some("raw")
+        _ => None
+      }
+    _ => None
+  }
+}
+
+///|
+fn parse_upload_base_addr(value : Json?) -> UInt? {
+  match value {
+    Some(String(text)) => parse_number(text.trim().to_string())
+    Some(Number(n, ..)) =>
+      if n >= 0 { Some(n.to_int().reinterpret_as_uint()) } else { None }
+    None => Some(DEFAULT_RAW_BASE)
+    _ => None
+  }
+}
+
+///|
+fn parse_upload_xlen(value : Json?) -> Int? {
+  match value {
+    Some(String("32")) => Some(32)
+    Some(String("64")) => Some(64)
+    Some(Number(n, ..)) => {
+      let parsed = n.to_int()
+      if parsed == 32 || parsed == 64 {
+        Some(parsed)
+      } else {
+        None
+      }
+    }
+    None => Some(DEFAULT_RAW_XLEN)
+    _ => None
+  }
+}
+
+///|
+fn parse_upload_payload(body : Json) -> UploadPayloadParseResult {
+  match body {
+    Object(obj) => {
+      let filename = match obj.get("filename") {
+        Some(String(value)) => value.trim().to_string()
+        _ => ""
+      }
+      let content_base64 = match obj.get("content_base64") {
+        Some(String(value)) => value.trim().to_string()
+        _ => ""
+      }
+      if filename == "" {
+        return UploadPayloadErr("missing filename")
+      }
+      if content_base64 == "" {
+        return UploadPayloadErr("missing content_base64")
+      }
+      let input_format = match parse_upload_input_format(obj.get("input_format")) {
+        Some(value) => value
+        None => return UploadPayloadErr("invalid input_format: expected elf or raw")
+      }
+      let base_addr = match parse_upload_base_addr(obj.get("base_addr")) {
+        Some(value) => value
+        None =>
+          return UploadPayloadErr(
+            "invalid base_addr: expected decimal or 0x-prefixed address",
+          )
+      }
+      let xlen = match parse_upload_xlen(obj.get("xlen")) {
+        Some(value) => value
+        None => return UploadPayloadErr("invalid xlen: expected 32 or 64")
+      }
+      UploadPayloadOk({
+        filename,
+        content_base64,
+        input_format,
+        base_addr,
+        xlen,
+      })
+    }
+    _ => UploadPayloadErr("invalid upload payload")
+  }
+}
+
+///|
+fn sanitize_upload_filename(name : String) -> String {
+  let mut sanitized = ""
+  for c in name {
+    let safe = match c {
+      'a'..='z' | 'A'..='Z' | '0'..='9' | '.' | '_' | '-' => c.to_string()
+      _ => "_"
+    }
+    sanitized = sanitized + safe
+  }
+  if sanitized == "" { "upload.elf" } else { sanitized }
+}
+
+///|
+fn ensure_upload_dir() -> Bool {
+  if @fs.path_exists(UPLOAD_DIR) {
+    true
+  } else {
+    @fs.create_dir(UPLOAD_DIR) catch {
+      _ => return false
+    }
+    true
+  }
+}
+
+///|
+fn upload_path(filename : String) -> String {
+  let safe_name = sanitize_upload_filename(filename)
+  let suffix = (@fs.read_dir(UPLOAD_DIR).length().to_string()) catch {
+    _ => "0"
+  }
+  UPLOAD_DIR + "/" + suffix + "_" + safe_name
+}
+
+///|
+fn uploaded_input_spec(path : String, payload : UploadPayload) -> @program.InputSpec {
+  if payload.input_format == "raw" {
+    @program.raw_input_spec(path, payload.base_addr, payload.xlen)
+  } else {
+    @program.elf_input_spec(path)
+  }
+}
+
+///|
+fn cleanup_uploaded_file(path : String) -> Unit {
+  if @fs.path_exists(path) {
+    @fs.remove_file(path) catch {
+      _ => ()
+    }
+  }
+}
+
+///|
+fn upload_error_message(err : @program.ProgramLoadError, input : @program.InputSpec) -> String {
+  match err {
+    @program.ProgramLoadError::FileNotFound(_) => "uploaded file is not readable"
+    @program.ProgramLoadError::InvalidElf(_) | @program.ProgramLoadError::ParseElfFailed(_) =>
+      if input.is_raw() {
+        "uploaded RAW payload could not be decoded; please check input format, base and xlen"
+      } else {
+        "uploaded file is not a valid RISC-V ELF"
+      }
+    @program.ProgramLoadError::NotRiscV(_) =>
+      "uploaded file is not a RISC-V ELF"
+    @program.ProgramLoadError::NoCodeSection(_) =>
+      if input.is_raw() {
+        "uploaded RAW file does not contain decodable executable code"
+      } else {
+        "uploaded ELF does not contain executable code"
+      }
+  }
+}
+
+///|
+async fn handle_workbench_upload(ctx : @mars.Context) -> Unit {
+  match ctx.body_json() {
+    Some(body) =>
+      match parse_upload_payload(body) {
+        UploadPayloadErr(err) =>
+          ctx.json({ "ok": false, "error": err }, status=400)
+        UploadPayloadOk(payload) => {
+          let decoded = @base64.decode(payload.content_base64[:]) catch {
+            _ => {
+              ctx.json(
+                { "ok": false, "error": "invalid base64 upload body" },
+                status=400,
+              )
+              return
+            }
+          }
+          if decoded.length() <= 0 {
+            ctx.json({ "ok": false, "error": "empty upload body" }, status=400)
+            return
+          }
+          if decoded.length() > MAX_UPLOAD_BYTES {
+            ctx.json(
+              { "ok": false, "error": "uploaded file exceeds size limit" },
+              status=400,
+            )
+            return
+          }
+          if payload.input_format == "raw" &&
+            (payload.xlen != 32 && payload.xlen != 64) {
+            ctx.json(
+              { "ok": false, "error": "invalid xlen: expected 32 or 64" },
+              status=400,
+            )
+            return
+          }
+          if !ensure_upload_dir() {
+            ctx.json(
+              { "ok": false, "error": "failed to prepare upload directory" },
+              status=500,
+            )
+            return
+          }
+          let path = upload_path(payload.filename)
+          @fs.write_bytes_to_file(path, decoded) catch {
+            _ => {
+              ctx.json(
+                { "ok": false, "error": "failed to write uploaded file" },
+                status=500,
+              )
+              return
+            }
+          }
+          let input = uploaded_input_spec(path, payload)
+          match @program.load_program(input) {
+            @program.ProgramLoaded(program) =>
+              ctx.json({
+                "ok": true,
+                "file": path,
+                "filename": payload.filename,
+                "display_name": payload.filename,
+                "input_format": program.input_format_name(),
+                "base_addr": if input.is_raw() {
+                  input.base_addr.to_string()
+                } else {
+                  ""
+                },
+                "xlen": program.xlen,
+              })
+            @program.ProgramLoadFailed(err) => {
+              cleanup_uploaded_file(path)
+              ctx.json(
+                { "ok": false, "error": upload_error_message(err, input) },
+                status=400,
+              )
+            }
+          }
+        }
+      }
+    None => ctx.json({ "ok": false, "error": "invalid json body" }, status=400)
+  }
+}
+
+///|
 fn format_sse_event(event_name : String, data : String) -> String {
   "event: " + event_name + "\n" + "data: " + data + "\n\n"
 }
@@ -1164,6 +1456,11 @@ async fn run_server(opts : ServeOptions) -> Unit {
   app.get(
     "/api/health",
     @mars.handler(async fn(ctx) { ctx.json({ "ok": true }) }),
+  )
+
+  app.post(
+    "/api/workbench/upload",
+    @mars.handler(async fn(ctx) { handle_workbench_upload(ctx) }),
   )
 
   app.get(

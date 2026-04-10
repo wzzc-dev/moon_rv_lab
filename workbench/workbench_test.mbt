@@ -384,6 +384,7 @@ test "online workbench html preserves raw boot metadata" {
     64,
     "/api/workbench/overview",
     "/api/workbench/function",
+    "/api/workbench/upload",
     create_input_options("", 64, true, TEST_BASE, 32),
   )
 
@@ -391,6 +392,8 @@ test "online workbench html preserves raw boot metadata" {
   assert_true(html.contains("\"raw_mode\":true"))
   assert_true(html.contains("\"base_addr\":\"0x10000\""))
   assert_true(html.contains("\"xlen\":32"))
+  assert_true(html.contains("\"upload_endpoint\":\"/api/workbench/upload\""))
+  assert_true(html.contains("Upload RAW"))
   assert_true(html.contains("buildRemoteParams"))
   assert_true(html.contains("id=\"input-mode\""))
   assert_true(html.contains("id=\"raw-base-input\""))

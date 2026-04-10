@@ -120,12 +120,14 @@ git status --short
 2. 点击 `Open Online Workbench`
 3. 或直接打开 `http://127.0.0.1:18080/workbench?file=out/simple.elf`
 4. 再打开 `http://127.0.0.1:18080/workbench?file=out/simple.raw&raw=1&base=0x10000&xlen=64`
+5. 如现场机器方便，也可直接在页面里使用 `Upload ELF` / `Upload RAW`
 
 现场观察点：
 
 - 首页能说明在线/离线两条入口
 - `/workbench` 首屏包含 `How to use`
 - `Reset / Prev / Next / Play` 正常工作
+- 页面内上传本地 ELF / RAW 后，能自动解析并进入现有 workbench 流程
 - 函数切换、搜索过滤、`Follow PC`、trace 与寄存器联动正常
 - RAW 页面函数列表会出现 synthetic `entry`
 - RAW 地址栏在刷新后仍保留 `raw/base/xlen`

@@ -16,6 +16,7 @@
 | 文件 | 用途 | 推荐命令 | 观察点 |
 | --- | --- | --- | --- |
 | `simple.s` | 算术/逻辑/移位/LUI | `~/.moon/bin/moon run cmd/main -- asm example/simple.s -o out/simple.elf` -> `~/.moon/bin/moon run cmd/main -- run out/simple.elf --max-steps 20` | `a0/a1/a2/t0` 最终值、`ebreak` 停止原因 |
+| `complex_demo.s` | 综合演示样例 | `~/.moon/bin/moon run cmd/main -- asm example/complex_demo.s -o out/complex_demo.elf` -> `~/.moon/bin/moon run cmd/main -- run out/complex_demo.elf --max-steps 120` -> `~/.moon/bin/moon run cmd/main -- workbench out/complex_demo.elf -o out/complex_demo.html` | `sum_to_n` 循环、`mix_pair` 分支、栈上的 `sw/lw`、最终 `a0=0x25 / a1=0x15 / a2=0x10 / a3=-1` |
 | `simple.s` | RAW 输入闭环 | `~/.moon/bin/moon run cmd/main -- asm example/simple.s -o out/simple.raw --format raw` -> `~/.moon/bin/moon run cmd/main -- run out/simple.raw --raw --base 0x10000 --xlen 64 --max-steps 20` -> `~/.moon/bin/moon run cmd/main -- workbench out/simple.raw --raw --base 0x10000 --xlen 64 -o out/simple_raw.html` | 对照 ELF 链路验证相同 stop reason、寄存器摘要和离线 workbench 页面 |
 | `branch_loop.s` | 分支与循环 | `asm example/branch_loop.s -> run out/branch_loop.elf` | `a0` 在循环里累加，`bne` 形成回边 |
 | `memory_roundtrip.s` | 栈访存 | `asm example/memory_roundtrip.s -> run --trace out/memory_roundtrip.elf` | `sw/lw` 对应的寄存器和内存写入 |
@@ -52,18 +53,21 @@
 4. `out/simple.elf`
    命令: `~/.moon/bin/moon run cmd/main -- run out/simple.elf --max-steps 20`
    作用: 先展示执行引擎、寄存器变化和 stop reason。
-5. `out/simple.raw`
+5. `out/complex_demo.elf`
+   命令: `~/.moon/bin/moon run cmd/main -- asm example/complex_demo.s -o out/complex_demo.elf`
+   作用: 如果默认 `simple.elf` 太短，可切到更完整的综合样例，适合 workbench/trace/CFG 联动演示。
+6. `out/simple.raw`
    命令: `~/.moon/bin/moon run cmd/main -- run out/simple.raw --raw --base 0x10000 --xlen 64 --max-steps 20`
    作用: 展示 RAW 输入闭环与显式 `base/xlen` 元数据。
-6. `out/simple.elf`
+7. `out/simple.elf`
    命令: `~/.moon/bin/moon run cmd/main -- workbench out/simple.elf -o out/workbench.html`
    作用: 展示离线 Godbolt 风格工作台。
-7. `out/simple.raw`
+8. `out/simple.raw`
    命令: `~/.moon/bin/moon run cmd/main -- workbench out/simple.raw --raw --base 0x10000 --xlen 64 -o out/simple_raw.html`
    作用: 展示 RAW 离线 workbench；当前在线 `/workbench` 不覆盖 RAW。
-8. `example/file_open_read_close.s`
+9. `example/file_open_read_close.s`
    命令: `~/.moon/bin/moon run cmd/main -- asm example/file_open_read_close.s -o out/file_open_read_close.elf`
    作用: 进入 syscall + 文件 I/O 演示。
-9. 在线工作台
+10. 在线工作台
    命令: `~/.moon/bin/moon run cmd/server --target native -- --file out/simple.elf --port 18080`
    作用: 浏览器中展示 `/workbench`、文件切换、单步和播放。
