@@ -158,6 +158,11 @@ test "generated workbench html includes godbolt style panes and controls" {
   assert_true(html.contains("id=\"toolbar-toggle-inspector\""))
   assert_true(html.contains("id=\"cfg-subtitle\""))
   assert_true(html.contains("id=\"recent-writes\""))
+  assert_true(html.contains("id=\"symbol-list\""))
+  assert_true(html.contains("id=\"callgraph-list\""))
+  assert_true(html.contains("id=\"analysis-summary-grid\""))
+  assert_true(html.contains("id=\"pseudo-code-body\""))
+  assert_true(html.contains("id=\"dataflow-body\""))
   assert_true(html.contains("id=\"breakpoint-summary\""))
   assert_true(html.contains("id=\"breakpoint-list\""))
   assert_true(html.contains("id=\"breakpoint-clear-btn\""))
@@ -171,6 +176,10 @@ test "generated workbench html includes godbolt style panes and controls" {
   assert_true(html.contains("helpCollapsed: true"))
   assert_true(html.contains("\"embedded_overview\""))
   assert_true(html.contains("\"embedded_function_slices\""))
+  assert_true(html.contains("\"analysis_summary\""))
+  assert_true(html.contains("\"callgraph\""))
+  assert_true(html.contains("\"pseudo_code\""))
+  assert_true(html.contains("\"dataflow\""))
   assert_true(html.contains("\"xlen\":64"))
   assert_true(html.contains("overview.events"))
   assert_true(html.contains("overview.runtime.initial_registers"))
@@ -255,6 +264,9 @@ test "overview api json includes hello navigation metadata" {
   assert_true(json.contains("\"functions\""))
   assert_true(json.contains("\"name\":\"entry\""))
   assert_true(json.contains("\"sections\""))
+  assert_true(json.contains("\"symbols\""))
+  assert_true(json.contains("\"callgraph\""))
+  assert_true(json.contains("\"analysis_summary\""))
   assert_true(json.contains("\"runtime\""))
   assert_true(json.contains("\"events\""))
 }
@@ -288,6 +300,13 @@ test "overview api json supports raw online inputs" {
   assert_true(json.contains("\"entry_point\":\"0x10000\""))
   assert_true(json.contains("\"name\":\"entry\""))
   assert_true(json.contains("\"xlen\":64"))
+  assert_true(json.contains("\"symbols\":[]"))
+  assert_true(
+    json.contains(
+      "\"callgraph\":{\"entry_point\":\"0x10000\",\"available\":false",
+    ),
+  )
+  assert_true(json.contains("\"analysis_summary\""))
 }
 
 ///|
@@ -300,6 +319,8 @@ test "function api json returns per-function slice payload" {
   assert_true(json.contains("\"instructions\""))
   assert_true(json.contains("\"blocks\""))
   assert_true(json.contains("\"edges\""))
+  assert_true(json.contains("\"pseudo_code\""))
+  assert_true(json.contains("\"dataflow\""))
   assert_true(json.contains("\"available\":true"))
 }
 
@@ -316,6 +337,8 @@ test "function api json supports raw synthetic entry slices" {
   assert_true(json.contains("\"addr\":\"0x10000\""))
   assert_true(json.contains("\"available\":true"))
   assert_true(json.contains("\"instructions\""))
+  assert_true(json.contains("\"dataflow\":{\"available\":false"))
+  assert_true(json.contains("RAW input lacks reliable function boundaries"))
 }
 
 ///|

@@ -22,9 +22,11 @@ pub fn generate_from_file(String, String, WorkbenchOptions) -> WorkbenchError?
 
 pub fn online_page_html(String, String, Int, String) -> String
 
-pub fn online_page_html_with_options(String, String, Int, String, String, WorkbenchOptions) -> String
+pub fn online_page_html_with_options(String, String, Int, String, String, String, WorkbenchOptions) -> String
 
 pub fn online_page_html_with_request(String, @program.WorkbenchRequest, String, String) -> String
+
+pub fn online_page_html_with_request_and_upload(String, @program.WorkbenchRequest, String, String, String) -> String
 
 pub fn overview_api_json(@program.WorkbenchRequest) -> String
 
@@ -47,11 +49,26 @@ pub enum StreamEventsLoadResult {
 }
 pub impl Show for StreamEventsLoadResult
 
+type WorkbenchAnalysisSummary
+pub impl Show for WorkbenchAnalysisSummary
+
 type WorkbenchBlock
 pub impl Show for WorkbenchBlock
 
+type WorkbenchCallGraph
+pub impl Show for WorkbenchCallGraph
+
+type WorkbenchCallGraphNode
+pub impl Show for WorkbenchCallGraphNode
+
 type WorkbenchData
 pub impl Show for WorkbenchData
+
+type WorkbenchDataflow
+pub impl Show for WorkbenchDataflow
+
+type WorkbenchDataflowEntry
+pub impl Show for WorkbenchDataflowEntry
 
 type WorkbenchEdge
 pub impl Show for WorkbenchEdge
@@ -104,6 +121,9 @@ pub impl Show for WorkbenchRuntime
 
 type WorkbenchSection
 pub impl Show for WorkbenchSection
+
+type WorkbenchSymbol
+pub impl Show for WorkbenchSymbol
 
 type WorkbenchTraceEvent
 pub impl Show for WorkbenchTraceEvent

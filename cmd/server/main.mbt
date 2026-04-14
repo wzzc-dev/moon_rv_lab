@@ -1154,7 +1154,11 @@ fn parse_upload_base_addr(value : Json?) -> UInt? {
   match value {
     Some(String(text)) => parse_number(text.trim().to_string())
     Some(Number(n, ..)) =>
-      if n >= 0 { Some(n.to_int().reinterpret_as_uint()) } else { None }
+      if n >= 0 {
+        Some(n.to_int().reinterpret_as_uint())
+      } else {
+        None
+      }
     None => Some(DEFAULT_RAW_BASE)
     _ => None
   }
@@ -1196,9 +1200,11 @@ fn parse_upload_payload(body : Json) -> UploadPayloadParseResult {
       if content_base64 == "" {
         return UploadPayloadErr("missing content_base64")
       }
-      let input_format = match parse_upload_input_format(obj.get("input_format")) {
+      let input_format = match
+        parse_upload_input_format(obj.get("input_format")) {
         Some(value) => value
-        None => return UploadPayloadErr("invalid input_format: expected elf or raw")
+        None =>
+          return UploadPayloadErr("invalid input_format: expected elf or raw")
       }
       let base_addr = match parse_upload_base_addr(obj.get("base_addr")) {
         Some(value) => value
@@ -1233,7 +1239,11 @@ fn sanitize_upload_filename(name : String) -> String {
     }
     sanitized = sanitized + safe
   }
-  if sanitized == "" { "upload.elf" } else { sanitized }
+  if sanitized == "" {
+    "upload.elf"
+  } else {
+    sanitized
+  }
 }
 
 ///|
@@ -1251,14 +1261,15 @@ fn ensure_upload_dir() -> Bool {
 ///|
 fn upload_path(filename : String) -> String {
   let safe_name = sanitize_upload_filename(filename)
-  let suffix = (@fs.read_dir(UPLOAD_DIR).length().to_string()) catch {
-    _ => "0"
-  }
+  let suffix = @fs.read_dir(UPLOAD_DIR).length().to_string() catch { _ => "0" }
   UPLOAD_DIR + "/" + suffix + "_" + safe_name
 }
 
 ///|
-fn uploaded_input_spec(path : String, payload : UploadPayload) -> @program.InputSpec {
+fn uploaded_input_spec(
+  path : String,
+  payload : UploadPayload,
+) -> @program.InputSpec {
   if payload.input_format == "raw" {
     @program.raw_input_spec(path, payload.base_addr, payload.xlen)
   } else {
@@ -1276,10 +1287,15 @@ fn cleanup_uploaded_file(path : String) -> Unit {
 }
 
 ///|
-fn upload_error_message(err : @program.ProgramLoadError, input : @program.InputSpec) -> String {
+fn upload_error_message(
+  err : @program.ProgramLoadError,
+  input : @program.InputSpec,
+) -> String {
   match err {
-    @program.ProgramLoadError::FileNotFound(_) => "uploaded file is not readable"
-    @program.ProgramLoadError::InvalidElf(_) | @program.ProgramLoadError::ParseElfFailed(_) =>
+    @program.ProgramLoadError::FileNotFound(_) =>
+      "uploaded file is not readable"
+    @program.ProgramLoadError::InvalidElf(_)
+    | @program.ProgramLoadError::ParseElfFailed(_) =>
       if input.is_raw() {
         "uploaded RAW payload could not be decoded; please check input format, base and xlen"
       } else {
@@ -1325,7 +1341,8 @@ async fn handle_workbench_upload(ctx : @mars.Context) -> Unit {
             return
           }
           if payload.input_format == "raw" &&
-            (payload.xlen != 32 && payload.xlen != 64) {
+            payload.xlen != 32 &&
+            payload.xlen != 64 {
             ctx.json(
               { "ok": false, "error": "invalid xlen: expected 32 or 64" },
               status=400,

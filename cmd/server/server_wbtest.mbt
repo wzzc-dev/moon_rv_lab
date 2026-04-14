@@ -72,9 +72,7 @@ test "workbench route html embeds online bootstrap config" {
   assert_true(
     html.contains("\"function_endpoint\":\"/api/workbench/function\""),
   )
-  assert_true(
-    html.contains("\"upload_endpoint\":\"/api/workbench/upload\""),
-  )
+  assert_true(html.contains("\"upload_endpoint\":\"/api/workbench/upload\""))
   assert_true(html.contains("class=\"workbench-shell\""))
   assert_true(html.contains("id=\"file-input\""))
   assert_true(html.contains("id=\"file-load-btn\""))
@@ -173,11 +171,12 @@ test "workbench route query parsing validates raw parameters" {
 
 ///|
 test "upload payload parsing supports elf and raw metadata" {
-  match parse_upload_payload({
-    "filename": "demo.elf",
-    "content_base64": "AA==",
-    "input_format": "elf",
-  }) {
+  match
+    parse_upload_payload({
+      "filename": "demo.elf",
+      "content_base64": "AA==",
+      "input_format": "elf",
+    }) {
     UploadPayloadOk(payload) => {
       assert_eq(payload.filename, "demo.elf")
       assert_eq(payload.input_format, "elf")
@@ -187,13 +186,14 @@ test "upload payload parsing supports elf and raw metadata" {
     UploadPayloadErr(err) => abort(err)
   }
 
-  match parse_upload_payload({
-    "filename": "demo.raw",
-    "content_base64": "AA==",
-    "input_format": "raw",
-    "base_addr": "0x20000",
-    "xlen": 32,
-  }) {
+  match
+    parse_upload_payload({
+      "filename": "demo.raw",
+      "content_base64": "AA==",
+      "input_format": "raw",
+      "base_addr": "0x20000",
+      "xlen": 32,
+    }) {
     UploadPayloadOk(payload) => {
       assert_eq(payload.input_format, "raw")
       assert_eq(payload.base_addr, 0x20000U)
@@ -205,13 +205,14 @@ test "upload payload parsing supports elf and raw metadata" {
 
 ///|
 test "upload payload parsing rejects invalid raw metadata" {
-  match parse_upload_payload({
-    "filename": "demo.raw",
-    "content_base64": "AA==",
-    "input_format": "raw",
-    "base_addr": "bad",
-    "xlen": 128,
-  }) {
+  match
+    parse_upload_payload({
+      "filename": "demo.raw",
+      "content_base64": "AA==",
+      "input_format": "raw",
+      "base_addr": "bad",
+      "xlen": 128,
+    }) {
     UploadPayloadOk(_) => abort("expected invalid raw upload payload")
     UploadPayloadErr(err) =>
       assert_true(err.contains("base_addr") || err.contains("xlen"))

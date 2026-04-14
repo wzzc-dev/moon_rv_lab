@@ -127,6 +127,15 @@ struct WorkbenchSection {
 } derive(Show)
 
 ///|
+struct WorkbenchSymbol {
+  name : String
+  addr : String
+  size : String
+  type_name : String
+  binding : String
+} derive(Show)
+
+///|
 struct WorkbenchInstruction {
   index : Int
   addr : String
@@ -194,10 +203,52 @@ struct WorkbenchRuntime {
 } derive(Show)
 
 ///|
+struct WorkbenchCallGraphNode {
+  addr : String
+  name : String
+  calls : Array[String]
+} derive(Show)
+
+///|
+struct WorkbenchCallGraph {
+  entry_point : String
+  nodes : Array[WorkbenchCallGraphNode]
+  available : Bool
+  reason : String
+} derive(Show)
+
+///|
+struct WorkbenchAnalysisSummary {
+  instruction_categories : Array[(String, Int)]
+  basic_block_count : Int
+  cfg_edge_count : Int
+  call_graph_node_count : Int
+  runtime_event_count : Int
+} derive(Show)
+
+///|
+struct WorkbenchDataflowEntry {
+  addr : String
+  def_use : String
+  liveness : String
+  constant_state : String
+} derive(Show)
+
+///|
+struct WorkbenchDataflow {
+  available : Bool
+  reason : String
+  entries : Array[WorkbenchDataflowEntry]
+} derive(Show)
+
+///|
 struct WorkbenchData {
   meta : WorkbenchMeta
   functions : Array[WorkbenchFunction]
   sections : Array[WorkbenchSection]
+  symbols : Array[WorkbenchSymbol]
+  callgraph : WorkbenchCallGraph
+  analysis_summary : WorkbenchAnalysisSummary
   instructions : Array[WorkbenchInstruction]
   blocks : Array[WorkbenchBlock]
   edges : Array[WorkbenchEdge]
@@ -210,6 +261,9 @@ struct WorkbenchOverview {
   meta : WorkbenchMeta
   functions : Array[WorkbenchFunction]
   sections : Array[WorkbenchSection]
+  symbols : Array[WorkbenchSymbol]
+  callgraph : WorkbenchCallGraph
+  analysis_summary : WorkbenchAnalysisSummary
   runtime : WorkbenchRuntime
   events : Array[WorkbenchTraceEvent]
 } derive(Show)
@@ -220,6 +274,8 @@ struct WorkbenchFunctionSlice {
   instructions : Array[WorkbenchInstruction]
   blocks : Array[WorkbenchBlock]
   edges : Array[WorkbenchEdge]
+  pseudo_code : String
+  dataflow : WorkbenchDataflow
   available : Bool
   reason : String
 } derive(Show)
@@ -564,11 +620,7 @@ pub fn online_page_html_with_request(
   function_endpoint : String,
 ) -> String {
   online_page_html_with_request_and_upload(
-    default_file,
-    request,
-    overview_endpoint,
-    function_endpoint,
-    "/api/workbench/upload",
+    default_file, request, overview_endpoint, function_endpoint, "/api/workbench/upload",
   )
 }
 
@@ -660,11 +712,19 @@ fn load_workbench_data(
         events.length(),
         max_inst,
       )
+      let symbols = build_workbench_symbols(index)
+      let callgraph = build_workbench_callgraph(index)
+      let analysis_summary = build_workbench_analysis_summary(
+        index, events, callgraph,
+      )
       let shown_count = meta.instruction_count
       Ok({
         meta,
         functions,
         sections: index.sections,
+        symbols,
+        callgraph,
+        analysis_summary,
         instructions: collect_instructions(index.all_instructions, shown_count),
         blocks: index.blocks,
         edges: index.edges,
@@ -1118,6 +1178,21 @@ fn collect_instructions_in_range(
 }
 
 ///|
+fn collect_instruction_range_fixed_array(
+  all_instructions : FixedArray[@analysis.DecodedInst],
+  start_addr : UInt,
+  end_addr : UInt,
+) -> FixedArray[@analysis.DecodedInst] {
+  let result : Array[@analysis.DecodedInst] = []
+  for inst in all_instructions {
+    if inst.addr >= start_addr && inst.addr < end_addr {
+      result.push(inst)
+    }
+  }
+  FixedArray::from_array(result)
+}
+
+///|
 fn collect_blocks_in_range(
   blocks : Array[WorkbenchBlock],
   start_addr : UInt,
@@ -1227,6 +1302,189 @@ fn make_workbench_function(
 }
 
 ///|
+fn build_symbol_map_for_index(index : StaticProgramIndex) -> Map[UInt, String] {
+  let result : Map[UInt, String] = {}
+  for function_range in index.function_ranges {
+    result[function_range.addr] = function_range.name
+  }
+  result
+}
+
+///|
+fn build_workbench_symbols(
+  index : StaticProgramIndex,
+) -> Array[WorkbenchSymbol] {
+  if index.input_format == "raw" {
+    return []
+  }
+  let result : Array[WorkbenchSymbol] = []
+  for function_range in index.function_ranges {
+    result.push({
+      name: function_range.name,
+      addr: format_hex(function_range.addr),
+      size: format_hex(function_range.size),
+      type_name: "func",
+      binding: "derived",
+    })
+  }
+  result
+}
+
+///|
+fn build_workbench_callgraph(index : StaticProgramIndex) -> WorkbenchCallGraph {
+  if index.input_format == "raw" {
+    return {
+      entry_point: format_hex(index.entry_point),
+      nodes: [],
+      available: false,
+      reason: "RAW input lacks reliable function boundaries, so call graph generation is unavailable.",
+    }
+  }
+  if index.all_instructions.length() == 0 {
+    return {
+      entry_point: format_hex(index.entry_point),
+      nodes: [],
+      available: false,
+      reason: "no instructions available",
+    }
+  }
+  let cfg = @analysis.build_cfg(index.all_instructions, index.entry_point)
+  let callgraph = @analysis.build_call_graph(index.all_instructions, cfg)
+  let nodes : Array[WorkbenchCallGraphNode] = []
+  for node in callgraph.nodes {
+    let calls : Array[String] = []
+    for call in node.calls {
+      calls.push(format_hex(call))
+    }
+    nodes.push({ addr: format_hex(node.address), name: node.name, calls })
+  }
+  {
+    entry_point: format_hex(callgraph.entry_point),
+    nodes,
+    available: true,
+    reason: "",
+  }
+}
+
+///|
+fn count_instruction_categories_for_summary(
+  instructions : FixedArray[@analysis.DecodedInst],
+) -> Array[(String, Int)] {
+  let counts : Map[String, Int] = {}
+  for inst in instructions {
+    let key = category_to_string(inst.inst.category())
+    counts[key] = counts.get_or_default(key, 0) + 1
+  }
+  counts.to_array()
+}
+
+///|
+fn build_workbench_analysis_summary(
+  index : StaticProgramIndex,
+  events : Array[WorkbenchTraceEvent],
+  callgraph : WorkbenchCallGraph,
+) -> WorkbenchAnalysisSummary {
+  {
+    instruction_categories: count_instruction_categories_for_summary(
+      index.all_instructions,
+    ),
+    basic_block_count: index.blocks.length(),
+    cfg_edge_count: index.edges.length(),
+    call_graph_node_count: callgraph.nodes.length(),
+    runtime_event_count: events.length(),
+  }
+}
+
+///|
+fn build_function_pseudo_code(
+  index : StaticProgramIndex,
+  function_range : FunctionRange,
+  instructions : FixedArray[@analysis.DecodedInst],
+  available : Bool,
+) -> String {
+  if !available || instructions.length() == 0 {
+    return ""
+  }
+  let cfg = @analysis.build_cfg(instructions, function_range.addr)
+  let symbol_map = build_symbol_map_for_index(index)
+  @analysis.decompile(cfg, instructions, symbol_map, {})
+}
+
+///|
+fn find_liveness_for_block(
+  states : FixedArray[@analysis.BlockLiveness],
+  block_addr : UInt,
+) -> @analysis.BlockLiveness? {
+  for state in states {
+    if state.block_addr == block_addr {
+      return Some(state)
+    }
+  }
+  None
+}
+
+///|
+fn build_workbench_dataflow(
+  index : StaticProgramIndex,
+  function_range : FunctionRange,
+  instructions : FixedArray[@analysis.DecodedInst],
+  available : Bool,
+) -> WorkbenchDataflow {
+  if index.input_format == "raw" {
+    return {
+      available: false,
+      reason: "RAW input lacks reliable function boundaries, so function-level dataflow is unavailable.",
+      entries: [],
+    }
+  }
+  if !available || instructions.length() == 0 {
+    return {
+      available: false,
+      reason: "function slice unavailable",
+      entries: [],
+    }
+  }
+  let cfg = @analysis.build_cfg(instructions, function_range.addr)
+  let def_use = @analysis.compute_def_use_chains(instructions)
+  let liveness = @analysis.compute_liveness(cfg, instructions)
+  let const_states = @analysis.compute_constant_propagation(cfg, instructions)
+
+  let mut def_use_text = ""
+  for chain in def_use {
+    if chain.defs.length() > 0 || chain.uses.length() > 0 {
+      def_use_text = def_use_text +
+        @decode.reg_name(chain.reg) +
+        " defs=" +
+        chain.defs.length().to_string() +
+        " uses=" +
+        chain.uses.length().to_string() +
+        "; "
+    }
+  }
+
+  let entries : Array[WorkbenchDataflowEntry] = []
+  for block in cfg.blocks {
+    let live = match find_liveness_for_block(liveness, block.start_addr) {
+      Some(state) => @analysis.print_live_set(state.live_in)
+      None => ""
+    }
+    let mut const_text = ""
+    for state in const_states {
+      if state.block_addr == block.start_addr {
+        const_text = @analysis.format_const_state(state.state_in)
+      }
+    }
+    entries.push({
+      addr: format_hex(block.start_addr),
+      def_use: def_use_text,
+      liveness: live,
+      constant_state: const_text,
+    })
+  }
+  { available: true, reason: "", entries }
+}
+
+///|
 fn build_workbench_functions(
   index : StaticProgramIndex,
   events : Array[WorkbenchTraceEvent],
@@ -1287,6 +1545,10 @@ fn build_workbench_overview(
   events : Array[WorkbenchTraceEvent],
   max_instructions : Int,
 ) -> WorkbenchOverview {
+  let callgraph = build_workbench_callgraph(index)
+  let analysis_summary = build_workbench_analysis_summary(
+    index, events, callgraph,
+  )
   {
     meta: build_workbench_meta(
       index,
@@ -1296,6 +1558,9 @@ fn build_workbench_overview(
     ),
     functions,
     sections: index.sections,
+    symbols: build_workbench_symbols(index),
+    callgraph,
+    analysis_summary,
     runtime,
     events,
   }
@@ -1347,11 +1612,28 @@ fn build_function_slice_from_range(
 ) -> WorkbenchFunctionSlice {
   let slice = build_slice_data(index, function_range)
   let function = make_workbench_function(function_range, slice, false)
+  let instructions = collect_instruction_range_fixed_array(
+    index.all_instructions,
+    function_range.addr,
+    function_range.end_addr,
+  )
   {
     function,
     instructions: slice.instructions,
     blocks: slice.blocks,
     edges: slice.edges,
+    pseudo_code: build_function_pseudo_code(
+      index,
+      function_range,
+      instructions,
+      slice.available,
+    ),
+    dataflow: build_workbench_dataflow(
+      index,
+      function_range,
+      instructions,
+      slice.available,
+    ),
     available: slice.available,
     reason: slice.reason,
   }
@@ -1376,6 +1658,12 @@ fn build_all_instructions_slice(
     ),
     blocks: index.blocks,
     edges: index.edges,
+    pseudo_code: "",
+    dataflow: {
+      available: false,
+      reason: "dataflow view is available for a single function only",
+      entries: [],
+    },
     available: true,
     reason: "",
   }
@@ -1657,379 +1945,6 @@ fn category_to_string(cat : @decode.InstructionCategory) -> String {
 }
 
 ///|
-fn edge_type_to_string(edge_type : @analysis.EdgeType) -> String {
-  match edge_type {
-    @analysis.EdgeType::Jump => "jump"
-    @analysis.EdgeType::BranchTaken => "branch_taken"
-    @analysis.EdgeType::BranchNotTaken => "branch_not_taken"
-    @analysis.EdgeType::Call => "call"
-    @analysis.EdgeType::Return => "return"
-  }
-}
-
-///|
-fn to_json(data : WorkbenchData) -> String {
-  let mut json = "{"
-  json = json + "\"meta\":" + to_json_meta(data.meta)
-  json = json + ",\"functions\":" + to_json_functions(data.functions)
-  json = json + ",\"sections\":" + to_json_sections(data.sections)
-  json = json + ",\"instructions\":" + to_json_instructions(data.instructions)
-  json = json + ",\"blocks\":" + to_json_blocks(data.blocks)
-  json = json + ",\"edges\":" + to_json_edges(data.edges)
-  json = json + ",\"runtime\":" + to_json_runtime(data.runtime)
-  json = json + ",\"events\":" + to_json_runtime_events(data.events)
-  json = json + "}"
-  json
-}
-
-///|
-fn to_json_overview(data : WorkbenchOverview) -> String {
-  let mut json = "{"
-  json = json + "\"meta\":" + to_json_meta(data.meta)
-  json = json + ",\"functions\":" + to_json_functions(data.functions)
-  json = json + ",\"sections\":" + to_json_sections(data.sections)
-  json = json + ",\"runtime\":" + to_json_runtime(data.runtime)
-  json = json + ",\"events\":" + to_json_runtime_events(data.events)
-  json = json + "}"
-  json
-}
-
-///|
-fn to_json_meta(meta : WorkbenchMeta) -> String {
-  let mut json = "{"
-  json = json + "\"title\":" + json_string(meta.title)
-  json = json + ",\"source_file\":" + json_string(meta.source_file)
-  json = json + ",\"input_format\":" + json_string(meta.input_format)
-  json = json + ",\"entry_point\":" + json_string(meta.entry_point)
-  json = json + ",\"file_class\":" + json_string(meta.file_class)
-  json = json + ",\"xlen\":" + meta.xlen.to_string()
-  json = json + ",\"architecture\":" + json_string(meta.architecture)
-  json = json + ",\"section_count\":" + meta.section_count.to_string()
-  json = json + ",\"program_count\":" + meta.program_count.to_string()
-  json = json + ",\"function_count\":" + meta.function_count.to_string()
-  json = json + ",\"instruction_count\":" + meta.instruction_count.to_string()
-  json = json +
-    ",\"total_instruction_count\":" +
-    meta.total_instruction_count.to_string()
-  json = json + ",\"basic_block_count\":" + meta.basic_block_count.to_string()
-  json = json + ",\"cfg_edge_count\":" + meta.cfg_edge_count.to_string()
-  json = json +
-    ",\"runtime_event_count\":" +
-    meta.runtime_event_count.to_string()
-  json = json + ",\"truncated\":" + bool_to_json(meta.truncated)
-  json = json + "}"
-  json
-}
-
-///|
-fn to_json_functions(functions : Array[WorkbenchFunction]) -> String {
-  let mut json = "["
-  for i = 0; i < functions.length(); i = i + 1 {
-    let function = functions[i]
-    if i > 0 {
-      json = json + ","
-    }
-    json = json + to_json_function(function)
-  }
-  json = json + "]"
-  json
-}
-
-///|
-fn to_json_function(function : WorkbenchFunction) -> String {
-  let mut json = "{"
-  json = json + "\"name\":" + json_string(function.name)
-  json = json + ",\"addr\":" + json_string(function.addr)
-  json = json + ",\"size\":" + json_string(function.size)
-  json = json +
-    ",\"instruction_count\":" +
-    function.instruction_count.to_string()
-  json = json + ",\"block_count\":" + function.block_count.to_string()
-  json = json +
-    ",\"has_runtime_event\":" +
-    bool_to_json(function.has_runtime_event)
-  json = json + "}"
-  json
-}
-
-///|
-fn to_json_sections(sections : Array[WorkbenchSection]) -> String {
-  let mut json = "["
-  for i = 0; i < sections.length(); i = i + 1 {
-    let section = sections[i]
-    if i > 0 {
-      json = json + ","
-    }
-    json = json + "{"
-    json = json + "\"index\":" + section.index.to_string()
-    json = json + ",\"name\":" + json_string(section.name)
-    json = json + ",\"addr\":" + json_string(section.addr)
-    json = json + ",\"size\":" + json_string(section.size)
-    json = json + "}"
-  }
-  json = json + "]"
-  json
-}
-
-///|
-fn to_json_instructions(instructions : Array[WorkbenchInstruction]) -> String {
-  let mut json = "["
-  for i = 0; i < instructions.length(); i = i + 1 {
-    let inst = instructions[i]
-    if i > 0 {
-      json = json + ","
-    }
-    json = json + "{"
-    json = json + "\"index\":" + inst.index.to_string()
-    json = json + ",\"addr\":" + json_string(inst.addr)
-    json = json + ",\"asm\":" + json_string(inst.asm_text)
-    json = json + ",\"category\":" + json_string(inst.category)
-    json = json + "}"
-  }
-  json = json + "]"
-  json
-}
-
-///|
-fn to_json_blocks(blocks : Array[WorkbenchBlock]) -> String {
-  let mut json = "["
-  for i = 0; i < blocks.length(); i = i + 1 {
-    let block = blocks[i]
-    if i > 0 {
-      json = json + ","
-    }
-    json = json + "{"
-    json = json + "\"start_addr\":" + json_string(block.start_addr)
-    json = json + ",\"end_addr\":" + json_string(block.end_addr)
-    json = json +
-      ",\"instruction_count\":" +
-      block.instruction_count.to_string()
-    json = json + ",\"is_terminated\":" + bool_to_json(block.is_terminated)
-    json = json + "}"
-  }
-  json = json + "]"
-  json
-}
-
-///|
-fn to_json_edges(edges : Array[WorkbenchEdge]) -> String {
-  let mut json = "["
-  for i = 0; i < edges.length(); i = i + 1 {
-    let edge = edges[i]
-    if i > 0 {
-      json = json + ","
-    }
-    json = json + "{"
-    json = json + "\"from_block\":" + json_string(edge.from_block)
-    json = json + ",\"to_block\":" + json_string(edge.to_block)
-    json = json + ",\"edge_type\":" + json_string(edge.edge_type)
-    json = json + "}"
-  }
-  json = json + "]"
-  json
-}
-
-///|
-fn to_json_runtime(runtime : WorkbenchRuntime) -> String {
-  let mut json = "{"
-  json = json + "\"initial_pc\":" + json_string(runtime.initial_pc)
-  json = json + ",\"stop_reason\":" + json_string(runtime.stop_reason)
-  json = json +
-    ",\"initial_registers\":" +
-    to_json_runtime_registers(runtime.initial_registers)
-  json = json + "}"
-  json
-}
-
-///|
-fn to_json_runtime_registers(
-  registers : Array[WorkbenchRegisterValue],
-) -> String {
-  let mut json = "["
-  for i = 0; i < registers.length(); i = i + 1 {
-    if i > 0 {
-      json = json + ","
-    }
-    let reg = registers[i]
-    json = json + "{"
-    json = json + "\"name\":" + json_string(reg.name)
-    json = json + ",\"value\":" + json_string(reg.value)
-    json = json + "}"
-  }
-  json = json + "]"
-  json
-}
-
-///|
-fn to_json_runtime_register_writes(
-  writes : Array[WorkbenchRegisterWrite],
-) -> String {
-  let mut json = "["
-  for i = 0; i < writes.length(); i = i + 1 {
-    if i > 0 {
-      json = json + ","
-    }
-    let write = writes[i]
-    json = json + "{"
-    json = json + "\"name\":" + json_string(write.name)
-    json = json + ",\"before\":" + json_string(write.before)
-    json = json + ",\"after\":" + json_string(write.after)
-    json = json + "}"
-  }
-  json = json + "]"
-  json
-}
-
-///|
-fn to_json_runtime_memory_writes(
-  writes : Array[WorkbenchMemoryEvent],
-) -> String {
-  let mut json = "["
-  for i = 0; i < writes.length(); i = i + 1 {
-    if i > 0 {
-      json = json + ","
-    }
-    let write = writes[i]
-    json = json + "{"
-    json = json + "\"addr\":" + json_string(write.addr)
-    json = json + ",\"before\":" + json_string(write.before)
-    json = json + ",\"after\":" + json_string(write.after)
-    json = json + ",\"size\":" + write.size.to_string()
-    json = json + "}"
-  }
-  json = json + "]"
-  json
-}
-
-///|
-fn to_json_runtime_events(events : Array[WorkbenchTraceEvent]) -> String {
-  let mut json = "["
-  for i = 0; i < events.length(); i = i + 1 {
-    if i > 0 {
-      json = json + ","
-    }
-    let event = events[i]
-    json = json + "{"
-    json = json + "\"step\":" + event.step.to_string()
-    json = json + ",\"addr\":" + json_string(event.addr)
-    json = json + ",\"next_addr\":" + json_string(event.next_addr)
-    json = json + ",\"asm\":" + json_string(event.asm_text)
-    json = json + ",\"category\":" + json_string(event.category)
-    json = json + ",\"block_start\":" + json_string(event.block_start)
-    json = json +
-      ",\"register_writes\":" +
-      to_json_runtime_register_writes(event.register_writes)
-    json = json +
-      ",\"memory_writes\":" +
-      to_json_runtime_memory_writes(event.memory_writes)
-    json = json + ",\"stdout_append\":" + json_string(event.stdout_append)
-    json = json + ",\"stderr_append\":" + json_string(event.stderr_append)
-    json = json + ",\"syscall\":" + json_string(event.syscall)
-    json = json + ",\"stop_reason\":" + json_string(event.stop_reason)
-    json = json + "}"
-  }
-  json = json + "]"
-  json
-}
-
-///|
-fn to_json_function_slice(data : WorkbenchFunctionSlice) -> String {
-  let mut json = "{"
-  json = json + "\"function\":" + to_json_function(data.function)
-  json = json + ",\"instructions\":" + to_json_instructions(data.instructions)
-  json = json + ",\"blocks\":" + to_json_blocks(data.blocks)
-  json = json + ",\"edges\":" + to_json_edges(data.edges)
-  json = json + ",\"available\":" + bool_to_json(data.available)
-  json = json + ",\"reason\":" + json_string(data.reason)
-  json = json + "}"
-  json
-}
-
-///|
-fn to_json_function_slices_map(
-  slices : Array[WorkbenchFunctionSlice],
-) -> String {
-  let mut json = "{"
-  for i = 0; i < slices.length(); i = i + 1 {
-    if i > 0 {
-      json = json + ","
-    }
-    let slice = slices[i]
-    json = json + json_string(slice.function.addr)
-    json = json + ":"
-    json = json + to_json_function_slice(slice)
-  }
-  json = json + "}"
-  json
-}
-
-///|
-fn api_error_json(err : WorkbenchError) -> String {
-  "{\"ok\":false,\"error\":" + json_string(err.to_string()) + "}"
-}
-
-///|
-fn normalize_max_events(value : Int) -> Int {
-  if value <= 0 {
-    200
-  } else {
-    value
-  }
-}
-
-///|
-fn build_stream_event_payloads(
-  events : Array[WorkbenchTraceEvent],
-  max_events : Int,
-) -> Array[String] {
-  let payloads : Array[String] = []
-  let limit = if events.length() < max_events {
-    events.length()
-  } else {
-    max_events
-  }
-  for i = 0; i < limit; i = i + 1 {
-    let event = events[i]
-    let mut json = "{"
-    json = json + "\"step\":" + event.step.to_string()
-    json = json + ",\"addr\":" + json_string(event.addr)
-    json = json + ",\"next_addr\":" + json_string(event.next_addr)
-    json = json + ",\"asm\":" + json_string(event.asm_text)
-    json = json + ",\"category\":" + json_string(event.category)
-    json = json + ",\"block_start\":" + json_string(event.block_start)
-    json = json +
-      ",\"register_writes\":" +
-      to_json_runtime_register_writes(event.register_writes)
-    json = json +
-      ",\"memory_writes\":" +
-      to_json_runtime_memory_writes(event.memory_writes)
-    json = json + ",\"stdout_append\":" + json_string(event.stdout_append)
-    json = json + ",\"stderr_append\":" + json_string(event.stderr_append)
-    json = json + ",\"syscall\":" + json_string(event.syscall)
-    json = json + ",\"stop_reason\":" + json_string(event.stop_reason)
-    json = json +
-      ",\"trace\":" +
-      json_string(event.addr + ": " + event.asm_text)
-    json = json + "}"
-    payloads.push(json)
-  }
-  payloads
-}
-
-///|
-fn join_json_values(values : Array[String]) -> String {
-  let mut json = "["
-  for i = 0; i < values.length(); i = i + 1 {
-    if i > 0 {
-      json = json + ","
-    }
-    json = json + values[i]
-  }
-  json = json + "]"
-  json
-}
-
-///|
 fn find_block_start_for_addr(
   blocks : Array[WorkbenchBlock],
   addr : String,
@@ -2057,36 +1972,6 @@ fn find_block_start_for_addr(
 }
 
 ///|
-fn bool_to_json(value : Bool) -> String {
-  if value {
-    "true"
-  } else {
-    "false"
-  }
-}
-
-///|
-fn json_string(value : String) -> String {
-  "\"" + escape_json(value) + "\""
-}
-
-///|
-fn escape_json(value : String) -> String {
-  let mut escaped = ""
-  for c in value {
-    match c {
-      '"' => escaped = escaped + "\\\""
-      '\\' => escaped = escaped + "\\\\"
-      '\n' => escaped = escaped + "\\n"
-      '\r' => escaped = escaped + "\\r"
-      '\t' => escaped = escaped + "\\t"
-      _ => escaped = escaped + c.to_string()
-    }
-  }
-  escaped
-}
-
-///|
 fn escape_html(value : String) -> String {
   let mut escaped = ""
   for c in value {
@@ -2100,80 +1985,6 @@ fn escape_html(value : String) -> String {
     }
   }
   escaped
-}
-
-///|
-fn embedded_boot_json(
-  overview_json : String,
-  function_slices_json : String,
-  max_instructions : Int,
-) -> String {
-  "{\"mode\":\"embedded\",\"default_file\":\"\",\"initial_file\":\"\",\"max_inst\":" +
-  normalize_max_instructions(max_instructions).to_string() +
-  ",\"overview_endpoint\":\"/api/workbench/overview\",\"function_endpoint\":\"/api/workbench/function\",\"embedded_overview\":" +
-  overview_json +
-  ",\"embedded_function_slices\":" +
-  function_slices_json +
-  ",\"raw_mode\":false,\"base_addr\":\"0x10000\",\"xlen\":64" +
-  "}"
-}
-
-///|
-fn remote_boot_json(
-  default_file : String,
-  initial_file : String,
-  max_instructions : Int,
-  overview_endpoint : String,
-  function_endpoint : String,
-  upload_endpoint : String,
-  raw_mode : Bool,
-  base_addr : UInt,
-  xlen : Int,
-) -> String {
-  let max_inst = normalize_max_instructions(max_instructions)
-  let resolved_overview_endpoint = if overview_endpoint == "" {
-    "/api/workbench/overview"
-  } else {
-    overview_endpoint
-  }
-  let resolved_function_endpoint = if function_endpoint == "" {
-    "/api/workbench/function"
-  } else {
-    function_endpoint
-  }
-  let resolved_upload_endpoint = if upload_endpoint == "" {
-    "/api/workbench/upload"
-  } else {
-    upload_endpoint
-  }
-  "{\"mode\":\"remote\",\"default_file\":" +
-  json_string(default_file) +
-  ",\"initial_file\":" +
-  json_string(initial_file) +
-  ",\"max_inst\":" +
-  max_inst.to_string() +
-  ",\"overview_endpoint\":" +
-  json_string(resolved_overview_endpoint) +
-  ",\"function_endpoint\":" +
-  json_string(resolved_function_endpoint) +
-  ",\"upload_endpoint\":" +
-  json_string(resolved_upload_endpoint) +
-  ",\"raw_mode\":" +
-  bool_to_json(raw_mode) +
-  ",\"base_addr\":" +
-  json_string(format_hex(base_addr)) +
-  ",\"xlen\":" +
-  normalize_remote_xlen(xlen).to_string() +
-  ",\"embedded_overview\":null,\"embedded_function_slices\":{}}"
-}
-
-///|
-fn normalize_remote_xlen(xlen : Int) -> Int {
-  if xlen == 32 {
-    32
-  } else {
-    64
-  }
 }
 
 ///|
@@ -2223,6 +2034,11 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    functionList: document.getElementById("function-list"),
   #|    sectionListCount: document.getElementById("section-list-count"),
   #|    sectionList: document.getElementById("section-list"),
+  #|    symbolListCount: document.getElementById("symbol-list-count"),
+  #|    symbolList: document.getElementById("symbol-list"),
+  #|    callgraphListCount: document.getElementById("callgraph-list-count"),
+  #|    callgraphList: document.getElementById("callgraph-list"),
+  #|    analysisSummaryGrid: document.getElementById("analysis-summary-grid"),
   #|    searchInput: document.getElementById("search-input"),
   #|    disasmSubtitle: document.getElementById("disasm-subtitle"),
   #|    cfgSubtitle: document.getElementById("cfg-subtitle"),
@@ -2236,6 +2052,8 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    stderrOutput: document.getElementById("stderr-output"),
   #|    registerGroups: document.getElementById("register-groups"),
   #|    recentWrites: document.getElementById("recent-writes"),
+  #|    pseudoCodeBody: document.getElementById("pseudo-code-body"),
+  #|    dataflowBody: document.getElementById("dataflow-body"),
   #|    breakpointSummary: document.getElementById("breakpoint-summary"),
   #|    breakpointList: document.getElementById("breakpoint-list"),
   #|    breakpointClearBtn: document.getElementById("breakpoint-clear-btn"),
@@ -2391,7 +2209,6 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|      xlen: normalizeRemoteXlen(state.remoteXlen)
   #|    };
   #|  }
-
   #|  function bytesToBase64(bytes) {
   #|    let binary = "";
   #|    const chunkSize = 0x8000;
@@ -2424,6 +2241,15 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|      },
   #|      functions: [],
   #|      sections: [],
+  #|      symbols: [],
+  #|      callgraph: { entry_point: "0x0", nodes: [], available: false, reason: "" },
+  #|      analysis_summary: {
+  #|        instruction_categories: [],
+  #|        basic_block_count: 0,
+  #|        cfg_edge_count: 0,
+  #|        call_graph_node_count: 0,
+  #|        runtime_event_count: 0
+  #|      },
   #|      runtime: { initial_pc: "0x0", stop_reason: "unloaded", initial_registers: [] },
   #|      events: []
   #|    };
@@ -2444,6 +2270,8 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|      instructions: [],
   #|      blocks: [],
   #|      edges: [],
+  #|      pseudo_code: "",
+  #|      dataflow: { available: false, reason: reason || "slice unavailable", entries: [] },
   #|      available: false,
   #|      reason: reason || "slice unavailable"
   #|    };
@@ -2888,6 +2716,61 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    }).join("") || panelEmptyState("当前输入未提供节区信息。", "请确认路径存在，且 ELF 或 RAW 元数据配置正确。");
   #|  }
   #|
+  #|  function renderSymbols() {
+  #|    const symbols = overview.symbols || [];
+  #|    if (overview.meta.input_format === "raw") {
+  #|      refs.symbolListCount.textContent = "RAW degraded";
+  #|      refs.symbolList.innerHTML = panelEmptyState("RAW 输入不会伪造可靠符号。", "可继续使用 Functions、Disassembly 和 Trace 观察 synthetic entry。");
+  #|      return;
+  #|    }
+  #|    refs.symbolListCount.textContent = `${symbols.length} items | 点击地址同步搜索`;
+  #|    refs.symbolList.innerHTML = symbols.map((symbol) => {
+  #|      return `<button class="nav-row" data-symbol-query="${escapeHtml(symbol.addr)}"><div class="nav-row-title"><span>${escapeHtml(symbol.name)}</span></div><div class="nav-row-meta">${escapeHtml(symbol.addr)} / ${escapeHtml(symbol.size)} | ${escapeHtml(symbol.type || symbol.type_name || "func")} / ${escapeHtml(symbol.binding || "-")}</div></button>`;
+  #|    }).join("") || panelEmptyState("当前输入没有可用符号信息。", "若 ELF 不含函数符号，工作台会继续保留函数导航，但不会伪造完整 symbol table。");
+  #|  }
+  #|
+  #|  function renderCallgraph() {
+  #|    const callgraph = overview.callgraph || { available: false, nodes: [], reason: "" };
+  #|    const nodes = callgraph.nodes || [];
+  #|    if (!callgraph.available) {
+  #|      refs.callgraphListCount.textContent = "unavailable";
+  #|      refs.callgraphList.innerHTML = panelEmptyState(callgraph.reason || "调用图当前不可用。", "可先从 Functions 和 CFG 面板继续浏览。");
+  #|      return;
+  #|    }
+  #|    refs.callgraphListCount.textContent = `${nodes.length} nodes | 点击节点跳转函数`;
+  #|    refs.callgraphList.innerHTML = nodes.map((node) => {
+  #|      const calls = (node.calls || []).slice(0, 3).join(", ");
+  #|      const extra = (node.calls || []).length > 3 ? ` +${node.calls.length - 3}` : "";
+  #|      return `<button class="nav-row" data-callgraph-query="${escapeHtml(node.addr)}"><div class="nav-row-title"><span>${escapeHtml(node.name || node.addr)}</span></div><div class="nav-row-meta">${escapeHtml(node.addr)} | calls ${node.calls.length}${calls ? ` | ${escapeHtml(calls)}${extra}` : ""}</div></button>`;
+  #|    }).join("") || panelEmptyState("调用图没有可展示节点。", "请确认 ELF 中存在可恢复的函数边界。");
+  #|  }
+  #|
+  #|  function renderAnalysisSummary() {
+  #|    const summary = overview.analysis_summary || {
+  #|      instruction_categories: [],
+  #|      basic_block_count: 0,
+  #|      cfg_edge_count: 0,
+  #|      call_graph_node_count: 0,
+  #|      runtime_event_count: 0
+  #|    };
+  #|    const categoryText = (summary.instruction_categories || [])
+  #|      .slice()
+  #|      .sort((lhs, rhs) => Number(rhs.count || 0) - Number(lhs.count || 0))
+  #|      .slice(0, 4)
+  #|      .map((item) => `${item.name}:${item.count}`)
+  #|      .join(" | ");
+  #|    const entries = [
+  #|      ["BB", summary.basic_block_count || 0],
+  #|      ["CFG", summary.cfg_edge_count || 0],
+  #|      ["CallGraph", summary.call_graph_node_count || 0],
+  #|      ["Trace", summary.runtime_event_count || 0],
+  #|      ["Top Categories", categoryText || "-"]
+  #|    ];
+  #|    refs.analysisSummaryGrid.innerHTML = entries
+  #|      .map(([key, value]) => `<div class="stat"><div class="k">${escapeHtml(key)}</div><div class="v">${escapeHtml(value)}</div></div>`)
+  #|      .join("");
+  #|  }
+  #|
   #|  function renderFunctions() {
   #|    refs.functionSelect.innerHTML = "";
   #|    if (allInstructionsAllowed()) {
@@ -3172,6 +3055,43 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    refs.compareBody.innerHTML = `<div class="compare-grid">${renderCompareCard("Registers", registerRows, "当前寄存器与初始状态一致")}${renderCompareCard("Recent Memory Writes", memoryRows, "从初始状态开始还没有内存写入")}${renderCompareCard("Accumulated Output", outputRows, "从初始状态开始还没有 stdout / stderr 输出")}</div>`;
   #|  }
   #|
+  #|  function renderPseudoCode() {
+  #|    const slice = selectedSlice();
+  #|    if (!slice) {
+  #|      refs.pseudoCodeBody.innerHTML = panelEmptyState("请先选择一个函数。", "选择函数后即可查看该函数的伪代码摘要。");
+  #|      return;
+  #|    }
+  #|    if (slice.available === false) {
+  #|      refs.pseudoCodeBody.innerHTML = panelEmptyState(slice.reason || "函数切片不可用。", "请切换到其他函数，或刷新页面后重试。");
+  #|      return;
+  #|    }
+  #|    const pseudo = String(slice.pseudo_code || "").trim();
+  #|    refs.pseudoCodeBody.innerHTML = pseudo
+  #|      ? `<pre class="output-body mono">${escapeHtml(pseudo)}</pre>`
+  #|      : panelEmptyState("当前函数暂时没有可展示的伪代码。", "可继续结合 Disassembly、CFG 和 Trace 面板理解执行路径。");
+  #|  }
+  #|
+  #|  function renderDataflow() {
+  #|    const slice = selectedSlice();
+  #|    if (!slice) {
+  #|      refs.dataflowBody.innerHTML = panelEmptyState("请先选择一个函数。", "选择函数后即可查看函数级数据流摘要。");
+  #|      return;
+  #|    }
+  #|    if (slice.available === false) {
+  #|      refs.dataflowBody.innerHTML = panelEmptyState(slice.reason || "函数切片不可用。", "请切换到其他函数，或刷新页面后重试。");
+  #|      return;
+  #|    }
+  #|    const dataflow = slice.dataflow || { available: false, reason: "", entries: [] };
+  #|    if (!dataflow.available) {
+  #|      refs.dataflowBody.innerHTML = panelEmptyState(dataflow.reason || "当前函数没有可用的数据流摘要。", "RAW 模式会保留全局浏览能力，但默认关闭函数级 dataflow。");
+  #|      return;
+  #|    }
+  #|    const entries = dataflow.entries || [];
+  #|    refs.dataflowBody.innerHTML = entries.length > 0
+  #|      ? `<table class="memory-table mono"><thead><tr><th class="column-addr">block</th><th>def-use</th><th>live-in</th><th>const-in</th></tr></thead><tbody>${entries.map((entry) => `<tr><td>${escapeHtml(entry.addr)}</td><td>${escapeHtml(entry.def_use || "-")}</td><td>${escapeHtml(entry.liveness || "-")}</td><td>${escapeHtml(entry.constant_state || "-")}</td></tr>`).join("")}</tbody></table>`
+  #|      : panelEmptyState("当前函数没有块级数据流条目。", "可先检查该函数是否包含足够的基本块和寄存器读写。");
+  #|  }
+  #|
   #|  function renderTrace() {
   #|    const events = overview.events || [];
   #|    const center = state.cursor >= 0 ? state.cursor : 0;
@@ -3272,6 +3192,9 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    renderHelpPanel();
   #|    renderSummary();
   #|    renderSections();
+  #|    renderSymbols();
+  #|    renderCallgraph();
+  #|    renderAnalysisSummary();
   #|    renderFunctions();
   #|    renderBanner();
   #|  }
@@ -3283,6 +3206,8 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    renderRuntimeSummary();
   #|    renderStateCompare();
   #|    renderExecution();
+  #|    renderPseudoCode();
+  #|    renderDataflow();
   #|    renderRegisters();
   #|    renderRecentWrites();
   #|    renderReplayBreakpoints();
@@ -3617,6 +3542,26 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    renderAll();
   #|  });
   #|
+  #|  refs.symbolList.addEventListener("click", async (event) => {
+  #|    const row = event.target.closest("[data-symbol-query]");
+  #|    if (!row) {
+  #|      return;
+  #|    }
+  #|    state.searchText = row.getAttribute("data-symbol-query") || "";
+  #|    refs.searchInput.value = state.searchText;
+  #|    saveUiState();
+  #|    await jumpToAddress(state.searchText);
+  #|    renderAll();
+  #|  });
+  #|
+  #|  refs.callgraphList.addEventListener("click", async (event) => {
+  #|    const row = event.target.closest("[data-callgraph-query]");
+  #|    if (!row) {
+  #|      return;
+  #|    }
+  #|    await selectFunctionByAddr(row.getAttribute("data-callgraph-query") || "", "");
+  #|  });
+  #|
   #|  refs.disasmBody.addEventListener("click", async (event) => {
   #|    const disabledBreakpoint = event.target.closest("[data-breakpoint-disabled]");
   #|    if (disabledBreakpoint) {
@@ -3699,14 +3644,12 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    }
   #|    await loadOverview(refs.fileInput.value, true);
   #|  });
-
   #|  refs.fileUploadBtn.addEventListener("click", () => {
   #|    if (!REMOTE_MODE || state.loading) {
   #|      return;
   #|    }
   #|    refs.filePicker.click();
   #|  });
-
   #|  refs.filePicker.addEventListener("change", async (event) => {
   #|    if (!REMOTE_MODE || state.loading) {
   #|      return;
@@ -4694,8 +4637,10 @@ fn build_html_page(title : String, boot_json : String) -> String {
   html = html +
     "            <input id=\"file-input\" type=\"text\" placeholder=\"ELF file path\" />\n"
   html = html + "            <button id=\"file-load-btn\">Load</button>\n"
-  html = html + "            <input id=\"file-picker\" type=\"file\" accept=\".elf,application/octet-stream\" class=\"hidden\" />\n"
-  html = html + "            <button id=\"file-upload-btn\">Upload ELF</button>\n"
+  html = html +
+    "            <input id=\"file-picker\" type=\"file\" accept=\".elf,application/octet-stream\" class=\"hidden\" />\n"
+  html = html +
+    "            <button id=\"file-upload-btn\">Upload ELF</button>\n"
   html = html + "          </div>\n"
   html = html + "        </div>\n"
   html = html +
@@ -4800,6 +4745,18 @@ fn build_html_page(title : String, boot_json : String) -> String {
     "          <div class=\"list-header\"><span>Sections</span><span class=\"muted\" id=\"section-list-count\"></span></div>\n"
   html = html +
     "          <div class=\"compact-list\" id=\"section-list\"></div>\n"
+  html = html +
+    "          <div class=\"list-header\"><span>Symbols</span><span class=\"muted\" id=\"symbol-list-count\"></span></div>\n"
+  html = html +
+    "          <div class=\"compact-list\" id=\"symbol-list\"></div>\n"
+  html = html +
+    "          <div class=\"list-header\"><span>Call Graph</span><span class=\"muted\" id=\"callgraph-list-count\"></span></div>\n"
+  html = html +
+    "          <div class=\"compact-list\" id=\"callgraph-list\"></div>\n"
+  html = html +
+    "          <div class=\"list-header\"><span>Analysis Summary</span><span class=\"muted\">overview</span></div>\n"
+  html = html +
+    "          <div class=\"summary-grid\" id=\"analysis-summary-grid\"></div>\n"
   html = html + "        </div>\n"
   html = html + "      </aside>\n"
   html = html +
@@ -4921,6 +4878,14 @@ fn build_html_page(title : String, boot_json : String) -> String {
   html = html + "            <h3>Execution</h3>\n"
   html = html +
     "            <table class=\"kv-table mono\"><tbody id=\"execution-body\"></tbody></table>\n"
+  html = html + "          </div>\n"
+  html = html + "          <div class=\"section-block\">\n"
+  html = html + "            <h3>Pseudo Code</h3>\n"
+  html = html + "            <div id=\"pseudo-code-body\"></div>\n"
+  html = html + "          </div>\n"
+  html = html + "          <div class=\"section-block\">\n"
+  html = html + "            <h3>Dataflow</h3>\n"
+  html = html + "            <div id=\"dataflow-body\"></div>\n"
   html = html + "          </div>\n"
   html = html + "          <div class=\"section-block\">\n"
   html = html + "            <div class=\"register-toolbar\">\n"

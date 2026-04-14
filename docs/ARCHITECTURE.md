@@ -67,6 +67,8 @@ format / asm / decode / disasm / analysis   cmd/server
   - 离线单文件 HTML 生成
   - `/api/workbench/overview` + `/api/workbench/function` 主接口
   - `/api/snapshot` / `/api/stream` 兼容接口
+- `overview` 负责首屏导航与摘要，稳定输出 `symbols / callgraph / analysis_summary`
+- `function` 负责单函数切片，稳定输出 `pseudo_code / dataflow`
 - 在线和离线页面共用同一套 HTML/CSS/JS 壳，只是启动模式不同:
   - 离线模式内嵌完整 `WorkbenchData`
   - 在线模式先拉取 `/api/workbench/overview`，再按需请求 `/api/workbench/function`
@@ -83,6 +85,7 @@ format / asm / decode / disasm / analysis   cmd/server
 ### `cmd/server/`
 
 - 只负责在线路由和 HTML/API 出口，不承载模拟器状态。
+- 支持策略为 native-first；不要求 wasm-gc 提供完整在线 server 能力。
 - `/` 是轻量入口页。
 - `/workbench` 是完整在线工作台。
 - `/api/workbench/overview` / `/api/workbench/function` 是在线 workbench 主接口；`/api/snapshot` / `/api/stream` 保持兼容。

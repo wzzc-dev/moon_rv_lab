@@ -1,17 +1,21 @@
 # Roadmap
 
-## 当前轮次: 在线 RAW 产品化
+## 当前轮次: 在线 RAW 产品化 + Workbench 分析增强
 
 - 目标: 把在线 `/workbench` 与 `/api/workbench/overview|function` 补齐到和离线 RAW 同级可用性
 - 已覆盖:
   - `/workbench?file=<path>&raw=1&base=<addr>&xlen=32|64`
   - `/api/workbench/overview`
   - `/api/workbench/function`
+  - overview 的 `symbols / callgraph / analysis_summary`
+  - function slice 的 `pseudo_code / dataflow`
   - 在线 toolbar 的 `ELF / RAW` 切换、`Base`、`XLEN`
   - URL、刷新和分享时对 `raw/base/xlen` 的保留
 - 明确边界:
   - RAW 在线初版继续只暴露 synthetic function `entry`
+  - RAW 下不伪造可靠 symbol table，callgraph/dataflow 返回显式降级原因
   - `/api/snapshot` 与 `/api/stream` 仍保持 ELF-only 兼容接口
+  - `cmd/server` 以 native-first 为支持策略，不要求 wasm-gc 提供完整在线服务能力
   - 不扩 ISA、不扩 syscall 范围、不新增 RAW 函数恢复
 
 ## 后续观察点

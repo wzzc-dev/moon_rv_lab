@@ -174,6 +174,9 @@ pub fn overview_api_json_from_file(
 - `total_instruction_count`
 - `functions`
 - `sections`
+- `symbols`
+- `callgraph`
+- `analysis_summary`
 - `runtime`
 - `events`
 
@@ -184,6 +187,9 @@ RAW 模式补充:
 - `meta.input_format` 固定为 `"raw"`
 - `meta.file_class` 固定为 `"RAW"`
 - 函数列表只暴露一个 synthetic function `entry`
+- `symbols` 固定为空数组，不伪造可靠符号表
+- `callgraph.available` 固定为 `false`，并返回显式降级原因
+- `analysis_summary` 继续返回可计算的指令类别、CFG 和 runtime 摘要
 
 回放断点与 `State Compare` 继续复用现有字段，不新增 schema，客户端主要读取：
 
@@ -216,7 +222,15 @@ pub fn function_api_json_from_file(
 - `instructions`
 - `blocks`
 - `edges`
+- `pseudo_code`
+- `dataflow`
 - `available`
+
+RAW 模式补充:
+
+- 仍支持 synthetic `entry` 切片
+- `dataflow.available` 固定为 `false`，并返回显式降级原因
+- `pseudo_code` 继续作为只读解释层输出，不承诺高级结构恢复准确率
 
 在线 workbench 的函数级 CFG 与明细面板以该接口为主。
 
