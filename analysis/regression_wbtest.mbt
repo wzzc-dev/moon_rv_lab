@@ -187,3 +187,13 @@ test "decompile call chain fixture keeps helper call and returns" {
     ),
   )
 }
+
+///|
+test "analysis regression fixtures stay aligned with disassembly text" {
+  let instructions = call_chain_fixture()
+  assert_eq(@disasm.disassemble(instructions[0].inst), "c.li a0, 1")
+  assert_eq(@disasm.disassemble(instructions[1].inst), "jal ra, 0x8")
+  assert_eq(@disasm.disassemble(instructions[2].inst), "jalr zero, ra, 0")
+  assert_eq(@disasm.disassemble(instructions[3].inst), "c.li a0, 7")
+  assert_eq(@disasm.disassemble(instructions[4].inst), "jalr zero, ra, 0")
+}

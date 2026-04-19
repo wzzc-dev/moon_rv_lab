@@ -87,3 +87,31 @@ test "simulator supports file-oriented syscalls and brk updates" {
   assert_eq(brk_set.result_signed, requested_brk.reinterpret_as_int())
   assert_eq(state.memory.heap_end, requested_brk)
 }
+
+///|
+test "simulator trace json keeps syscall names and memory writes stable" {
+  ensure_test_dir()
+  let host_path = TEST_DIR + "/trace_fields_io.txt"
+  @fs.write_string_to_file(host_path, "ABCDE") catch {
+    _ => abort("failed to write host input")
+  }
+
+  let state = load_state_from_source("trace_json", "ecall\necall\nebreak")
+  let stack = state.registers.get(2U)
+  let path_addr = stack - 512U
+  let read_buf = stack - 256U
+  let state = write_memory_bytes(state, path_addr, string_to_c_bytes(host_path))
+
+  let state = configure_syscall(state, 0U, path_addr, 0U, 0U, 0U, 0U, 56U)
+  let state = step(state)
+  let fd = state.registers.get(10U)
+  let state = configure_syscall(state, fd, read_buf, 4U, 0U, 0U, 0U, 63U)
+  let state = step(state)
+
+  let json = trace_events_to_json(state.trace)
+  assert_true(json.contains("\"name\":\"openat\""))
+  assert_true(json.contains("\"name\":\"read\""))
+  assert_true(json.contains("\"memory_writes\":["))
+  assert_true(json.contains("\"addr\":\"0x10000\""))
+  assert_true(json.contains("\"stop_reason\":\"running\""))
+}

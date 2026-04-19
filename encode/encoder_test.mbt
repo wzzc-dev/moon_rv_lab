@@ -115,6 +115,51 @@ test "encode_sub" {
 }
 
 ///|
+test "encode_zba_zbb_roundtrip" {
+  let cases = [
+    0x207322B3U, // sh1add x5, x6, x7
+    0x600312B3U, // clz x5, x6
+    0x0A7322B3U, // min x5, x6, x7
+    0x0A7332B3U, // minu x5, x6, x7
+    0x0A7362B3U, // max x5, x6, x7
+    0x607352B3U, // ror x5, x6, x7
+    0x287352B3U, // orc.b x5, x6
+    0x698352B3U, // rev8 x5, x6
+    0x287362B3U, // bset x5, x6, x7
+    0x487342B3U, // bclr x5, x6, x7
+    0x4A7352B3U, // bext x5, x6, x7
+    0x687352B3U, // binv x5, x6, x7
+    0x28531293U, // bseti x5, x6, 5
+    0x48531293U, // bclri x5, x6, 5
+    0x48535293U, // bexti x5, x6, 5
+    0x68535293U, // binvi x5, x6, 5
+  ]
+  for code in cases {
+    let @decode.DecodeResult(inst) = @decode.decode(code)
+    let result = @encode.encode(inst)
+    assert_eq(result.code, code)
+  }
+}
+
+///|
+test "encode_rv64_zba_zbb_roundtrip" {
+  let cases = [
+    0x207322BBU, // sh1add.uw x5, x6, x7
+    0x087302BBU, // add.uw x5, x6, x7
+    0x0873129BU, // slli.uw x5, x6, 7
+    0x600312BBU, // clzw x5, x6
+    0x607312BBU, // rolw x5, x6, x7
+    0x607352BBU, // rorw x5, x6, x7
+    0x6073529BU, // roriw x5, x6, 7
+  ]
+  for code in cases {
+    let @decode.DecodeResult(inst) = @decode.decode(code)
+    let result = @encode.encode(inst)
+    assert_eq(result.code, code)
+  }
+}
+
+///|
 /// Test RV32M extension encoding
 test "encode_rv32m" {
   // MUL x1, x2, x3 = 0x023100B3

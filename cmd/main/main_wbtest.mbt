@@ -68,6 +68,33 @@ fn must_prepare_simple_elf() -> String {
 }
 
 ///|
+fn simple_workbench_output_path(xlen : Int) -> String {
+  if xlen == 32 {
+    CLI_TEST_DIR + "/simple32_workbench.html"
+  } else {
+    CLI_TEST_DIR + "/simple_workbench.html"
+  }
+}
+
+///|
+fn generate_simple_workbench_html(xlen : Int) -> String {
+  ensure_cli_test_dir()
+  let output_path = simple_workbench_output_path(xlen)
+  reset_cli_test_file(output_path)
+  let simple_elf = must_prepare_simple_elf_with_xlen(xlen)
+  match
+    execute_workbench_result({
+      file_path: simple_elf,
+      output: output_path,
+      title: "CLI Test Workbench",
+      max_instructions: 64,
+    }) {
+    Success(_) => must_read_text(output_path)
+    Failure(err) => abort(err)
+  }
+}
+
+///|
 fn simple_run_options(
   xlen : Int,
   format : OutputFormat,
@@ -203,6 +230,37 @@ test "run command remains compatible with explicit rv32 fixtures" {
     }
     Failure(err) => abort(err)
   }
+}
+
+///|
+test "run json output stays aligned with embedded workbench metadata" {
+  let rv64_run = match
+    execute_run_result(simple_run_options(64, OutputFormat::Json, "", [])) {
+    Success(output) => output
+    Failure(err) => abort(err)
+  }
+  let rv64_html = generate_simple_workbench_html(64)
+  assert_true(rv64_run.contains("\"entry\":\"0x10000\""))
+  assert_true(rv64_run.contains("\"xlen\":64"))
+  assert_true(rv64_run.contains("\"stop_reason\":\"ebreak @0x1002c\""))
+  assert_true(rv64_html.contains("\"entry_point\":\"0x10000\""))
+  assert_true(rv64_html.contains("\"initial_pc\":\"0x10000\""))
+  assert_true(rv64_html.contains("\"xlen\":64"))
+  assert_true(rv64_html.contains("\"stop_reason\":\"ebreak @0x1002c\""))
+
+  let rv32_run = match
+    execute_run_result(simple_run_options(32, OutputFormat::Json, "", [])) {
+    Success(output) => output
+    Failure(err) => abort(err)
+  }
+  let rv32_html = generate_simple_workbench_html(32)
+  assert_true(rv32_run.contains("\"entry\":\"0x10000\""))
+  assert_true(rv32_run.contains("\"xlen\":32"))
+  assert_true(rv32_run.contains("\"stop_reason\":\"ebreak @0x1002c\""))
+  assert_true(rv32_html.contains("\"entry_point\":\"0x10000\""))
+  assert_true(rv32_html.contains("\"initial_pc\":\"0x10000\""))
+  assert_true(rv32_html.contains("\"xlen\":32"))
+  assert_true(rv32_html.contains("\"stop_reason\":\"ebreak @0x1002c\""))
 }
 
 ///|

@@ -15,11 +15,21 @@ fn ensure_test_dir() -> Unit {
 
 ///|
 fn assemble_test_elf(source : String) -> FixedArray[Byte] {
+  assemble_test_elf_with_xlen(source, 64)
+}
+
+///|
+fn assemble_test_elf_with_xlen(source : String, xlen : Int) -> FixedArray[Byte] {
   let assembled = @asm.assemble_with_symbols(source, TEST_BASE)
   if assembled.errors.length() != 0 {
     abort("assembly failed")
   }
-  @format.assemble_to_elf(@asm.encode_to_bytes(assembled), TEST_BASE)
+  let bytes = @asm.encode_to_bytes(assembled)
+  if xlen <= 32 {
+    @format.assemble_to_elf32(bytes, TEST_BASE)
+  } else {
+    @format.assemble_to_elf64(bytes, TEST_BASE)
+  }
 }
 
 ///|
@@ -62,6 +72,15 @@ fn load_state_from_program_bytes(
 ///|
 fn load_state_from_source(name : String, source : String) -> ExecState {
   load_state_from_elf_bytes(name, assemble_test_elf(source))
+}
+
+///|
+fn load_state_from_source_with_xlen(
+  name : String,
+  source : String,
+  xlen : Int,
+) -> ExecState {
+  load_state_from_elf_bytes(name, assemble_test_elf_with_xlen(source, xlen))
 }
 
 ///|

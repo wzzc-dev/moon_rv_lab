@@ -252,12 +252,12 @@ pub fn parse_instruction(
     "sext.b" => parse_and_build_unary_zbb(operands, 0x64U)
     "sext.h" => parse_and_build_unary_zbb(operands, 0x65U)
     "zext.h" => parse_and_build_unary_zbb_w(operands, 0x0CU)
-    "max" => parse_and_build_r_zbb(operands, 0x6U, 0x0U)
-    "maxu" => parse_and_build_r_zbb(operands, 0x7U, 0x0U)
-    "min" => parse_and_build_r_zbb(operands, 0x4U, 0x0U)
-    "minu" => parse_and_build_r_zbb(operands, 0x5U, 0x0U)
-    "rol" => parse_and_build_r_zbb(operands, 0x1U, 0x0U)
-    "ror" => parse_and_build_r_zbb(operands, 0x5U, 0x20U)
+    "max" => parse_and_build_r_zbb(operands, 0x6U, 0x5U)
+    "maxu" => parse_and_build_r_zbb(operands, 0x7U, 0x5U)
+    "min" => parse_and_build_r_zbb(operands, 0x2U, 0x5U)
+    "minu" => parse_and_build_r_zbb(operands, 0x3U, 0x5U)
+    "rol" => parse_and_build_r_zbb(operands, 0x1U, 0x30U)
+    "ror" => parse_and_build_r_zbb(operands, 0x5U, 0x30U)
     "rori" => parse_and_build_shift_zbb(operands, 0x5U)
     "orc.b" => parse_and_build_unary_zbb(operands, 0x67U)
     "rev8" => parse_and_build_unary_zbb(operands, 0x6BU)
@@ -1023,17 +1023,17 @@ fn parse_and_build_r_zbb(
         Some(@decode.ORN(r, s1, s2))
       } else if funct3 == 0x4U && funct7 == 0x20U {
         Some(@decode.XNOR(r, s1, s2))
-      } else if funct3 == 0x6U && funct7 == 0x0U {
+      } else if funct3 == 0x6U && funct7 == 0x5U {
         Some(@decode.MAX(r, s1, s2))
-      } else if funct3 == 0x7U && funct7 == 0x0U {
+      } else if funct3 == 0x7U && funct7 == 0x5U {
         Some(@decode.MAXU(r, s1, s2))
-      } else if funct3 == 0x4U && funct7 == 0x0U {
+      } else if funct3 == 0x2U && funct7 == 0x5U {
         Some(@decode.MIN(r, s1, s2))
-      } else if funct3 == 0x5U && funct7 == 0x0U {
+      } else if funct3 == 0x3U && funct7 == 0x5U {
         Some(@decode.MINU(r, s1, s2))
-      } else if funct3 == 0x1U && funct7 == 0x0U {
+      } else if funct3 == 0x1U && funct7 == 0x30U {
         Some(@decode.ROL(r, s1, s2))
-      } else if funct3 == 0x5U && funct7 == 0x20U {
+      } else if funct3 == 0x5U && funct7 == 0x30U {
         Some(@decode.ROR(r, s1, s2))
       } else {
         None

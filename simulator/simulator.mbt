@@ -822,6 +822,139 @@ fn execute_single_step(
           32,
         ),
       )
+    @decode.SH1ADD(rd, rs1, rs2) =>
+      write_reg(
+        rd,
+        normalize_xlen((read_reg(rs1) << 1) + read_reg(rs2), state.image.xlen),
+      )
+    @decode.SH2ADD(rd, rs1, rs2) =>
+      write_reg(
+        rd,
+        normalize_xlen((read_reg(rs1) << 2) + read_reg(rs2), state.image.xlen),
+      )
+    @decode.SH3ADD(rd, rs1, rs2) =>
+      write_reg(
+        rd,
+        normalize_xlen((read_reg(rs1) << 3) + read_reg(rs2), state.image.xlen),
+      )
+    @decode.ANDN(rd, rs1, rs2) =>
+      write_reg(
+        rd,
+        normalize_xlen(
+          read_reg(rs1) & invert_xlen_bits(read_reg(rs2), state.image.xlen),
+          state.image.xlen,
+        ),
+      )
+    @decode.ORN(rd, rs1, rs2) =>
+      write_reg(
+        rd,
+        normalize_xlen(
+          read_reg(rs1) | invert_xlen_bits(read_reg(rs2), state.image.xlen),
+          state.image.xlen,
+        ),
+      )
+    @decode.XNOR(rd, rs1, rs2) =>
+      write_reg(
+        rd,
+        normalize_xlen(
+          invert_xlen_bits(read_reg(rs1) ^ read_reg(rs2), state.image.xlen),
+          state.image.xlen,
+        ),
+      )
+    @decode.CLZ(rd, rs1) =>
+      write_reg(rd, count_leading_zeros_of_xlen(read_reg(rs1), state.image.xlen))
+    @decode.CTZ(rd, rs1) =>
+      write_reg(
+        rd,
+        count_trailing_zeros_of_xlen(read_reg(rs1), state.image.xlen),
+      )
+    @decode.CPOP(rd, rs1) =>
+      write_reg(
+        rd,
+        count_population_bits_of_xlen(read_reg(rs1), state.image.xlen),
+      )
+    @decode.SEXT_B(rd, rs1) =>
+      write_reg(rd, sign_extend_to_uint(read_reg(rs1) & 0xFFU, 8))
+    @decode.SEXT_H(rd, rs1) =>
+      write_reg(rd, sign_extend_to_uint(read_reg(rs1) & 0xFFFFU, 16))
+    @decode.ZEXT_H(rd, rs1) =>
+      write_reg(rd, normalize_xlen(read_reg(rs1) & 0xFFFFU, state.image.xlen))
+    @decode.MAX(rd, rs1, rs2) =>
+      write_reg(rd, signed_max_of_xlen(read_reg(rs1), read_reg(rs2), state.image.xlen))
+    @decode.MAXU(rd, rs1, rs2) =>
+      write_reg(rd, unsigned_max_of_xlen(read_reg(rs1), read_reg(rs2), state.image.xlen))
+    @decode.MIN(rd, rs1, rs2) =>
+      write_reg(rd, signed_min_of_xlen(read_reg(rs1), read_reg(rs2), state.image.xlen))
+    @decode.MINU(rd, rs1, rs2) =>
+      write_reg(rd, unsigned_min_of_xlen(read_reg(rs1), read_reg(rs2), state.image.xlen))
+    @decode.ROL(rd, rs1, rs2) =>
+      write_reg(
+        rd,
+        rotate_left_of_xlen(read_reg(rs1), read_reg(rs2), state.image.xlen),
+      )
+    @decode.ROR(rd, rs1, rs2) =>
+      write_reg(
+        rd,
+        rotate_right_of_xlen(read_reg(rs1), read_reg(rs2), state.image.xlen),
+      )
+    @decode.RORI(rd, rs1, shamt) =>
+      write_reg(rd, rotate_right_of_xlen(read_reg(rs1), shamt, state.image.xlen))
+    @decode.ORC_B(rd, rs1) =>
+      write_reg(rd, or_combine_bytes_of_xlen(read_reg(rs1), state.image.xlen))
+    @decode.REV8(rd, rs1) =>
+      write_reg(rd, reverse_bytes_of_xlen(read_reg(rs1), state.image.xlen))
+    @decode.BCLR(rd, rs1, rs2) =>
+      write_reg(
+        rd,
+        normalize_xlen(
+          read_reg(rs1) & invert_xlen_bits(bit_mask_for_xlen(read_reg(rs2), state.image.xlen), state.image.xlen),
+          state.image.xlen,
+        ),
+      )
+    @decode.BCLRI(rd, rs1, shamt) =>
+      write_reg(
+        rd,
+        normalize_xlen(
+          read_reg(rs1) & invert_xlen_bits(bit_mask_for_xlen(shamt, state.image.xlen), state.image.xlen),
+          state.image.xlen,
+        ),
+      )
+    @decode.BEXT(rd, rs1, rs2) =>
+      write_reg(rd, bit_extract_of_xlen(read_reg(rs1), read_reg(rs2), state.image.xlen))
+    @decode.BEXTI(rd, rs1, shamt) =>
+      write_reg(rd, bit_extract_of_xlen(read_reg(rs1), shamt, state.image.xlen))
+    @decode.BINV(rd, rs1, rs2) =>
+      write_reg(
+        rd,
+        normalize_xlen(
+          read_reg(rs1) ^ bit_mask_for_xlen(read_reg(rs2), state.image.xlen),
+          state.image.xlen,
+        ),
+      )
+    @decode.BINVI(rd, rs1, shamt) =>
+      write_reg(
+        rd,
+        normalize_xlen(
+          read_reg(rs1) ^ bit_mask_for_xlen(shamt, state.image.xlen),
+          state.image.xlen,
+        ),
+      )
+    @decode.BSET(rd, rs1, rs2) =>
+      write_reg(
+        rd,
+        normalize_xlen(
+          read_reg(rs1) | bit_mask_for_xlen(read_reg(rs2), state.image.xlen),
+          state.image.xlen,
+        ),
+      )
+    @decode.BSETI(rd, rs1, shamt) =>
+      write_reg(
+        rd,
+        normalize_xlen(
+          read_reg(rs1) | bit_mask_for_xlen(shamt, state.image.xlen),
+          state.image.xlen,
+        ),
+      )
     @decode.FENCE(_, _) => ()
     @decode.FENCE_I => ()
     @decode.EBREAK => {
@@ -1516,6 +1649,190 @@ fn unsigned_remainder_result(lhs : UInt, rhs : UInt, xlen : Int) -> UInt {
     return normalize_xlen(lhs, xlen)
   }
   normalize_xlen(normalize_xlen(lhs, xlen) % divisor, xlen)
+}
+
+///|
+fn xlen_bit_width(xlen : Int) -> Int {
+  if xlen <= 32 {
+    32
+  } else {
+    64
+  }
+}
+
+///|
+fn xlen_byte_width(xlen : Int) -> Int {
+  if xlen <= 32 {
+    4
+  } else {
+    8
+  }
+}
+
+///|
+fn invert_xlen_bits(value : UInt, xlen : Int) -> UInt {
+  normalize_xlen(normalize_xlen(0U - 1U, xlen) ^ normalize_xlen(value, xlen), xlen)
+}
+
+///|
+fn count_leading_zeros_of_xlen(value : UInt, xlen : Int) -> UInt {
+  let normalized = normalize_xlen(value, xlen)
+  let mut count = 0
+  let mut bit = xlen_bit_width(xlen) - 1
+  while bit >= 0 {
+    if ((normalized >> bit) & 0x1U) != 0U {
+      break
+    }
+    count = count + 1
+    bit = bit - 1
+  }
+  count.reinterpret_as_uint()
+}
+
+///|
+fn count_trailing_zeros_of_xlen(value : UInt, xlen : Int) -> UInt {
+  let normalized = normalize_xlen(value, xlen)
+  let width = xlen_bit_width(xlen)
+  let mut count = 0
+  let mut bit = 0
+  while bit < width {
+    if ((normalized >> bit) & 0x1U) != 0U {
+      break
+    }
+    count = count + 1
+    bit = bit + 1
+  }
+  count.reinterpret_as_uint()
+}
+
+///|
+fn count_population_bits_of_xlen(value : UInt, xlen : Int) -> UInt {
+  let normalized = normalize_xlen(value, xlen)
+  let width = xlen_bit_width(xlen)
+  let mut count = 0
+  let mut bit = 0
+  while bit < width {
+    if ((normalized >> bit) & 0x1U) != 0U {
+      count = count + 1
+    }
+    bit = bit + 1
+  }
+  count.reinterpret_as_uint()
+}
+
+///|
+fn rotate_left_of_xlen(value : UInt, shamt : UInt, xlen : Int) -> UInt {
+  let normalized = normalize_xlen(value, xlen)
+  let width = xlen_bit_width(xlen)
+  let shift = (shamt & shift_mask_for_xlen(xlen)).reinterpret_as_int() % width
+  if shift == 0 {
+    normalized
+  } else {
+    normalize_xlen(
+      (normalized << shift) | (normalized >> (width - shift)),
+      xlen,
+    )
+  }
+}
+
+///|
+fn rotate_right_of_xlen(value : UInt, shamt : UInt, xlen : Int) -> UInt {
+  let normalized = normalize_xlen(value, xlen)
+  let width = xlen_bit_width(xlen)
+  let shift = (shamt & shift_mask_for_xlen(xlen)).reinterpret_as_int() % width
+  if shift == 0 {
+    normalized
+  } else {
+    normalize_xlen(
+      (normalized >> shift) | (normalized << (width - shift)),
+      xlen,
+    )
+  }
+}
+
+///|
+fn signed_max_of_xlen(lhs : UInt, rhs : UInt, xlen : Int) -> UInt {
+  let lhs_signed = signed_of_xlen(lhs, xlen)
+  let rhs_signed = signed_of_xlen(rhs, xlen)
+  if lhs_signed >= rhs_signed {
+    normalize_xlen(lhs_signed.reinterpret_as_uint(), xlen)
+  } else {
+    normalize_xlen(rhs_signed.reinterpret_as_uint(), xlen)
+  }
+}
+
+///|
+fn signed_min_of_xlen(lhs : UInt, rhs : UInt, xlen : Int) -> UInt {
+  let lhs_signed = signed_of_xlen(lhs, xlen)
+  let rhs_signed = signed_of_xlen(rhs, xlen)
+  if lhs_signed <= rhs_signed {
+    normalize_xlen(lhs_signed.reinterpret_as_uint(), xlen)
+  } else {
+    normalize_xlen(rhs_signed.reinterpret_as_uint(), xlen)
+  }
+}
+
+///|
+fn unsigned_max_of_xlen(lhs : UInt, rhs : UInt, xlen : Int) -> UInt {
+  let lhs_norm = normalize_xlen(lhs, xlen)
+  let rhs_norm = normalize_xlen(rhs, xlen)
+  if lhs_norm >= rhs_norm {
+    lhs_norm
+  } else {
+    rhs_norm
+  }
+}
+
+///|
+fn unsigned_min_of_xlen(lhs : UInt, rhs : UInt, xlen : Int) -> UInt {
+  let lhs_norm = normalize_xlen(lhs, xlen)
+  let rhs_norm = normalize_xlen(rhs, xlen)
+  if lhs_norm <= rhs_norm {
+    lhs_norm
+  } else {
+    rhs_norm
+  }
+}
+
+///|
+fn bit_mask_for_xlen(index : UInt, xlen : Int) -> UInt {
+  1U << (index & shift_mask_for_xlen(xlen)).reinterpret_as_int()
+}
+
+///|
+fn bit_extract_of_xlen(value : UInt, index : UInt, xlen : Int) -> UInt {
+  if (normalize_xlen(value, xlen) & bit_mask_for_xlen(index, xlen)) != 0U {
+    1U
+  } else {
+    0U
+  }
+}
+
+///|
+fn or_combine_bytes_of_xlen(value : UInt, xlen : Int) -> UInt {
+  let normalized = normalize_xlen(value, xlen)
+  let mut result = 0U
+  for i = 0; i < xlen_byte_width(xlen); i = i + 1 {
+    let shift = i * 8
+    if ((normalized >> shift) & 0xFFU) != 0U {
+      result = result | (0xFFU << shift)
+    }
+  }
+  normalize_xlen(result, xlen)
+}
+
+///|
+fn reverse_bytes_of_xlen(value : UInt, xlen : Int) -> UInt {
+  let normalized = normalize_xlen(value, xlen)
+  let mut result = 0U
+  let width = xlen_byte_width(xlen)
+  for i = 0; i < width; i = i + 1 {
+    let source_shift = i * 8
+    let target_shift = (width - 1 - i) * 8
+    let byte = (normalized >> source_shift) & 0xFFU
+    result = result | (byte << target_shift)
+  }
+  normalize_xlen(result, xlen)
 }
 
 ///|

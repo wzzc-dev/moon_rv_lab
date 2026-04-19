@@ -177,13 +177,13 @@ pub fn encode(inst : @decode.Instruction) -> EncodeResult {
     @decode.CSRRCI(rd, csr, uimm) => encode_csr_imm(rd, csr, uimm, 0x7U)
 
     // Zba extension
-    @decode.SH1ADD(rd, rs1, rs2) => encode_r_type_zba(rd, rs1, rs2, 0x10U)
-    @decode.SH2ADD(rd, rs1, rs2) => encode_r_type_zba(rd, rs1, rs2, 0x20U)
-    @decode.SH3ADD(rd, rs1, rs2) => encode_r_type_zba(rd, rs1, rs2, 0x30U)
-    @decode.SH1ADD_UW(rd, rs1, rs2) => encode_r_type_zba64(rd, rs1, rs2, 0x10U)
-    @decode.SH2ADD_UW(rd, rs1, rs2) => encode_r_type_zba64(rd, rs1, rs2, 0x20U)
-    @decode.SH3ADD_UW(rd, rs1, rs2) => encode_r_type_zba64(rd, rs1, rs2, 0x30U)
-    @decode.ADD_UW(rd, rs1, rs2) => encode_r_type_zba64(rd, rs1, rs2, 0x0U)
+    @decode.SH1ADD(rd, rs1, rs2) => encode_r_type_zba(rd, rs1, rs2, 0x2U)
+    @decode.SH2ADD(rd, rs1, rs2) => encode_r_type_zba(rd, rs1, rs2, 0x4U)
+    @decode.SH3ADD(rd, rs1, rs2) => encode_r_type_zba(rd, rs1, rs2, 0x6U)
+    @decode.SH1ADD_UW(rd, rs1, rs2) => encode_r_type_zba64(rd, rs1, rs2, 0x10U, 0x2U)
+    @decode.SH2ADD_UW(rd, rs1, rs2) => encode_r_type_zba64(rd, rs1, rs2, 0x10U, 0x4U)
+    @decode.SH3ADD_UW(rd, rs1, rs2) => encode_r_type_zba64(rd, rs1, rs2, 0x10U, 0x6U)
+    @decode.ADD_UW(rd, rs1, rs2) => encode_r_type_zba64(rd, rs1, rs2, 0x4U, 0x0U)
     @decode.SLLI_UW(rd, rs1, shamt) => encode_shift_imm_uw(rd, rs1, shamt)
 
     // Zbb extension
@@ -195,21 +195,21 @@ pub fn encode(inst : @decode.Instruction) -> EncodeResult {
     @decode.CPOP(rd, rs1) => encode_unary_zbb(rd, rs1, 0x2U)
     @decode.SEXT_B(rd, rs1) => encode_unary_zbb(rd, rs1, 0x4U)
     @decode.SEXT_H(rd, rs1) => encode_unary_zbb(rd, rs1, 0x5U)
-    @decode.ZEXT_H(rd, rs1) => encode_unary_zbb_32(rd, rs1, 0x4U)
-    @decode.MAX(rd, rs1, rs2) => encode_r_type_zbb(rd, rs1, rs2, 0x0U, 0x6U)
-    @decode.MAXU(rd, rs1, rs2) => encode_r_type_zbb(rd, rs1, rs2, 0x0U, 0x7U)
-    @decode.MIN(rd, rs1, rs2) => encode_r_type_zbb(rd, rs1, rs2, 0x0U, 0x4U)
-    @decode.MINU(rd, rs1, rs2) => encode_r_type_zbb(rd, rs1, rs2, 0x0U, 0x5U)
-    @decode.ROL(rd, rs1, rs2) => encode_r_type_zbb(rd, rs1, rs2, 0x0U, 0x1U)
-    @decode.ROR(rd, rs1, rs2) => encode_r_type_zbb(rd, rs1, rs2, 0x0U, 0x5U)
+    @decode.ZEXT_H(rd, rs1) => encode_zext_h(rd, rs1)
+    @decode.MAX(rd, rs1, rs2) => encode_r_type_zbb(rd, rs1, rs2, 0x5U, 0x6U)
+    @decode.MAXU(rd, rs1, rs2) => encode_r_type_zbb(rd, rs1, rs2, 0x5U, 0x7U)
+    @decode.MIN(rd, rs1, rs2) => encode_r_type_zbb(rd, rs1, rs2, 0x5U, 0x2U)
+    @decode.MINU(rd, rs1, rs2) => encode_r_type_zbb(rd, rs1, rs2, 0x5U, 0x3U)
+    @decode.ROL(rd, rs1, rs2) => encode_r_type_zbb(rd, rs1, rs2, 0x30U, 0x1U)
+    @decode.ROR(rd, rs1, rs2) => encode_r_type_zbb(rd, rs1, rs2, 0x30U, 0x5U)
     @decode.RORI(rd, rs1, shamt) => encode_rori(rd, rs1, shamt)
-    @decode.ORC_B(rd, rs1) => encode_unary_zbb(rd, rs1, 0x7U)
+    @decode.ORC_B(rd, rs1) => encode_orc_b(rd, rs1)
     @decode.REV8(rd, rs1) => encode_rev8(rd, rs1)
     @decode.CLZW(rd, rs1) => encode_unary_zbb64(rd, rs1, 0x0U)
     @decode.CTZW(rd, rs1) => encode_unary_zbb64(rd, rs1, 0x1U)
     @decode.CPOPW(rd, rs1) => encode_unary_zbb64(rd, rs1, 0x2U)
-    @decode.ROLW(rd, rs1, rs2) => encode_r_type_zbb64(rd, rs1, rs2, 0x1U)
-    @decode.RORW(rd, rs1, rs2) => encode_r_type_zbb64(rd, rs1, rs2, 0x5U)
+    @decode.ROLW(rd, rs1, rs2) => encode_r_type_zbb64(rd, rs1, rs2, 0x30U, 0x1U)
+    @decode.RORW(rd, rs1, rs2) => encode_r_type_zbb64(rd, rs1, rs2, 0x30U, 0x5U)
     @decode.RORIW(rd, rs1, shamt) => encode_roriw(rd, rs1, shamt)
 
     // Zbc extension
@@ -218,14 +218,14 @@ pub fn encode(inst : @decode.Instruction) -> EncodeResult {
     @decode.CLMULR(rd, rs1, rs2) => encode_r_type_zbc(rd, rs1, rs2, 0x2U)
 
     // Zbs extension
-    @decode.BCLR(rd, rs1, rs2) => encode_r_type_zbs(rd, rs1, rs2, 0x1U)
-    @decode.BCLRI(rd, rs1, shamt) => encode_zbs_imm(rd, rs1, shamt, 0x1U)
-    @decode.BEXT(rd, rs1, rs2) => encode_r_type_zbs(rd, rs1, rs2, 0x5U)
-    @decode.BEXTI(rd, rs1, shamt) => encode_zbs_imm(rd, rs1, shamt, 0x5U)
-    @decode.BINV(rd, rs1, rs2) => encode_r_type_zbs(rd, rs1, rs2, 0x3U)
-    @decode.BINVI(rd, rs1, shamt) => encode_zbs_imm(rd, rs1, shamt, 0x3U)
-    @decode.BSET(rd, rs1, rs2) => encode_r_type_zbs(rd, rs1, rs2, 0x0U)
-    @decode.BSETI(rd, rs1, shamt) => encode_zbs_imm(rd, rs1, shamt, 0x0U)
+    @decode.BCLR(rd, rs1, rs2) => encode_r_type_zbs(rd, rs1, rs2, 0x24U, 0x4U)
+    @decode.BCLRI(rd, rs1, shamt) => encode_zbs_imm(rd, rs1, shamt, 0x24U, 0x1U)
+    @decode.BEXT(rd, rs1, rs2) => encode_r_type_zbs(rd, rs1, rs2, 0x25U, 0x5U)
+    @decode.BEXTI(rd, rs1, shamt) => encode_zbs_imm(rd, rs1, shamt, 0x24U, 0x5U)
+    @decode.BINV(rd, rs1, rs2) => encode_r_type_zbs(rd, rs1, rs2, 0x34U, 0x5U)
+    @decode.BINVI(rd, rs1, shamt) => encode_zbs_imm(rd, rs1, shamt, 0x34U, 0x5U)
+    @decode.BSET(rd, rs1, rs2) => encode_r_type_zbs(rd, rs1, rs2, 0x14U, 0x6U)
+    @decode.BSETI(rd, rs1, shamt) => encode_zbs_imm(rd, rs1, shamt, 0x14U, 0x1U)
 
     // RV32A extension
     @decode.LR_W(rd, rs1, aq, rl) => encode_lr_w(rd, rs1, aq, rl)
@@ -513,17 +513,28 @@ fn encode_csr_imm(rd : UInt, csr : UInt, uimm : UInt, funct3 : UInt) -> UInt {
 
 ///|
 /// Encode Zba extension R-type instruction
-fn encode_r_type_zba(rd : UInt, rs1 : UInt, rs2 : UInt, funct7 : UInt) -> UInt {
-  (0x20U << 25) | (rs2 << 20) | (rs1 << 15) | (0x2U << 12) | (rd << 7) | OP_REG
+fn encode_r_type_zba(rd : UInt, rs1 : UInt, rs2 : UInt, funct3 : UInt) -> UInt {
+  (0x10U << 25) |
+  (rs2 << 20) |
+  (rs1 << 15) |
+  (funct3 << 12) |
+  (rd << 7) |
+  OP_REG
 }
 
 ///|
 /// Encode Zba extension R-type instruction for RV64
-fn encode_r_type_zba64(rd : UInt, rs1 : UInt, rs2 : UInt, shamt : UInt) -> UInt {
-  ((0x0CU | shamt) << 25) |
+fn encode_r_type_zba64(
+  rd : UInt,
+  rs1 : UInt,
+  rs2 : UInt,
+  funct7 : UInt,
+  funct3 : UInt,
+) -> UInt {
+  (funct7 << 25) |
   (rs2 << 20) |
   (rs1 << 15) |
-  (0x4U << 12) |
+  (funct3 << 12) |
   (rd << 7) |
   OP_OP32
 }
@@ -531,7 +542,7 @@ fn encode_r_type_zba64(rd : UInt, rs1 : UInt, rs2 : UInt, shamt : UInt) -> UInt 
 ///|
 /// Encode SLLI_UW instruction
 fn encode_shift_imm_uw(rd : UInt, rs1 : UInt, shamt : UInt) -> UInt {
-  (0x0BU << 25) |
+  (0x4U << 25) |
   (shamt << 20) |
   (rs1 << 15) |
   (0x1U << 12) |
@@ -564,36 +575,25 @@ fn encode_unary_zbb(rd : UInt, rs1 : UInt, funct5 : UInt) -> UInt {
   (rs1 << 15) |
   (0x1U << 12) |
   (rd << 7) |
-  OP_IMM
-}
-
-///|
-/// Encode 32-bit unary Zbb instruction
-fn encode_unary_zbb_32(rd : UInt, rs1 : UInt, funct5 : UInt) -> UInt {
-  (0x0CU << 25) |
-  (funct5 << 20) |
-  (rs1 << 15) |
-  (0x4U << 12) |
-  (rd << 7) |
-  OP_OP32
+  OP_REG
 }
 
 ///|
 /// Encode unary Zbb instruction for RV64
 fn encode_unary_zbb64(rd : UInt, rs1 : UInt, funct5 : UInt) -> UInt {
-  (0x1CU << 25) |
+  (0x30U << 25) |
   (funct5 << 20) |
   (rs1 << 15) |
   (0x1U << 12) |
   (rd << 7) |
-  OP_OP_IMM32
+  OP_OP32
 }
 
 ///|
 /// Encode RORI instruction
 fn encode_rori(rd : UInt, rs1 : UInt, shamt : UInt) -> UInt {
   (0x30U << 25) |
-  ((0x8U | shamt) << 20) |
+  (shamt << 20) |
   (rs1 << 15) |
   (0x5U << 12) |
   (rd << 7) |
@@ -603,7 +603,12 @@ fn encode_rori(rd : UInt, rs1 : UInt, shamt : UInt) -> UInt {
 ///|
 /// Encode REV8 instruction
 fn encode_rev8(rd : UInt, rs1 : UInt) -> UInt {
-  (0x35U << 25) | (0x8U << 20) | (rs1 << 15) | (0x1U << 12) | (rd << 7) | OP_IMM
+  (0x34U << 25) |
+  (0x18U << 20) |
+  (rs1 << 15) |
+  (0x5U << 12) |
+  (rd << 7) |
+  OP_REG
 }
 
 ///|
@@ -612,9 +617,10 @@ fn encode_r_type_zbb64(
   rd : UInt,
   rs1 : UInt,
   rs2 : UInt,
+  funct7 : UInt,
   funct3 : UInt,
 ) -> UInt {
-  (0x1U << 25) |
+  (funct7 << 25) |
   (rs2 << 20) |
   (rs1 << 15) |
   (funct3 << 12) |
@@ -625,12 +631,27 @@ fn encode_r_type_zbb64(
 ///|
 /// Encode RORIW instruction
 fn encode_roriw(rd : UInt, rs1 : UInt, shamt : UInt) -> UInt {
-  (0x20U << 25) |
-  ((0x8U | shamt) << 20) |
+  (0x30U << 25) |
+  (shamt << 20) |
   (rs1 << 15) |
   (0x5U << 12) |
   (rd << 7) |
   OP_OP_IMM32
+}
+
+///|
+fn encode_zext_h(rd : UInt, rs1 : UInt) -> UInt {
+  (0x4U << 25) | (rs1 << 15) | (0x4U << 12) | (rd << 7) | OP_REG
+}
+
+///|
+fn encode_orc_b(rd : UInt, rs1 : UInt) -> UInt {
+  (0x14U << 25) |
+  (0x7U << 20) |
+  (rs1 << 15) |
+  (0x5U << 12) |
+  (rd << 7) |
+  OP_REG
 }
 
 ///|
@@ -641,8 +662,14 @@ fn encode_r_type_zbc(rd : UInt, rs1 : UInt, rs2 : UInt, funct3 : UInt) -> UInt {
 
 ///|
 /// Encode Zbs extension R-type instruction
-fn encode_r_type_zbs(rd : UInt, rs1 : UInt, rs2 : UInt, funct3 : UInt) -> UInt {
-  (0x14U << 25) |
+fn encode_r_type_zbs(
+  rd : UInt,
+  rs1 : UInt,
+  rs2 : UInt,
+  funct7 : UInt,
+  funct3 : UInt,
+) -> UInt {
+  (funct7 << 25) |
   (rs2 << 20) |
   (rs1 << 15) |
   (funct3 << 12) |
@@ -652,8 +679,14 @@ fn encode_r_type_zbs(rd : UInt, rs1 : UInt, rs2 : UInt, funct3 : UInt) -> UInt {
 
 ///|
 /// Encode Zbs extension immediate instruction
-fn encode_zbs_imm(rd : UInt, rs1 : UInt, shamt : UInt, funct3 : UInt) -> UInt {
-  (0x14U << 25) |
+fn encode_zbs_imm(
+  rd : UInt,
+  rs1 : UInt,
+  shamt : UInt,
+  funct7 : UInt,
+  funct3 : UInt,
+) -> UInt {
+  (funct7 << 25) |
   (shamt << 20) |
   (rs1 << 15) |
   (funct3 << 12) |

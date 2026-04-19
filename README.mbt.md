@@ -14,8 +14,11 @@ MoonBit 编写的 RISC-V 二进制分析与执行实验项目。当前仓库已�
 ## 快速开始
 
 ```bash
-# 自动化回归
+# 基础本地回归
 ~/.moon/bin/moon test
+
+# Linux 第二层扩展回归
+scripts/run_extended_regression.sh
 
 # 先汇编默认演示源码
 ~/.moon/bin/moon run cmd/main -- asm example/simple.s -o out/simple.elf
@@ -36,6 +39,8 @@ MoonBit 编写的 RISC-V 二进制分析与执行实验项目。当前仓库已�
 ~/.moon/bin/moon run cmd/main -- asm example/simple.s -o out/simple32.elf --xlen 32
 ~/.moon/bin/moon run cmd/main -- run out/simple32.elf --max-steps 20
 ```
+
+完整的 smoke / extended regression / Windows 补充校验说明见 [docs/TESTING.md](docs/TESTING.md)。
 
 ## 前端使用路径
 

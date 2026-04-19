@@ -369,12 +369,12 @@ pub fn decode(code : UInt) -> DecodeResult {
               } else {
                 DecodeResult(BINV(rd, rs1, rs2))
               }
-            // Zbs: BSET or Zbb: ORC_B (rs2=00111=7)
+            // Zbb: ORC_B
             0b0010100 =>
               if rs2 == 0b00111U {
                 DecodeResult(ORC_B(rd, rs1))
               } else {
-                DecodeResult(BSET(rd, rs1, rs2))
+                DecodeResult(Invalid(code))
               }
             _ => DecodeResult(Invalid(code))
           }

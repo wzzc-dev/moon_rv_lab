@@ -95,6 +95,12 @@ fn is_alnum_underscore(c : Char) -> Bool {
 }
 
 ///|
+/// Check if character can continue an identifier
+fn is_ident_char(c : Char) -> Bool {
+  is_alnum_underscore(c) || c == '.'
+}
+
+///|
 /// Check if character can start an identifier
 fn is_ident_start(c : Char) -> Bool {
   (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || c == '_' || c == '.'
@@ -183,7 +189,7 @@ fn read_ident(lexer : Lexer) -> (Lexer, Token) {
   let mut l = lexer
   let mut ident = ""
 
-  while is_alnum_underscore(l.peek()) {
+  while is_ident_char(l.peek()) {
     let (new_l, c) = l.advance()
     l = new_l
     ident = ident + c.to_string()

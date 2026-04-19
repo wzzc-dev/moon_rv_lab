@@ -24,6 +24,7 @@
 | TODO-20 | 已完成 | 为 workbench 增加轨迹回放断点 | `moon test workbench --target native` | `feat: 为 workbench 增加轨迹回放断点` |
 | TODO-21 | 已完成 | 为 workbench 增加状态对比视图 | `moon test workbench --target native` | `feat: 为 workbench 增加状态对比视图` |
 | TODO-22 | 已完成 | 同步 workbench 断点与状态对比说明 | `moon test workbench --target native`<br>`moon test cmd/server --target native`<br>`moon run cmd/main -- asm example/simple.s -o out/simple.elf`<br>`moon run cmd/main -- workbench out/simple.elf -o out/workbench.html` | `docs: 同步 workbench 断点与状态对比说明` |
+| TODO-23 | 已完成 | 建立 Linux 扩展回归第二层门禁，统一脚本入口并补关键语义断言 | `moon test analysis`<br>`moon test decode`<br>`moon test format`<br>`moon test simulator --target native`<br>`moon test cmd/main --target native`<br>`moon test workbench --target native`<br>`bash scripts/run_extended_regression.sh` | `ci: 建立扩展回归第二层门禁` |
 
 ## 执行约定
 

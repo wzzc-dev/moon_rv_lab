@@ -185,6 +185,54 @@ test "lexer_label" {
 }
 
 ///|
+test "lexer_dotted_instruction" {
+  let tokens = tokenize("sext.b a0, a1")
+  match tokens[0].token {
+    Token::Ident(name) => assert_eq(name, "sext.b")
+    _ => abort("Expected dotted instruction")
+  }
+}
+
+///|
+test "lexer_directive_consumes_dot" {
+  let tokens = tokenize(".text")
+  match tokens[0].token {
+    Token::Directive(name) => assert_eq(name, ".text")
+    _ => abort("Expected directive token")
+  }
+}
+
+///|
+test "parse_zbb_min_family" {
+  let min_inst = parse_instruction(
+    "min",
+    [Token::Reg("a0"), Token::Reg("a1"), Token::Reg("a2")],
+  )
+  let minu_inst = parse_instruction(
+    "minu",
+    [Token::Reg("a0"), Token::Reg("a1"), Token::Reg("a2")],
+  )
+
+  assert_true(min_inst is Some(@decode.MIN(10U, 11U, 12U)))
+  assert_true(minu_inst is Some(@decode.MINU(10U, 11U, 12U)))
+}
+
+///|
+test "parse_zbs_bset_family" {
+  let bset_inst = parse_instruction(
+    "bset",
+    [Token::Reg("a0"), Token::Reg("a1"), Token::Reg("a2")],
+  )
+  let bseti_inst = parse_instruction(
+    "bseti",
+    [Token::Reg("a0"), Token::Reg("a1"), Token::Imm(4)],
+  )
+
+  assert_true(bset_inst is Some(@decode.BSET(10U, 11U, 12U)))
+  assert_true(bseti_inst is Some(@decode.BSETI(10U, 11U, 4U)))
+}
+
+///|
 test "parse_label" {
   let tokens = tokenize("main:")
   let stmt = parse_statement(tokens)

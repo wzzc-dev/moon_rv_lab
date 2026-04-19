@@ -111,3 +111,17 @@ test "simulator executes compressed nop before ebreak" {
     _ => abort("expected compressed nop ebreak stop")
   }
 }
+
+///|
+test "compressed trace json preserves compressed asm text" {
+  let state = load_state_from_compressed_parts("compressed_trace_json", [
+    encode_u16(0x4505U),
+    encode_u16(0x0505U),
+    encode_u16(0x9002U),
+  ])
+  let finished = run_with_limit(state, 8)
+  let json = trace_events_to_json(finished.trace)
+  assert_true(json.contains("\"asm\":\"c.li a0, 1\""))
+  assert_true(json.contains("\"asm\":\"c.addi a0, 1\""))
+  assert_true(json.contains("\"asm\":\"c.ebreak\""))
+}

@@ -53,6 +53,25 @@ fn branch_trace_program() -> String {
 }
 
 ///|
+fn syscall_trace_program() -> String {
+  "addi sp, sp, -8\n" +
+  "addi t0, x0, 52\n" +
+  "sb t0, 0(sp)\n" +
+  "addi t0, x0, 50\n" +
+  "sb t0, 1(sp)\n" +
+  "addi t0, x0, 10\n" +
+  "sb t0, 2(sp)\n" +
+  "addi a1, sp, 0\n" +
+  "addi a0, x0, 1\n" +
+  "addi a2, x0, 3\n" +
+  "addi a7, x0, 64\n" +
+  "ecall\n" +
+  "addi a0, x0, 0\n" +
+  "addi a7, x0, 93\n" +
+  "ecall"
+}
+
+///|
 fn read_text_file(path : String) -> String {
   let bytes = @fs.read_file_to_bytes(path).to_fixedarray() catch {
     _ => abort("failed to read text file")
@@ -228,6 +247,33 @@ test "function api json returns per-function slice payload" {
   assert_true(json.contains("\"blocks\""))
   assert_true(json.contains("\"edges\""))
   assert_true(json.contains("\"available\":true"))
+}
+
+///|
+test "workbench api endpoints keep runtime metadata and syscall detail aligned" {
+  let path = write_test_elf("workbench_api_runtime", syscall_trace_program())
+  let snapshot = snapshot_api_json_from_file(path, 200)
+  let overview = overview_api_json_from_file(path, 200)
+  let stream = stream_api_json_from_file(path, 200, 200)
+
+  assert_true(snapshot.contains("\"file_class\":\"ELF64\""))
+  assert_true(snapshot.contains("\"xlen\":64"))
+  assert_true(snapshot.contains("\"initial_pc\":\"0x10000\""))
+  assert_true(snapshot.contains("\"stop_reason\":\"exit(0)\""))
+  assert_true(snapshot.contains("\"runtime_event_count\":15"))
+
+  assert_true(overview.contains("\"file_class\":\"ELF64\""))
+  assert_true(overview.contains("\"xlen\":64"))
+  assert_true(overview.contains("\"initial_pc\":\"0x10000\""))
+  assert_true(overview.contains("\"stop_reason\":\"exit(0)\""))
+  assert_true(overview.contains("\"runtime_event_count\":15"))
+
+  assert_true(stream.contains("\"ok\":true"))
+  assert_true(stream.contains("\"total_events\":15"))
+  assert_true(stream.contains("\"syscall\":\"write("))
+  assert_true(stream.contains("\"syscall\":\"exit("))
+  assert_true(stream.contains("\"memory_writes\":["))
+  assert_true(stream.contains("\"stdout_append\":\"42\\n\""))
 }
 
 ///|
