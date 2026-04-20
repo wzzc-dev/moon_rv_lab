@@ -862,7 +862,10 @@ fn execute_single_step(
         ),
       )
     @decode.CLZ(rd, rs1) =>
-      write_reg(rd, count_leading_zeros_of_xlen(read_reg(rs1), state.image.xlen))
+      write_reg(
+        rd,
+        count_leading_zeros_of_xlen(read_reg(rs1), state.image.xlen),
+      )
     @decode.CTZ(rd, rs1) =>
       write_reg(
         rd,
@@ -880,13 +883,25 @@ fn execute_single_step(
     @decode.ZEXT_H(rd, rs1) =>
       write_reg(rd, normalize_xlen(read_reg(rs1) & 0xFFFFU, state.image.xlen))
     @decode.MAX(rd, rs1, rs2) =>
-      write_reg(rd, signed_max_of_xlen(read_reg(rs1), read_reg(rs2), state.image.xlen))
+      write_reg(
+        rd,
+        signed_max_of_xlen(read_reg(rs1), read_reg(rs2), state.image.xlen),
+      )
     @decode.MAXU(rd, rs1, rs2) =>
-      write_reg(rd, unsigned_max_of_xlen(read_reg(rs1), read_reg(rs2), state.image.xlen))
+      write_reg(
+        rd,
+        unsigned_max_of_xlen(read_reg(rs1), read_reg(rs2), state.image.xlen),
+      )
     @decode.MIN(rd, rs1, rs2) =>
-      write_reg(rd, signed_min_of_xlen(read_reg(rs1), read_reg(rs2), state.image.xlen))
+      write_reg(
+        rd,
+        signed_min_of_xlen(read_reg(rs1), read_reg(rs2), state.image.xlen),
+      )
     @decode.MINU(rd, rs1, rs2) =>
-      write_reg(rd, unsigned_min_of_xlen(read_reg(rs1), read_reg(rs2), state.image.xlen))
+      write_reg(
+        rd,
+        unsigned_min_of_xlen(read_reg(rs1), read_reg(rs2), state.image.xlen),
+      )
     @decode.ROL(rd, rs1, rs2) =>
       write_reg(
         rd,
@@ -898,7 +913,10 @@ fn execute_single_step(
         rotate_right_of_xlen(read_reg(rs1), read_reg(rs2), state.image.xlen),
       )
     @decode.RORI(rd, rs1, shamt) =>
-      write_reg(rd, rotate_right_of_xlen(read_reg(rs1), shamt, state.image.xlen))
+      write_reg(
+        rd,
+        rotate_right_of_xlen(read_reg(rs1), shamt, state.image.xlen),
+      )
     @decode.ORC_B(rd, rs1) =>
       write_reg(rd, or_combine_bytes_of_xlen(read_reg(rs1), state.image.xlen))
     @decode.REV8(rd, rs1) =>
@@ -907,7 +925,11 @@ fn execute_single_step(
       write_reg(
         rd,
         normalize_xlen(
-          read_reg(rs1) & invert_xlen_bits(bit_mask_for_xlen(read_reg(rs2), state.image.xlen), state.image.xlen),
+          read_reg(rs1) &
+          invert_xlen_bits(
+            bit_mask_for_xlen(read_reg(rs2), state.image.xlen),
+            state.image.xlen,
+          ),
           state.image.xlen,
         ),
       )
@@ -915,12 +937,19 @@ fn execute_single_step(
       write_reg(
         rd,
         normalize_xlen(
-          read_reg(rs1) & invert_xlen_bits(bit_mask_for_xlen(shamt, state.image.xlen), state.image.xlen),
+          read_reg(rs1) &
+          invert_xlen_bits(
+            bit_mask_for_xlen(shamt, state.image.xlen),
+            state.image.xlen,
+          ),
           state.image.xlen,
         ),
       )
     @decode.BEXT(rd, rs1, rs2) =>
-      write_reg(rd, bit_extract_of_xlen(read_reg(rs1), read_reg(rs2), state.image.xlen))
+      write_reg(
+        rd,
+        bit_extract_of_xlen(read_reg(rs1), read_reg(rs2), state.image.xlen),
+      )
     @decode.BEXTI(rd, rs1, shamt) =>
       write_reg(rd, bit_extract_of_xlen(read_reg(rs1), shamt, state.image.xlen))
     @decode.BINV(rd, rs1, rs2) =>
@@ -1671,7 +1700,10 @@ fn xlen_byte_width(xlen : Int) -> Int {
 
 ///|
 fn invert_xlen_bits(value : UInt, xlen : Int) -> UInt {
-  normalize_xlen(normalize_xlen(0U - 1U, xlen) ^ normalize_xlen(value, xlen), xlen)
+  normalize_xlen(
+    normalize_xlen(0U - 1U, xlen) ^ normalize_xlen(value, xlen),
+    xlen,
+  )
 }
 
 ///|

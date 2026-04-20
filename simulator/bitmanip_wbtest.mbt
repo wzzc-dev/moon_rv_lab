@@ -22,8 +22,14 @@ test "simulator executes zba shifts and zbb count or extend instructions" {
   assert_eq(finished.registers.get(11U), 28U)
   assert_eq(finished.registers.get(12U), 0U)
   assert_eq(finished.registers.get(13U), 4U)
-  assert_eq(finished.registers.get(15U), normalize_xlen(0U - 1U, state.image.xlen))
-  assert_eq(finished.registers.get(16U), normalize_xlen(0U - 1U, state.image.xlen))
+  assert_eq(
+    finished.registers.get(15U),
+    normalize_xlen(0U - 1U, state.image.xlen),
+  )
+  assert_eq(
+    finished.registers.get(16U),
+    normalize_xlen(0U - 1U, state.image.xlen),
+  )
   assert_eq(finished.registers.get(17U), 0xFFFFU)
   assert_eq(finished.registers.get(6U), 19U)
   assert_eq(finished.registers.get(7U), 23U)
@@ -48,12 +54,24 @@ test "simulator executes zbb logical max min family" {
   )
   assert_eq(state.image.xlen, 32)
   let finished = run_with_limit(state, 16)
-  assert_eq(finished.registers.get(12U), normalize_xlen(0U - 4U, state.image.xlen))
-  assert_eq(finished.registers.get(13U), normalize_xlen(0U - 4U, state.image.xlen))
+  assert_eq(
+    finished.registers.get(12U),
+    normalize_xlen(0U - 4U, state.image.xlen),
+  )
+  assert_eq(
+    finished.registers.get(13U),
+    normalize_xlen(0U - 4U, state.image.xlen),
+  )
   assert_eq(finished.registers.get(14U), 0U)
   assert_eq(finished.registers.get(15U), 3U)
-  assert_eq(finished.registers.get(16U), normalize_xlen(0U - 4U, state.image.xlen))
-  assert_eq(finished.registers.get(17U), normalize_xlen(0U - 4U, state.image.xlen))
+  assert_eq(
+    finished.registers.get(16U),
+    normalize_xlen(0U - 4U, state.image.xlen),
+  )
+  assert_eq(
+    finished.registers.get(17U),
+    normalize_xlen(0U - 4U, state.image.xlen),
+  )
   assert_eq(finished.registers.get(8U), 3U)
 }
 

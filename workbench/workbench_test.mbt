@@ -158,6 +158,10 @@ test "generated workbench html includes godbolt style panes and controls" {
   assert_true(html.contains("id=\"breakpoint-list\""))
   assert_true(html.contains("id=\"breakpoint-clear-btn\""))
   assert_true(html.contains("State Compare"))
+  assert_true(html.contains("Live Debugger"))
+  assert_true(html.contains("id=\"debug-panel\""))
+  assert_true(html.contains("id=\"debug-start-btn\""))
+  assert_true(html.contains("id=\"debug-breakpoints-input\""))
   assert_true(html.contains("id=\"compare-body\""))
   assert_true(html.contains("id=\"compare-prev-btn\""))
   assert_true(html.contains("id=\"compare-initial-btn\""))
@@ -173,6 +177,11 @@ test "generated workbench html includes godbolt style panes and controls" {
   assert_true(html.contains("replayBreakpointHit"))
   assert_true(html.contains("compareMode"))
   assert_true(html.contains("renderStateCompare"))
+  assert_true(html.contains("renderDebugPanel"))
+  assert_true(html.contains("debug_start_endpoint"))
+  assert_true(html.contains("DEBUG_MODE"))
+  assert_true(html.contains("startDebugSession"))
+  assert_true(html.contains("continueDebugSession"))
   assert_false(html.contains("id=\"current-function-only\""))
 }
 
@@ -279,7 +288,9 @@ test "workbench api endpoints keep runtime metadata and syscall detail aligned" 
 ///|
 test "online workbench html bootstraps from overview and function apis" {
   let html = online_page_html(
-    "out/simple.elf", "out/simple.elf", 64, "/api/workbench/overview",
+    "out/simple.elf", "out/simple.elf", 64, "/api/workbench/overview", "/api/workbench/function",
+    "/api/debug/start", "/api/debug/state", "/api/debug/step", "/api/debug/continue",
+    "/api/debug/reset", "/api/debug/stop",
   )
 
   assert_true(html.contains("WORKBENCH_BOOT"))
@@ -290,11 +301,21 @@ test "online workbench html bootstraps from overview and function apis" {
   assert_true(
     html.contains("\"function_endpoint\":\"/api/workbench/function\""),
   )
+  assert_true(html.contains("\"debug_start_endpoint\":\"/api/debug/start\""))
+  assert_true(html.contains("\"debug_state_endpoint\":\"/api/debug/state\""))
+  assert_true(
+    html.contains("\"debug_continue_endpoint\":\"/api/debug/continue\""),
+  )
   assert_true(html.contains("boot.overview_endpoint"))
   assert_true(html.contains("boot.function_endpoint"))
+  assert_true(html.contains("boot.debug_start_endpoint"))
+  assert_true(html.contains("boot.debug_state_endpoint"))
   assert_true(html.contains("xlen: 0"))
   assert_true(html.contains("id=\"file-input\""))
   assert_true(html.contains("id=\"file-load-btn\""))
+  assert_true(html.contains("id=\"debug-panel\""))
+  assert_true(html.contains("id=\"debug-start-btn\""))
+  assert_true(html.contains("id=\"debug-session\""))
   assert_true(html.contains("\"default_file\":\"out/simple.elf\""))
   assert_true(html.contains("boot.default_file"))
   assert_true(html.contains("id=\"help-panel\""))

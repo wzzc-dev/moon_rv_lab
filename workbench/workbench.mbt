@@ -398,6 +398,13 @@ pub fn online_page_html(
   initial_file : String,
   max_instructions : Int,
   overview_endpoint : String,
+  function_endpoint : String,
+  debug_start_endpoint : String,
+  debug_state_endpoint : String,
+  debug_step_endpoint : String,
+  debug_continue_endpoint : String,
+  debug_reset_endpoint : String,
+  debug_stop_endpoint : String,
 ) -> String {
   let resolved_overview_endpoint = if overview_endpoint == "" {
     "/api/workbench/overview"
@@ -407,7 +414,9 @@ pub fn online_page_html(
   build_html_page(
     "MoonRV Lab Online Workbench",
     remote_boot_json(
-      default_file, initial_file, max_instructions, resolved_overview_endpoint, "/api/workbench/function",
+      default_file, initial_file, max_instructions, resolved_overview_endpoint, function_endpoint,
+      debug_start_endpoint, debug_state_endpoint, debug_step_endpoint, debug_continue_endpoint,
+      debug_reset_endpoint, debug_stop_endpoint,
     ),
   )
 }
@@ -1800,7 +1809,7 @@ fn embedded_boot_json(
 ) -> String {
   "{\"mode\":\"embedded\",\"default_file\":\"\",\"initial_file\":\"\",\"max_inst\":" +
   normalize_max_instructions(max_instructions).to_string() +
-  ",\"overview_endpoint\":\"/api/workbench/overview\",\"function_endpoint\":\"/api/workbench/function\",\"embedded_overview\":" +
+  ",\"overview_endpoint\":\"/api/workbench/overview\",\"function_endpoint\":\"/api/workbench/function\",\"debug_start_endpoint\":\"\",\"debug_state_endpoint\":\"\",\"debug_step_endpoint\":\"\",\"debug_continue_endpoint\":\"\",\"debug_reset_endpoint\":\"\",\"debug_stop_endpoint\":\"\",\"embedded_overview\":" +
   overview_json +
   ",\"embedded_function_slices\":" +
   function_slices_json +
@@ -1814,6 +1823,12 @@ fn remote_boot_json(
   max_instructions : Int,
   overview_endpoint : String,
   function_endpoint : String,
+  debug_start_endpoint : String,
+  debug_state_endpoint : String,
+  debug_step_endpoint : String,
+  debug_continue_endpoint : String,
+  debug_reset_endpoint : String,
+  debug_stop_endpoint : String,
 ) -> String {
   let max_inst = normalize_max_instructions(max_instructions)
   let resolved_overview_endpoint = if overview_endpoint == "" {
@@ -1826,6 +1841,36 @@ fn remote_boot_json(
   } else {
     function_endpoint
   }
+  let resolved_debug_start_endpoint = if debug_start_endpoint == "" {
+    "/api/debug/start"
+  } else {
+    debug_start_endpoint
+  }
+  let resolved_debug_state_endpoint = if debug_state_endpoint == "" {
+    "/api/debug/state"
+  } else {
+    debug_state_endpoint
+  }
+  let resolved_debug_step_endpoint = if debug_step_endpoint == "" {
+    "/api/debug/step"
+  } else {
+    debug_step_endpoint
+  }
+  let resolved_debug_continue_endpoint = if debug_continue_endpoint == "" {
+    "/api/debug/continue"
+  } else {
+    debug_continue_endpoint
+  }
+  let resolved_debug_reset_endpoint = if debug_reset_endpoint == "" {
+    "/api/debug/reset"
+  } else {
+    debug_reset_endpoint
+  }
+  let resolved_debug_stop_endpoint = if debug_stop_endpoint == "" {
+    "/api/debug/stop"
+  } else {
+    debug_stop_endpoint
+  }
   "{\"mode\":\"remote\",\"default_file\":" +
   json_string(default_file) +
   ",\"initial_file\":" +
@@ -1836,6 +1881,18 @@ fn remote_boot_json(
   json_string(resolved_overview_endpoint) +
   ",\"function_endpoint\":" +
   json_string(resolved_function_endpoint) +
+  ",\"debug_start_endpoint\":" +
+  json_string(resolved_debug_start_endpoint) +
+  ",\"debug_state_endpoint\":" +
+  json_string(resolved_debug_state_endpoint) +
+  ",\"debug_step_endpoint\":" +
+  json_string(resolved_debug_step_endpoint) +
+  ",\"debug_continue_endpoint\":" +
+  json_string(resolved_debug_continue_endpoint) +
+  ",\"debug_reset_endpoint\":" +
+  json_string(resolved_debug_reset_endpoint) +
+  ",\"debug_stop_endpoint\":" +
+  json_string(resolved_debug_stop_endpoint) +
   ",\"embedded_overview\":null,\"embedded_function_slices\":{}}"
 }
 
@@ -1844,6 +1901,7 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|(() => {
   #|  const boot = WORKBENCH_BOOT || {};
   #|  const REMOTE_MODE = (boot.mode || "embedded") === "remote";
+  #|  const DEBUG_MODE = REMOTE_MODE && !!(boot.debug_start_endpoint || "");
   #|  const WINDOW_ROWS = 200;
   #|  const PROGRAM_ROW_LIMIT = 1200;
   #|  const CFG_BLOCK_LIMIT = 120;
@@ -1866,6 +1924,12 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    fileToolbarField: document.getElementById("file-toolbar-field"),
   #|    fileInput: document.getElementById("file-input"),
   #|    fileLoadBtn: document.getElementById("file-load-btn"),
+  #|    debugToolbarField: document.getElementById("debug-toolbar-field"),
+  #|    debugStartBtn: document.getElementById("debug-start-btn"),
+  #|    debugStepBtn: document.getElementById("debug-step-btn"),
+  #|    debugContinueBtn: document.getElementById("debug-continue-btn"),
+  #|    debugResetBtn: document.getElementById("debug-reset-btn"),
+  #|    debugStopBtn: document.getElementById("debug-stop-btn"),
   #|    summaryGrid: document.getElementById("summary-grid"),
   #|    runtimeSummary: document.getElementById("runtime-summary"),
   #|    executionBody: document.getElementById("execution-body"),
@@ -1894,6 +1958,16 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    compareInitialBtn: document.getElementById("compare-initial-btn"),
   #|    compareSummary: document.getElementById("compare-summary"),
   #|    compareBody: document.getElementById("compare-body"),
+  #|    debugPanel: document.getElementById("debug-panel"),
+  #|    debugSession: document.getElementById("debug-session"),
+  #|    debugStatus: document.getElementById("debug-status"),
+  #|    debugEntryInput: document.getElementById("debug-entry-input"),
+  #|    debugMaxSteps: document.getElementById("debug-max-steps"),
+  #|    debugBreakpointsInput: document.getElementById("debug-breakpoints-input"),
+  #|    debugSummary: document.getElementById("debug-summary"),
+  #|    debugError: document.getElementById("debug-error"),
+  #|    debugRegisters: document.getElementById("debug-registers"),
+  #|    debugTraceBody: document.getElementById("debug-trace-body"),
   #|    truncatedBanner: document.getElementById("truncated-banner"),
   #|    helpPanel: document.getElementById("help-panel"),
   #|    helpSubtitle: document.getElementById("help-subtitle"),
@@ -1952,12 +2026,33 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    currentFile: boot.initial_file || boot.default_file || "",
   #|    loadError: "",
   #|    loading: false,
-  #|    timer: null
+  #|    timer: null,
+  #|    debug: {
+  #|      sessionId: "",
+  #|      active: false,
+  #|      loading: false,
+  #|      file: "",
+  #|      entry: "",
+  #|      traceLen: 0,
+  #|      snapshot: null,
+  #|      lastEvent: null,
+  #|      traceTail: [],
+  #|      error: ""
+  #|    }
   #|  };
   #|
   #|  applyStoredUi(readUiState());
   #|  refs.searchInput.value = state.searchText;
   #|  refs.fileInput.value = state.currentFile;
+  #|  if (refs.debugEntryInput) {
+  #|    refs.debugEntryInput.value = "";
+  #|  }
+  #|  if (refs.debugMaxSteps) {
+  #|    refs.debugMaxSteps.value = "64";
+  #|  }
+  #|  if (refs.debugBreakpointsInput) {
+  #|    refs.debugBreakpointsInput.value = "";
+  #|  }
   #|
   #|  function escapeHtml(value) {
   #|    return String(value || "")
@@ -2067,6 +2162,126 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|      seen.add(addr);
   #|      return true;
   #|    });
+  #|  }
+  #|
+  #|  function parseDebugBreakpoints(value) {
+  #|    return sanitizeBreakpointAddrs(
+  #|      String(value || "")
+  #|        .split(/[;,]/)
+  #|        .map((item) => item.trim())
+  #|        .filter(Boolean),
+  #|    );
+  #|  }
+  #|
+  #|  function debugBreakpointsCsv() {
+  #|    return parseDebugBreakpoints(refs.debugBreakpointsInput ? refs.debugBreakpointsInput.value : "").join(",");
+  #|  }
+  #|
+  #|  function setDebugBreakpointsInput(values) {
+  #|    if (refs.debugBreakpointsInput) {
+  #|      refs.debugBreakpointsInput.value = sanitizeBreakpointAddrs(values).join(", ");
+  #|    }
+  #|  }
+  #|
+  #|  function clearDebugState(errorMessage = "") {
+  #|    state.debug.sessionId = "";
+  #|    state.debug.active = false;
+  #|    state.debug.loading = false;
+  #|    state.debug.file = "";
+  #|    state.debug.entry = "";
+  #|    state.debug.traceLen = 0;
+  #|    state.debug.snapshot = null;
+  #|    state.debug.lastEvent = null;
+  #|    state.debug.traceTail = [];
+  #|    state.debug.error = errorMessage || "";
+  #|  }
+  #|
+  #|  function applyDebugPayload(data) {
+  #|    const payload = data && typeof data === "object" ? data : {};
+  #|    state.debug.sessionId = String(payload.session_id || "");
+  #|    state.debug.active = payload.active !== false;
+  #|    state.debug.loading = false;
+  #|    state.debug.file = String(payload.file || state.currentFile || "");
+  #|    state.debug.entry = String(payload.entry || "");
+  #|    state.debug.traceLen = Number(payload.trace_len || 0);
+  #|    state.debug.snapshot = payload.snapshot || null;
+  #|    state.debug.lastEvent = payload.last_event || null;
+  #|    state.debug.traceTail = Array.isArray(payload.trace_tail) ? payload.trace_tail : [];
+  #|    state.debug.error = "";
+  #|    setDebugBreakpointsInput(Array.isArray(payload.breakpoints) ? payload.breakpoints : []);
+  #|    if (refs.debugEntryInput && !refs.debugEntryInput.value.trim()) {
+  #|      refs.debugEntryInput.value = state.debug.entry || "";
+  #|    }
+  #|  }
+  #|
+  #|  function hasLiveDebugSession() {
+  #|    return DEBUG_MODE && !!state.debug.sessionId && !!state.debug.snapshot;
+  #|  }
+  #|
+  #|  function liveTraceEvents() {
+  #|    return hasLiveDebugSession() ? (state.debug.traceTail || []) : [];
+  #|  }
+  #|
+  #|  function currentRuntimeAddr() {
+  #|    if (hasLiveDebugSession() && state.debug.snapshot && state.debug.snapshot.pc) {
+  #|      return state.debug.snapshot.pc;
+  #|    }
+  #|    const event = currentEvent();
+  #|    return event ? event.addr : (overview.runtime.initial_pc || overview.meta.entry_point || "0x0");
+  #|  }
+  #|
+  #|  function currentRuntimeStopReason() {
+  #|    if (hasLiveDebugSession() && state.debug.snapshot && state.debug.snapshot.stop_reason) {
+  #|      return state.debug.snapshot.stop_reason;
+  #|    }
+  #|    const event = currentEvent();
+  #|    return (event && event.stop_reason) || overview.runtime.stop_reason || "-";
+  #|  }
+  #|
+  #|  function currentRuntimeFunction() {
+  #|    return functionForAddress(currentRuntimeAddr());
+  #|  }
+  #|
+  #|  function currentRegisterState() {
+  #|    return hasLiveDebugSession() && state.debug.snapshot && state.debug.snapshot.registers
+  #|      ? state.debug.snapshot.registers
+  #|      : state.registers;
+  #|  }
+  #|
+  #|  function liveMemoryHistory() {
+  #|    const rows = [];
+  #|    const events = liveTraceEvents();
+  #|    for (let i = events.length - 1; i >= 0; i -= 1) {
+  #|      const event = events[i];
+  #|      (event.memory_writes || []).forEach((item) => {
+  #|        rows.push({
+  #|          step: event.step,
+  #|          addr: item.addr,
+  #|          size: item.size,
+  #|          before: item.before,
+  #|          after: item.after,
+  #|        });
+  #|      });
+  #|    }
+  #|    return rows;
+  #|  }
+  #|
+  #|  function liveIoHistory() {
+  #|    const rows = [];
+  #|    const events = liveTraceEvents();
+  #|    for (let i = events.length - 1; i >= 0; i -= 1) {
+  #|      const event = events[i];
+  #|      if (event.syscall) {
+  #|        rows.push({ step: event.step, kind: "syscall", detail: event.syscall });
+  #|      }
+  #|      if (event.stdout_append) {
+  #|        rows.push({ step: event.step, kind: "stdout", detail: event.stdout_append });
+  #|      }
+  #|      if (event.stderr_append) {
+  #|        rows.push({ step: event.step, kind: "stderr", detail: event.stderr_append });
+  #|      }
+  #|    }
+  #|    return rows;
   #|  }
   #|
   #|  function applyStoredUi(value) {
@@ -2244,10 +2459,7 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|  }
   #|
   #|  function currentFunctionForCursor() {
-  #|    const event = currentEvent();
-  #|    return functionForAddress(
-  #|      event ? event.addr : (overview.runtime.initial_pc || overview.meta.entry_point || "0x0"),
-  #|    );
+  #|    return functionForAddress(currentRuntimeAddr());
   #|  }
   #|
   #|  function isTraceReachable(addr) {
@@ -2404,8 +2616,18 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    if (state.loading) {
   #|      return "loading";
   #|    }
+  #|    if (state.debug.loading) {
+  #|      return "debug loading";
+  #|    }
   #|    if (state.loadError) {
   #|      return "error";
+  #|    }
+  #|    if (state.debug.error) {
+  #|      return "debug error";
+  #|    }
+  #|    if (hasLiveDebugSession()) {
+  #|      const stop = currentRuntimeStopReason();
+  #|      return state.debug.active ? `debug ${stop || "running"}` : `debug paused | ${stop || "stopped"}`;
   #|    }
   #|    const event = currentEvent();
   #|    if (event && event.stop_reason && event.stop_reason !== "running") {
@@ -2426,6 +2648,7 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|      : (state.currentFile || "未选择文件");
   #|    refs.statusPill.textContent = statusLabel();
   #|    refs.fileToolbarField.classList.toggle("hidden", !REMOTE_MODE);
+  #|    refs.debugToolbarField.classList.toggle("hidden", !DEBUG_MODE);
   #|  }
   #|
   #|  function renderHelpPanel() {
@@ -2512,6 +2735,11 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|      refs.truncatedBanner.textContent = state.loadError;
   #|      return;
   #|    }
+  #|    if (state.debug.error) {
+  #|      refs.truncatedBanner.style.display = "block";
+  #|      refs.truncatedBanner.textContent = state.debug.error;
+  #|      return;
+  #|    }
   #|    const messages = [];
   #|    if (Number(overview.meta.total_instruction_count || 0) > PROGRAM_ROW_LIMIT) {
   #|      messages.push(`当前程序共有 ${overview.meta.total_instruction_count} 条指令，页面仅展示前 ${overview.meta.instruction_count} 条。可通过 CLI 参数 --max-inst 调整，或先选择函数缩小范围。`);
@@ -2522,6 +2750,9 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    if (replayBreakpointLabel()) {
   #|      messages.push(`${replayBreakpointLabel()}。这是轨迹回放断点，不会改写原始 stop reason。`);
   #|    }
+  #|    if (hasLiveDebugSession()) {
+  #|      messages.push(`Live Debugger: ${state.debug.sessionId} | pc=${currentRuntimeAddr()} | ${currentRuntimeStopReason()}`);
+  #|    }
   #|    const slice = selectedSlice();
   #|    if (state.selectedFunctionAddr && slice && slice.available === false) {
   #|      messages.push(`函数切片不可用：${slice.reason || state.selectedFunctionAddr}。请切换到其他函数，或刷新页面后重试。`);
@@ -2531,16 +2762,21 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|  }
   #|
   #|  function renderRuntimeSummary() {
-  #|    const event = currentEvent();
-  #|    const currentFn = currentFunctionForCursor();
+  #|    const currentFn = currentRuntimeFunction();
+  #|    const runtimeAddr = currentRuntimeAddr();
+  #|    const runtimeStop = currentRuntimeStopReason();
+  #|    const stepLabel = hasLiveDebugSession() && state.debug.snapshot
+  #|      ? `${state.debug.snapshot.steps}/${state.debug.traceLen}`
+  #|      : `${Math.max(0, state.cursor + 1)}/${(overview.events || []).length}`;
   #|    const entries = [
-  #|      ["PC", event ? event.addr : overview.runtime.initial_pc],
-  #|      ["步骤", `${Math.max(0, state.cursor + 1)}/${(overview.events || []).length}`],
+  #|      ["PC", runtimeAddr],
+  #|      ["步骤", stepLabel],
   #|      ["当前函数", currentFn ? currentFn.name : "N/A"],
-  #|      ["停止", event && event.stop_reason ? event.stop_reason : overview.runtime.stop_reason],
+  #|      ["停止", runtimeStop],
+  #|      ["调试", hasLiveDebugSession() ? state.debug.sessionId : "inactive"],
   #|      ["回放断点", replayBreakpointLabel() || "-"],
-  #|      ["stdout", String(state.stdout.length)],
-  #|      ["stderr", String(state.stderr.length)]
+  #|      ["stdout", String(hasLiveDebugSession() && state.debug.snapshot ? String(state.debug.snapshot.stdout || "").length : state.stdout.length)],
+  #|      ["stderr", String(hasLiveDebugSession() && state.debug.snapshot ? String(state.debug.snapshot.stderr || "").length : state.stderr.length)]
   #|    ];
   #|    refs.runtimeSummary.innerHTML = entries
   #|      .map(([key, value]) => `<div class="stat"><div class="k">${escapeHtml(key)}</div><div class="v">${escapeHtml(value)}</div></div>`)
@@ -2548,16 +2784,17 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|  }
   #|
   #|  function renderExecution() {
-  #|    const event = currentEvent();
-  #|    const currentFn = currentFunctionForCursor();
+  #|    const debugMode = hasLiveDebugSession();
+  #|    const event = debugMode ? state.debug.lastEvent : currentEvent();
+  #|    const currentFn = currentRuntimeFunction();
   #|    const row = event || {
-  #|      step: "-",
-  #|      addr: overview.runtime.initial_pc || overview.meta.entry_point,
-  #|      next_addr: "-",
+  #|      step: debugMode && state.debug.snapshot ? state.debug.snapshot.steps : "-",
+  #|      addr: currentRuntimeAddr(),
+  #|      next_addr: debugMode && state.debug.lastEvent ? state.debug.lastEvent.pc_after || "-" : "-",
   #|      block_start: "-",
   #|      category: "-",
-  #|      asm: "未执行",
-  #|      stop_reason: overview.runtime.stop_reason
+  #|      asm: debugMode ? "live session" : "未执行",
+  #|      stop_reason: currentRuntimeStopReason()
   #|    };
   #|    refs.executionBody.innerHTML = [
   #|      ["step", row.step],
@@ -2566,17 +2803,19 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|      ["block", row.block_start || "-"],
   #|      ["function", currentFn ? currentFn.name : "-"],
   #|      ["category", row.category || "-"],
-  #|      ["stop", row.stop_reason || overview.runtime.stop_reason || "-"],
+  #|      ["stop", row.stop_reason || currentRuntimeStopReason() || "-"],
+  #|      ["mode", debugMode ? "live debugger" : "replay"],
   #|      ["replay breakpoint", replayBreakpointLabel() || "-"],
   #|      ["asm", row.asm || "-"]
   #|    ].map(([key, value]) => `<tr><td>${escapeHtml(key)}</td><td>${escapeHtml(value)}</td></tr>`).join("");
   #|  }
   #|
   #|  function renderToolbarState() {
-  #|    refs.prevBtn.disabled = state.cursor < 0;
-  #|    refs.resetBtn.disabled = state.cursor < 0;
-  #|    refs.nextBtn.disabled = state.cursor >= (overview.events || []).length - 1;
-  #|    refs.playBtn.disabled = state.loading || !!state.loadError || (overview.events || []).length === 0;
+  #|    const liveLocked = hasLiveDebugSession();
+  #|    refs.prevBtn.disabled = liveLocked || state.cursor < 0;
+  #|    refs.resetBtn.disabled = liveLocked || state.cursor < 0;
+  #|    refs.nextBtn.disabled = liveLocked || state.cursor >= (overview.events || []).length - 1;
+  #|    refs.playBtn.disabled = liveLocked || state.loading || !!state.loadError || (overview.events || []).length === 0;
   #|    refs.playBtn.textContent = state.timer ? "Pause" : "Play";
   #|    refs.followPc.classList.toggle("active", state.followPcEnabled);
   #|    refs.changedRegistersToggle.classList.toggle("active", state.showChangedRegistersOnly);
@@ -2605,11 +2844,14 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    const focusAddr = instructionFocusAddr();
   #|    const focusIndex = findInstructionIndex(instructions, focusAddr);
   #|    const win = windowedItems(instructions, focusIndex, WINDOW_ROWS);
-  #|    const event = currentEvent();
-  #|    refs.disasmSubtitle.textContent = `${fn ? fn.name : "no function"} | ${instructions.length} rows | ${queryText() ? `filter=${queryText()}` : "no filter"} | focus=${focusAddr || "-"} | ${event ? `step=${event.step} pc=${event.addr}` : "step=0 pc=initial"}`;
+  #|    const activeAddr = currentRuntimeAddr();
+  #|    const activeStep = hasLiveDebugSession() && state.debug.snapshot
+  #|      ? `live step=${state.debug.snapshot.steps} pc=${activeAddr}`
+  #|      : (currentEvent() ? `step=${currentEvent().step} pc=${currentEvent().addr}` : "step=0 pc=initial");
+  #|    refs.disasmSubtitle.textContent = `${fn ? fn.name : "no function"} | ${instructions.length} rows | ${queryText() ? `filter=${queryText()}` : "no filter"} | focus=${focusAddr || "-"} | ${activeStep}`;
   #|    refs.disasmBody.innerHTML = win.items.length > 0
   #|      ? win.items.map((inst) => {
-  #|          const active = event && event.addr === inst.addr;
+  #|          const active = activeAddr === inst.addr;
   #|          const focus = state.focusedAddr === inst.addr;
   #|          const canBreak = isTraceReachable(inst.addr);
   #|          const armed = hasReplayBreakpoint(inst.addr);
@@ -2636,9 +2878,9 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    const blocks = slice.blocks || [];
   #|    const edges = slice.edges || [];
   #|    const fn = selectedFunction();
-  #|    const event = currentEvent();
-  #|    const currentAddr = event ? hexToBigInt(event.addr) : null;
-  #|    refs.cfgSubtitle.textContent = `${fn ? fn.name : "no function"} | ${blocks.length} blocks | ${edges.length} edges | ${event ? `pc=${event.addr}` : `pc=${overview.runtime.initial_pc}`}`;
+  #|    const runtimeAddr = currentRuntimeAddr();
+  #|    const currentAddr = runtimeAddr ? hexToBigInt(runtimeAddr) : null;
+  #|    refs.cfgSubtitle.textContent = `${fn ? fn.name : "no function"} | ${blocks.length} blocks | ${edges.length} edges | pc=${runtimeAddr}`;
   #|    const note = [];
   #|    if (blocks.length > CFG_BLOCK_LIMIT || edges.length > CFG_EDGE_LIMIT) {
   #|      note.push(`CFG 已截断：当前仅展示 blocks ${Math.min(blocks.length, CFG_BLOCK_LIMIT)}/${blocks.length}，edges ${Math.min(edges.length, CFG_EDGE_LIMIT)}/${edges.length}。可先收窄到具体函数或地址附近继续查看。`);
@@ -2668,7 +2910,8 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|  }
   #|
   #|  function renderRegisters() {
-  #|    const event = currentEvent();
+  #|    const event = hasLiveDebugSession() ? state.debug.lastEvent : currentEvent();
+  #|    const registers = currentRegisterState();
   #|    const changedMap = new Map((event && event.register_writes ? event.register_writes : []).map((item) => [item.name, item]));
   #|    refs.registerGroups.innerHTML = REGISTER_GROUPS.map((group) => {
   #|      const regs = group.regs.filter((name) => !state.showChangedRegistersOnly || changedMap.has(name));
@@ -2680,7 +2923,7 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|        const badge = delta ? '<span class="badge changed">changed</span>' : "";
   #|        const detail = delta
   #|          ? `${escapeHtml(delta.before)} -> ${escapeHtml(delta.after)}`
-  #|          : escapeHtml(state.registers[name] || "0x0");
+  #|          : escapeHtml(registers[name] || "0x0");
   #|        return `<tr><td>${escapeHtml(name)}</td><td>${detail}</td><td>${badge}</td></tr>`;
   #|      }).join("");
   #|      return `<div class="register-group"><div class="group-title">${escapeHtml(group.label)}</div><table class="register-table mono"><tbody>${rows}</tbody></table></div>`;
@@ -2688,9 +2931,52 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|  }
   #|
   #|  function renderRecentWrites() {
-  #|    refs.recentWrites.innerHTML = state.memoryHistory.slice(0, 8).map((item) => {
+  #|    const rows = hasLiveDebugSession() ? liveMemoryHistory().slice(0, 8) : state.memoryHistory.slice(0, 8);
+  #|    refs.recentWrites.innerHTML = rows.map((item) => {
   #|      return `<tr><td>${item.step}</td><td>${escapeHtml(item.addr)}</td><td>${item.size}</td><td>${escapeHtml(item.after)}</td></tr>`;
   #|    }).join("") || '<tr><td colspan="4" class="empty-panel">暂无最近写入</td></tr>';
+  #|  }
+  #|
+  #|  function renderDebugPanel() {
+  #|    if (!refs.debugPanel) {
+  #|      return;
+  #|    }
+  #|    refs.debugPanel.classList.toggle("hidden", !DEBUG_MODE);
+  #|    if (!DEBUG_MODE) {
+  #|      return;
+  #|    }
+  #|    const hasSession = !!state.debug.sessionId;
+  #|    const snapshot = state.debug.snapshot || null;
+  #|    refs.debugSession.textContent = state.debug.sessionId || "inactive";
+  #|    refs.debugStatus.textContent = hasSession
+  #|      ? `${state.debug.active ? "active" : "stopped"} | ${currentRuntimeStopReason()}`
+  #|      : "inactive";
+  #|    refs.debugSummary.innerHTML = [
+  #|      ["pc", snapshot ? snapshot.pc : "-"],
+  #|      ["entry", state.debug.entry || readDebugEntry() || overview.meta.entry_point || "-"],
+  #|      ["steps", snapshot ? snapshot.steps : 0],
+  #|      ["trace", state.debug.traceLen],
+  #|      ["breakpoints", debugBreakpointsCsv() || "-"],
+  #|    ].map(([key, value]) => `<div class="stat"><div class="k">${escapeHtml(key)}</div><div class="v">${escapeHtml(value)}</div></div>`).join("");
+  #|    refs.debugError.textContent = state.debug.error || "Live debugger uses the server-side debug session APIs.";
+  #|    const regState = snapshot && snapshot.registers ? snapshot.registers : {};
+  #|    const regRows = ["ra", "sp", "a0", "a1", "a7", "t0", "s0"]
+  #|      .map((name) => `<tr><td>${escapeHtml(name)}</td><td>${escapeHtml(regState[name] || "0x0")}</td></tr>`)
+  #|      .join("");
+  #|    refs.debugRegisters.innerHTML = regRows || '<tr><td colspan="2" class="empty-panel">session not started</td></tr>';
+  #|    refs.debugTraceBody.innerHTML = (state.debug.traceTail || []).length > 0
+  #|      ? (state.debug.traceTail || []).slice(-8).map((event) => {
+  #|          const active = !!(state.debug.lastEvent && state.debug.lastEvent.step === event.step);
+  #|          return `<tr class="${active ? "active" : ""}"><td>${event.step}</td><td>${escapeHtml(event.addr)}</td><td class="code-cell">${escapeHtml(event.asm || "-")}</td><td>${escapeHtml(event.stop_reason || "-")}</td></tr>`;
+  #|        }).join("")
+  #|      : '<tr><td colspan="4" class="empty-panel">no live trace yet</td></tr>';
+  #|    refs.debugStartBtn.disabled = state.debug.loading || state.loading || !REMOTE_MODE || !(state.currentFile || boot.default_file || "");
+  #|    refs.debugStepBtn.disabled = state.debug.loading || !hasSession || !state.debug.active;
+  #|    refs.debugContinueBtn.disabled = state.debug.loading || !hasSession || !state.debug.active;
+  #|    refs.debugResetBtn.disabled = state.debug.loading || !hasSession || !state.debug.active;
+  #|    refs.debugStopBtn.disabled = state.debug.loading || !hasSession || !state.debug.active;
+  #|    refs.debugStartBtn.textContent = state.debug.loading && !hasSession ? "Starting..." : "Debug Start";
+  #|    refs.debugStepBtn.textContent = state.debug.loading && hasSession ? "Working..." : "Debug Step";
   #|  }
   #|
   #|  function renderReplayBreakpoints() {
@@ -2710,6 +2996,46 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|  function renderStateCompare() {
   #|    refs.comparePrevBtn.classList.toggle("active", state.compareMode === "prev");
   #|    refs.compareInitialBtn.classList.toggle("active", state.compareMode === "initial");
+  #|    if (hasLiveDebugSession()) {
+  #|      const event = state.debug.lastEvent;
+  #|      const liveRegisters = currentRegisterState();
+  #|      if (state.compareMode === "prev") {
+  #|        if (!event) {
+  #|          refs.compareSummary.textContent = "Prev step: live session has not produced an event yet.";
+  #|          refs.compareBody.innerHTML = panelEmptyState("暂无 live step delta。", "先执行 Debug Step 或 Debug Continue。");
+  #|          return;
+  #|        }
+  #|        refs.compareSummary.textContent = `Prev step baseline: live step ${event.step - 1 < 0 ? 0 : event.step - 1}`;
+  #|        const registerRows = (event.register_writes || []).map((item) => `<div class="compare-row mono"><span>${escapeHtml(item.name)}</span><span>${escapeHtml(item.before)} -> ${escapeHtml(item.after)}</span></div>`);
+  #|        const memoryRows = (event.memory_writes || []).map((item) => `<div class="compare-row mono"><span>${escapeHtml(item.addr)}</span><span>${escapeHtml(item.before)} -> ${escapeHtml(item.after)} (size=${item.size})</span></div>`);
+  #|        const outputRows = [];
+  #|        if (event.stdout_append) {
+  #|          outputRows.push(`<div class="compare-row mono"><span>stdout</span><span>${escapeHtml(event.stdout_append)}</span></div>`);
+  #|        }
+  #|        if (event.stderr_append) {
+  #|          outputRows.push(`<div class="compare-row mono"><span>stderr</span><span>${escapeHtml(event.stderr_append)}</span></div>`);
+  #|        }
+  #|        refs.compareBody.innerHTML = `<div class="compare-grid">${renderCompareCard("Registers", registerRows, "本步没有寄存器变化")}${renderCompareCard("Memory", memoryRows, "本步没有内存写入")}${renderCompareCard("Output", outputRows, "本步没有 stdout / stderr 增量")}</div>`;
+  #|        return;
+  #|      }
+  #|      const registerDiffs = REGISTER_ORDER.map((name) => {
+  #|        const before = initialRegisters[name] || "0x0";
+  #|        const after = liveRegisters[name] || "0x0";
+  #|        return before !== after ? { name, before, after } : null;
+  #|      }).filter(Boolean);
+  #|      refs.compareSummary.textContent = "Initial baseline: compare live snapshot against the initial machine state.";
+  #|      const registerRows = registerDiffs.map((item) => `<div class="compare-row mono"><span>${escapeHtml(item.name)}</span><span>${escapeHtml(item.before)} -> ${escapeHtml(item.after)}</span></div>`);
+  #|      const memoryRows = liveMemoryHistory().slice(0, 8).map((item) => `<div class="compare-row mono"><span>step ${item.step}</span><span>${escapeHtml(item.addr)}: ${escapeHtml(item.before)} -> ${escapeHtml(item.after)} (size=${item.size})</span></div>`);
+  #|      const outputRows = [];
+  #|      if (state.debug.snapshot && state.debug.snapshot.stdout) {
+  #|        outputRows.push(`<div class="compare-row mono"><span>stdout</span><span>${escapeHtml(state.debug.snapshot.stdout)}</span></div>`);
+  #|      }
+  #|      if (state.debug.snapshot && state.debug.snapshot.stderr) {
+  #|        outputRows.push(`<div class="compare-row mono"><span>stderr</span><span>${escapeHtml(state.debug.snapshot.stderr)}</span></div>`);
+  #|      }
+  #|      refs.compareBody.innerHTML = `<div class="compare-grid">${renderCompareCard("Registers", registerRows, "当前寄存器与初始状态一致")}${renderCompareCard("Recent Memory Writes", memoryRows, "从初始状态开始还没有内存写入")}${renderCompareCard("Accumulated Output", outputRows, "从初始状态开始还没有 stdout / stderr 输出")}</div>`;
+  #|      return;
+  #|    }
   #|    const event = currentEvent();
   #|    if (state.compareMode === "prev") {
   #|      if (!event) {
@@ -2746,12 +3072,15 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|  }
   #|
   #|  function renderTrace() {
-  #|    const events = overview.events || [];
-  #|    const center = state.cursor >= 0 ? state.cursor : 0;
+  #|    const liveMode = hasLiveDebugSession();
+  #|    const events = liveMode ? liveTraceEvents() : (overview.events || []);
+  #|    const center = liveMode ? Math.max(0, events.length - 1) : (state.cursor >= 0 ? state.cursor : 0);
   #|    const win = windowedItems(events, center, WINDOW_ROWS);
   #|    refs.traceBody.innerHTML = win.items.length > 0
   #|      ? win.items.map((event) => {
-  #|          const active = event.step - 1 === state.cursor;
+  #|          const active = liveMode
+  #|            ? !!(state.debug.lastEvent && state.debug.lastEvent.step === event.step)
+  #|            : event.step - 1 === state.cursor;
   #|          const writes = [];
   #|          if ((event.register_writes || []).length > 0) {
   #|            writes.push((event.register_writes || []).map((item) => item.name).join(", "));
@@ -2766,17 +3095,19 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|  }
   #|
   #|  function renderMemoryWrites() {
-  #|    refs.memoryBody.innerHTML = state.memoryHistory.length > 0
-  #|      ? state.memoryHistory.map((item) => `<tr><td>${item.step}</td><td>${escapeHtml(item.addr)}</td><td>${item.size}</td><td>${escapeHtml(item.before)}</td><td>${escapeHtml(item.after)}</td></tr>`).join("")
+  #|    const rows = hasLiveDebugSession() ? liveMemoryHistory() : state.memoryHistory;
+  #|    refs.memoryBody.innerHTML = rows.length > 0
+  #|      ? rows.map((item) => `<tr><td>${item.step}</td><td>${escapeHtml(item.addr)}</td><td>${item.size}</td><td>${escapeHtml(item.before)}</td><td>${escapeHtml(item.after)}</td></tr>`).join("")
   #|      : '<tr><td colspan="5" class="empty-panel">暂无访存写入</td></tr>';
   #|  }
   #|
   #|  function renderSyscalls() {
-  #|    refs.syscallBody.innerHTML = state.ioHistory.length > 0
-  #|      ? state.ioHistory.map((item) => `<tr><td>${item.step}</td><td>${escapeHtml(item.kind)}</td><td class="code-cell">${escapeHtml(item.detail)}</td></tr>`).join("")
+  #|    const rows = hasLiveDebugSession() ? liveIoHistory() : state.ioHistory;
+  #|    refs.syscallBody.innerHTML = rows.length > 0
+  #|      ? rows.map((item) => `<tr><td>${item.step}</td><td>${escapeHtml(item.kind)}</td><td class="code-cell">${escapeHtml(item.detail)}</td></tr>`).join("")
   #|      : '<tr><td colspan="3" class="empty-panel">暂无 syscall / 输出</td></tr>';
-  #|    refs.stdoutOutput.textContent = state.stdout || "(empty)";
-  #|    refs.stderrOutput.textContent = state.stderr || "(empty)";
+  #|    refs.stdoutOutput.textContent = hasLiveDebugSession() && state.debug.snapshot ? (state.debug.snapshot.stdout || "(empty)") : (state.stdout || "(empty)");
+  #|    refs.stderrOutput.textContent = hasLiveDebugSession() && state.debug.snapshot ? (state.debug.snapshot.stderr || "(empty)") : (state.stderr || "(empty)");
   #|  }
   #|
   #|  function renderTabs() {
@@ -2811,12 +3142,14 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    if (!state.followPcEnabled) {
   #|      return;
   #|    }
-  #|    const event = currentEvent();
-  #|    if (!event) {
+  #|    const addr = currentRuntimeAddr();
+  #|    if (!addr) {
   #|      return;
   #|    }
-  #|    const disasmRow = refs.disasmBody.querySelector(`tr[data-addr="${event.addr}"]`);
-  #|    const traceRow = refs.traceBody.querySelector(`tr[data-event-index="${state.cursor}"]`);
+  #|    const disasmRow = refs.disasmBody.querySelector(`tr[data-addr="${addr}"]`);
+  #|    const traceRow = hasLiveDebugSession()
+  #|      ? refs.traceBody.querySelector("tr.active")
+  #|      : refs.traceBody.querySelector(`tr[data-event-index="${state.cursor}"]`);
   #|    if (disasmRow) {
   #|      disasmRow.scrollIntoView({ block: "nearest" });
   #|    }
@@ -2839,6 +3172,7 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    renderFunctions();
   #|    renderBanner();
   #|    renderRuntimeSummary();
+  #|    renderDebugPanel();
   #|    renderStateCompare();
   #|    renderExecution();
   #|    renderRegisters();
@@ -2872,6 +3206,7 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    overview = nextOverview || createEmptyOverview(file);
   #|    state.currentFile = overview.meta.source_file || file || state.currentFile;
   #|    storageKey = storageKeyFor(state.currentFile || file || "default");
+  #|    clearDebugState("");
   #|    if (restoreUi) {
   #|      applyStoredUi(readUiState());
   #|    }
@@ -2958,6 +3293,178 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|    }
   #|    saveUiState();
   #|    renderAll();
+  #|  }
+  #|
+  #|  function readDebugMaxSteps() {
+  #|    const parsed = Number(refs.debugMaxSteps ? refs.debugMaxSteps.value : "64");
+  #|    return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 64;
+  #|  }
+  #|
+  #|  function readDebugEntry() {
+  #|    const value = String(refs.debugEntryInput ? refs.debugEntryInput.value : "").trim();
+  #|    return isAddressQuery(value) ? value : "";
+  #|  }
+  #|
+  #|  function buildDebugUrl(endpoint, params) {
+  #|    const query = new URLSearchParams();
+  #|    Object.entries(params || {}).forEach(([key, value]) => {
+  #|      const text = String(value == null ? "" : value).trim();
+  #|      if (text) {
+  #|        query.set(key, text);
+  #|      }
+  #|    });
+  #|    const suffix = query.toString();
+  #|    return suffix ? `${endpoint}?${suffix}` : endpoint;
+  #|  }
+  #|
+  #|  async function requestDebug(method, endpoint, params) {
+  #|    const resp = await fetch(buildDebugUrl(endpoint, params), { method });
+  #|    const payload = await resp.json();
+  #|    if (!payload.ok || !payload.data) {
+  #|      throw new Error(payload.error || `debug request failed: ${endpoint}`);
+  #|    }
+  #|    return payload.data;
+  #|  }
+  #|
+  #|  async function syncDebugSelection() {
+  #|    if (!hasLiveDebugSession()) {
+  #|      return;
+  #|    }
+  #|    const addr = currentRuntimeAddr();
+  #|    if (addr) {
+  #|      state.focusedAddr = addr;
+  #|    }
+  #|    if (!state.followPcEnabled) {
+  #|      return;
+  #|    }
+  #|    const fn = functionForAddress(addr);
+  #|    if (fn && fn.addr !== state.selectedFunctionAddr) {
+  #|      state.selectedFunctionAddr = fn.addr;
+  #|      await loadFunctionSlice(fn.addr);
+  #|      saveUiState();
+  #|    }
+  #|  }
+  #|
+  #|  async function refreshDebugState() {
+  #|    if (!DEBUG_MODE || !state.debug.sessionId) {
+  #|      return;
+  #|    }
+  #|    const data = await requestDebug("GET", boot.debug_state_endpoint || "/api/debug/state", {
+  #|      id: state.debug.sessionId,
+  #|    });
+  #|    applyDebugPayload(data);
+  #|    await syncDebugSelection();
+  #|  }
+  #|
+  #|  async function startDebugSession() {
+  #|    if (!DEBUG_MODE) {
+  #|      return;
+  #|    }
+  #|    stopPlay();
+  #|    state.debug.loading = true;
+  #|    state.debug.error = "";
+  #|    renderRuntimePanels();
+  #|    try {
+  #|      const data = await requestDebug("POST", boot.debug_start_endpoint || "/api/debug/start", {
+  #|        file: state.currentFile || boot.default_file || "",
+  #|        entry: readDebugEntry(),
+  #|        breakpoints: debugBreakpointsCsv(),
+  #|      });
+  #|      applyDebugPayload(data);
+  #|      await syncDebugSelection();
+  #|    } catch (err) {
+  #|      state.debug.loading = false;
+  #|      state.debug.error = `live debug start failed: ${String(err)}`;
+  #|    }
+  #|    renderRuntimePanels();
+  #|  }
+  #|
+  #|  async function stepDebugSession() {
+  #|    if (!DEBUG_MODE || !state.debug.sessionId) {
+  #|      return;
+  #|    }
+  #|    stopPlay();
+  #|    state.debug.loading = true;
+  #|    state.debug.error = "";
+  #|    renderRuntimePanels();
+  #|    try {
+  #|      const data = await requestDebug("POST", boot.debug_step_endpoint || "/api/debug/step", {
+  #|        id: state.debug.sessionId,
+  #|        breakpoints: debugBreakpointsCsv(),
+  #|      });
+  #|      applyDebugPayload(data);
+  #|      await syncDebugSelection();
+  #|    } catch (err) {
+  #|      state.debug.loading = false;
+  #|      state.debug.error = `live debug step failed: ${String(err)}`;
+  #|    }
+  #|    renderRuntimePanels();
+  #|  }
+  #|
+  #|  async function continueDebugSession() {
+  #|    if (!DEBUG_MODE || !state.debug.sessionId) {
+  #|      return;
+  #|    }
+  #|    stopPlay();
+  #|    state.debug.loading = true;
+  #|    state.debug.error = "";
+  #|    renderRuntimePanels();
+  #|    try {
+  #|      const data = await requestDebug("POST", boot.debug_continue_endpoint || "/api/debug/continue", {
+  #|        id: state.debug.sessionId,
+  #|        max_steps: String(readDebugMaxSteps()),
+  #|        breakpoints: debugBreakpointsCsv(),
+  #|      });
+  #|      applyDebugPayload(data);
+  #|      await syncDebugSelection();
+  #|    } catch (err) {
+  #|      state.debug.loading = false;
+  #|      state.debug.error = `live debug continue failed: ${String(err)}`;
+  #|    }
+  #|    renderRuntimePanels();
+  #|  }
+  #|
+  #|  async function resetDebugSession() {
+  #|    if (!DEBUG_MODE || !state.debug.sessionId) {
+  #|      return;
+  #|    }
+  #|    stopPlay();
+  #|    state.debug.loading = true;
+  #|    state.debug.error = "";
+  #|    renderRuntimePanels();
+  #|    try {
+  #|      const data = await requestDebug("POST", boot.debug_reset_endpoint || "/api/debug/reset", {
+  #|        id: state.debug.sessionId,
+  #|        breakpoints: debugBreakpointsCsv(),
+  #|      });
+  #|      applyDebugPayload(data);
+  #|      await syncDebugSelection();
+  #|    } catch (err) {
+  #|      state.debug.loading = false;
+  #|      state.debug.error = `live debug reset failed: ${String(err)}`;
+  #|    }
+  #|    renderRuntimePanels();
+  #|  }
+  #|
+  #|  async function stopDebugSession() {
+  #|    if (!DEBUG_MODE || !state.debug.sessionId) {
+  #|      return;
+  #|    }
+  #|    stopPlay();
+  #|    state.debug.loading = true;
+  #|    state.debug.error = "";
+  #|    renderRuntimePanels();
+  #|    try {
+  #|      await requestDebug("POST", boot.debug_stop_endpoint || "/api/debug/stop", {
+  #|        id: state.debug.sessionId,
+  #|      });
+  #|      await refreshDebugState();
+  #|      state.debug.active = false;
+  #|    } catch (err) {
+  #|      state.debug.loading = false;
+  #|      state.debug.error = `live debug stop failed: ${String(err)}`;
+  #|    }
+  #|    renderRuntimePanels();
   #|  }
   #|
   #|  async function jumpToAddress(addrText) {
@@ -3176,11 +3683,39 @@ const WORKBENCH_CLIENT_SCRIPT : String =
   #|  });
   #|
   #|  refs.traceBody.addEventListener("click", async (event) => {
+  #|    if (hasLiveDebugSession()) {
+  #|      return;
+  #|    }
   #|    const row = event.target.closest("tr[data-event-index]");
   #|    if (!row) {
   #|      return;
   #|    }
   #|    await setCursor(Number(row.getAttribute("data-event-index")));
+  #|  });
+  #|
+  #|  refs.debugStartBtn.addEventListener("click", async () => {
+  #|    await startDebugSession();
+  #|  });
+  #|
+  #|  refs.debugStepBtn.addEventListener("click", async () => {
+  #|    await stepDebugSession();
+  #|  });
+  #|
+  #|  refs.debugContinueBtn.addEventListener("click", async () => {
+  #|    await continueDebugSession();
+  #|  });
+  #|
+  #|  refs.debugResetBtn.addEventListener("click", async () => {
+  #|    await resetDebugSession();
+  #|  });
+  #|
+  #|  refs.debugStopBtn.addEventListener("click", async () => {
+  #|    await stopDebugSession();
+  #|  });
+  #|
+  #|  refs.debugBreakpointsInput.addEventListener("change", () => {
+  #|    setDebugBreakpointsInput(parseDebugBreakpoints(refs.debugBreakpointsInput.value));
+  #|    renderDebugPanel();
   #|  });
   #|
   #|  refs.breakpointList.addEventListener("click", async (event) => {
@@ -4084,6 +4619,12 @@ fn build_html_page(title : String, boot_json : String) -> String {
   html = html +
     "          <input id=\"search-input\" type=\"search\" placeholder=\"地址 / 函数 / 指令 / category\" />\n"
   html = html + "        </div>\n"
+  html = html +
+    "        <div class=\"toolbar-field hidden\" id=\"debug-toolbar-field\">\n"
+  html = html + "          <span>Live Debug</span>\n"
+  html = html +
+    "          <div class=\"muted\">Stateful stepping via /api/debug/*</div>\n"
+  html = html + "        </div>\n"
   html = html + "        <div class=\"toolbar-buttons\">\n"
   html = html + "          <button id=\"reset-btn\">Reset</button>\n"
   html = html + "          <button id=\"prev-btn\">Prev</button>\n"
@@ -4242,6 +4783,64 @@ fn build_html_page(title : String, boot_json : String) -> String {
   html = html + "            <h3>State</h3>\n"
   html = html +
     "            <div class=\"summary-grid\" id=\"runtime-summary\"></div>\n"
+  html = html + "          </div>\n"
+  html = html +
+    "          <div class=\"section-block hidden\" id=\"debug-panel\">\n"
+  html = html + "            <div class=\"register-toolbar\">\n"
+  html = html + "              <h3 style=\"margin:0\">Live Debugger</h3>\n"
+  html = html + "              <div class=\"toolbar-inline\">\n"
+  html = html +
+    "                <span class=\"pill\" id=\"debug-session\"></span>\n"
+  html = html + "              </div>\n"
+  html = html + "            </div>\n"
+  html = html + "            <div class=\"muted\" id=\"debug-status\"></div>\n"
+  html = html +
+    "            <div class=\"toolbar-field\" style=\"margin-top:10px\">\n"
+  html = html + "              <span>Entry</span>\n"
+  html = html +
+    "              <input id=\"debug-entry-input\" type=\"text\" placeholder=\"0x10000 (optional)\" />\n"
+  html = html + "            </div>\n"
+  html = html +
+    "            <div class=\"toolbar-field\" style=\"margin-top:10px\">\n"
+  html = html + "              <span>Breakpoints (csv)</span>\n"
+  html = html +
+    "              <input id=\"debug-breakpoints-input\" type=\"text\" placeholder=\"0x10000,0x10020\" />\n"
+  html = html + "            </div>\n"
+  html = html +
+    "            <div class=\"toolbar-field\" style=\"margin-top:10px\">\n"
+  html = html + "              <span>Continue max steps</span>\n"
+  html = html +
+    "              <input id=\"debug-max-steps\" type=\"number\" min=\"1\" step=\"1\" value=\"64\" />\n"
+  html = html + "            </div>\n"
+  html = html +
+    "            <div class=\"toolbar-inline\" style=\"margin-top:10px; flex-wrap:wrap\">\n"
+  html = html +
+    "              <button id=\"debug-start-btn\" class=\"primary\">Debug Start</button>\n"
+  html = html +
+    "              <button id=\"debug-step-btn\">Debug Step</button>\n"
+  html = html +
+    "              <button id=\"debug-continue-btn\">Debug Continue</button>\n"
+  html = html +
+    "              <button id=\"debug-reset-btn\">Debug Reset</button>\n"
+  html = html +
+    "              <button id=\"debug-stop-btn\">Debug Stop</button>\n"
+  html = html + "            </div>\n"
+  html = html +
+    "            <div class=\"summary-grid\" id=\"debug-summary\" style=\"margin-top:10px\"></div>\n"
+  html = html +
+    "            <div class=\"muted\" id=\"debug-error\" style=\"margin-top:8px\"></div>\n"
+  html = html +
+    "            <div class=\"register-toolbar\" style=\"margin-top:12px\">\n"
+  html = html + "              <h3 style=\"margin:0\">Snapshot Registers</h3>\n"
+  html = html + "            </div>\n"
+  html = html +
+    "            <table class=\"kv-table mono\"><tbody id=\"debug-registers\"></tbody></table>\n"
+  html = html +
+    "            <div class=\"register-toolbar\" style=\"margin-top:12px\">\n"
+  html = html + "              <h3 style=\"margin:0\">Trace Tail</h3>\n"
+  html = html + "            </div>\n"
+  html = html +
+    "            <table class=\"interactive trace-table mono\"><thead><tr><th class=\"column-index\">step</th><th class=\"column-addr\">pc</th><th>instruction</th><th>stop</th></tr></thead><tbody id=\"debug-trace-body\"></tbody></table>\n"
   html = html + "          </div>\n"
   html = html + "          <div class=\"section-block\">\n"
   html = html + "            <div class=\"register-toolbar\">\n"

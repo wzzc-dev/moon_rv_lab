@@ -17,6 +17,36 @@ const DEFAULT_MAX_EVENTS : Int = 400
 const DEFAULT_INTERVAL_MS : Int = 350
 
 ///|
+priv struct Ref[T] {
+  mut val : T
+}
+
+///|
+fn[T] Ref::new(val : T) -> Ref[T] {
+  { val, }
+}
+
+///|
+priv struct DebugSession {
+  id : String
+  file : String
+  entry_addr : UInt
+  active : Bool
+  state : @simulator.ExecState
+}
+
+///|
+priv struct DebugSessionStore {
+  sessions : Ref[Map[String, DebugSession]]
+  next_id : Ref[Int]
+}
+
+///|
+fn make_debug_session_store() -> DebugSessionStore {
+  { sessions: Ref::new(Map::new()), next_id: Ref::new(1) }
+}
+
+///|
 const INDEX_STYLE : String =
   #|:root {
   #|  --bg: #eef5f4;
@@ -312,6 +342,108 @@ fn parse_int_dec(s : String) -> Int? {
 }
 
 ///|
+fn parse_hex_uint(s : String) -> UInt? {
+  if s.length() < 3 {
+    return None
+  }
+  if s[0] != '0' || (s[1] != 'x' && s[1] != 'X') {
+    return None
+  }
+
+  let mut result : UInt = 0U
+  for i = 2; i < s.length(); i = i + 1 {
+    let c = s[i]
+    let digit = match c {
+      '0' => Some(0U)
+      '1' => Some(1U)
+      '2' => Some(2U)
+      '3' => Some(3U)
+      '4' => Some(4U)
+      '5' => Some(5U)
+      '6' => Some(6U)
+      '7' => Some(7U)
+      '8' => Some(8U)
+      '9' => Some(9U)
+      'a' | 'A' => Some(10U)
+      'b' | 'B' => Some(11U)
+      'c' | 'C' => Some(12U)
+      'd' | 'D' => Some(13U)
+      'e' | 'E' => Some(14U)
+      'f' | 'F' => Some(15U)
+      _ => None
+    }
+    match digit {
+      Some(v) => result = result * 16U + v
+      None => return None
+    }
+  }
+  Some(result)
+}
+
+///|
+fn parse_uint_value(s : String) -> UInt? {
+  match parse_hex_uint(s) {
+    Some(value) => Some(value)
+    None => parse_uint_dec(s)
+  }
+}
+
+///|
+fn uint_to_hex(value : UInt) -> String {
+  if value == 0U {
+    "0"
+  } else {
+    let mut result = ""
+    let mut current = value
+    while current > 0U {
+      let digit = (current % 16U).reinterpret_as_int()
+      let ch = if digit < 10 {
+        (digit + 48).unsafe_to_char()
+      } else {
+        (digit + 87).unsafe_to_char()
+      }
+      result = ch.to_string() + result
+      current = current / 16U
+    }
+    result
+  }
+}
+
+///|
+fn format_hex(value : UInt) -> String {
+  "0x" + uint_to_hex(value)
+}
+
+///|
+fn escape_json(value : String) -> String {
+  let mut escaped = ""
+  for c in value {
+    match c {
+      '"' => escaped = escaped + "\\\""
+      '\\' => escaped = escaped + "\\\\"
+      '\n' => escaped = escaped + "\\n"
+      '\r' => escaped = escaped + "\\r"
+      '\t' => escaped = escaped + "\\t"
+      _ => escaped = escaped + c.to_string()
+    }
+  }
+  escaped
+}
+
+///|
+fn json_string(value : String) -> String {
+  "\"" + escape_json(value) + "\""
+}
+
+///|
+fn is_ascii_space(c : Char) -> Bool {
+  match c {
+    ' ' | '\t' | '\n' | '\r' => true
+    _ => false
+  }
+}
+
+///|
 fn parse_args(args : Array[String]) -> ServeOptions? {
   let mut options = default_options()
   let mut i = 0
@@ -406,6 +538,14 @@ fn print_usage() -> Unit {
   println(
     "  GET /api/stream?file=<path>&max_inst=<n>&max_events=<n>&interval_ms=<ms>",
   )
+  println("  GET /api/debug/state?id=<session>")
+  println("  POST /api/debug/start?file=<path>&entry=<addr>&breakpoints=<csv>")
+  println("  POST /api/debug/step?id=<session>&breakpoints=<csv>")
+  println(
+    "  POST /api/debug/continue?id=<session>&max_steps=<n>&breakpoints=<csv>",
+  )
+  println("  POST /api/debug/reset?id=<session>&breakpoints=<csv>")
+  println("  POST /api/debug/stop?id=<session>")
 }
 
 ///|
@@ -561,7 +701,7 @@ fn render_page_body(opts : ServeOptions) -> String {
                 ]),
                 @luna.h("p", [], [
                   @luna.text(
-                    "Primary APIs: /api/workbench/overview 提供首屏概要，/api/workbench/function 提供函数切片；Compatibility APIs: /api/snapshot 与 /api/stream 继续服务现有集成。",
+                    "Primary APIs: /api/workbench/overview 提供首屏概要，/api/workbench/function 提供函数切片；Compatibility APIs: /api/snapshot 与 /api/stream 继续服务现有集成；Debug APIs: /api/debug/* 提供 stateful step / continue / reset。",
                   ),
                 ]),
                 @luna.h("ul", [("class", @luna.attr_static("route-list"))], [
@@ -583,6 +723,19 @@ fn render_page_body(opts : ServeOptions) -> String {
                   @luna.h("li", [], [
                     @luna.text(
                       "GET /api/stream?file=<path>&max_inst=<n>&max_events=<n>&interval_ms=<ms>",
+                    ),
+                  ]),
+                  @luna.h("li", [], [
+                    @luna.text(
+                      "POST /api/debug/start?file=<path>&entry=<addr>&breakpoints=<csv>",
+                    ),
+                  ]),
+                  @luna.h("li", [], [
+                    @luna.text("GET /api/debug/state?id=<session>"),
+                  ]),
+                  @luna.h("li", [], [
+                    @luna.text(
+                      "POST /api/debug/continue?id=<session>&max_steps=<n>&breakpoints=<csv>",
                     ),
                   ]),
                 ]),
@@ -785,6 +938,13 @@ fn build_workbench_route_html(opts : ServeOptions, file : String) -> String {
     file,
     opts.max_inst,
     "/api/workbench/overview",
+    "/api/workbench/function",
+    "/api/debug/start",
+    "/api/debug/state",
+    "/api/debug/step",
+    "/api/debug/continue",
+    "/api/debug/reset",
+    "/api/debug/stop",
   )
 }
 
@@ -824,6 +984,346 @@ fn choose_positive_int(value : String?, default_value : Int) -> Int {
         None => default_value
       }
     None => default_value
+  }
+}
+
+///|
+fn parse_breakpoint_query(value : String?) -> Array[@simulator.Breakpoint] {
+  let breakpoints : Array[@simulator.Breakpoint] = []
+  let seen : Map[UInt, Bool] = {}
+  match value {
+    None => ()
+    Some(raw) => {
+      let mut token = ""
+      for c in raw {
+        if c == ',' || c == ';' {
+          if token != "" {
+            match parse_uint_value(token) {
+              Some(addr) =>
+                if !seen.contains(addr) {
+                  seen[addr] = true
+                  breakpoints.push(@simulator.breakpoint(addr))
+                }
+              None => ()
+            }
+          }
+          token = ""
+        } else if !is_ascii_space(c) {
+          token = token + c.to_string()
+        }
+      }
+      if token != "" {
+        match parse_uint_value(token) {
+          Some(addr) =>
+            if !seen.contains(addr) {
+              seen[addr] = true
+              breakpoints.push(@simulator.breakpoint(addr))
+            }
+          None => ()
+        }
+      }
+    }
+  }
+  breakpoints
+}
+
+///|
+fn parse_debug_entry(value : String?, fallback : UInt) -> UInt {
+  match value {
+    Some(raw) =>
+      match parse_uint_value(raw) {
+        Some(parsed) => parsed
+        None => fallback
+      }
+    None => fallback
+  }
+}
+
+///|
+fn breakpoints_to_json(breakpoints : Array[@simulator.Breakpoint]) -> String {
+  let mut json = "["
+  for i = 0; i < breakpoints.length(); i = i + 1 {
+    if i > 0 {
+      json = json + ","
+    }
+    json = json + json_string(format_hex(breakpoints[i].addr))
+  }
+  json = json + "]"
+  json
+}
+
+///|
+fn trace_tail_to_json(
+  events : Array[@simulator.TraceEvent],
+  limit : Int,
+) -> String {
+  let tail_limit = if limit <= 0 { 1 } else { limit }
+  let start = if events.length() > tail_limit {
+    events.length() - tail_limit
+  } else {
+    0
+  }
+  let mut json = "["
+  let mut first = true
+  for i = start; i < events.length(); i = i + 1 {
+    if !first {
+      json = json + ","
+    }
+    json = json + @simulator.trace_event_to_json(events[i])
+    first = false
+  }
+  json = json + "]"
+  json
+}
+
+///|
+fn session_error_json(message : String) -> String {
+  "{\"ok\":false,\"error\":" + json_string(message) + "}"
+}
+
+///|
+fn session_payload_json(session : DebugSession) -> String {
+  let snapshot_json = @simulator.exec_snapshot_to_json(
+    @simulator.snapshot(session.state),
+  )
+  let last_event_json = if session.state.trace.length() == 0 {
+    "null"
+  } else {
+    @simulator.trace_event_to_json(
+      session.state.trace[session.state.trace.length() - 1],
+    )
+  }
+  "{\"ok\":true,\"data\":{\"session_id\":" +
+  json_string(session.id) +
+  ",\"file\":" +
+  json_string(session.file) +
+  ",\"entry\":" +
+  json_string(format_hex(session.entry_addr)) +
+  ",\"xlen\":" +
+  session.state.image.xlen.to_string() +
+  ",\"active\":" +
+  (if session.active { "true" } else { "false" }) +
+  ",\"breakpoints\":" +
+  breakpoints_to_json(session.state.breakpoints) +
+  ",\"snapshot\":" +
+  snapshot_json +
+  ",\"last_event\":" +
+  last_event_json +
+  ",\"trace_tail\":" +
+  trace_tail_to_json(session.state.trace, 20) +
+  ",\"trace_len\":" +
+  session.state.trace.length().to_string() +
+  "}}"
+}
+
+///|
+fn next_debug_session_id(store : DebugSessionStore) -> String {
+  let current = store.next_id.val
+  store.next_id.val = current + 1
+  "dbg-" + current.to_string()
+}
+
+///|
+fn store_debug_session(
+  store : DebugSessionStore,
+  session : DebugSession,
+) -> Unit {
+  store.sessions.val[session.id] = session
+}
+
+///|
+fn active_debug_session(
+  store : DebugSessionStore,
+  session_id : String,
+) -> DebugSession? {
+  match store.sessions.val.get(session_id) {
+    Some(session) => if session.active { Some(session) } else { None }
+    None => None
+  }
+}
+
+///|
+fn find_debug_session(
+  store : DebugSessionStore,
+  session_id : String,
+) -> DebugSession? {
+  store.sessions.val.get(session_id)
+}
+
+///|
+fn resumable_debug_state(state : @simulator.ExecState) -> @simulator.ExecState {
+  @simulator.with_entry(state, state.pc)
+}
+
+///|
+fn debug_state_json(store : DebugSessionStore, session_id : String) -> String {
+  match find_debug_session(store, session_id) {
+    Some(session) => session_payload_json(session)
+    None => session_error_json("debug session not found: " + session_id)
+  }
+}
+
+///|
+fn debug_step_state(state : @simulator.ExecState) -> @simulator.ExecState {
+  match state.stop_reason {
+    Some(@simulator.StopReason::Breakpoint(_))
+    | Some(@simulator.StopReason::MaxSteps(_)) =>
+      @simulator.step(resumable_debug_state(state))
+    Some(_) => state
+    None => @simulator.step(state)
+  }
+}
+
+///|
+fn debug_continue_state(
+  state : @simulator.ExecState,
+  max_steps : Int,
+) -> @simulator.ExecState {
+  let limit = if max_steps <= 0 { 128 } else { max_steps }
+  match state.stop_reason {
+    Some(@simulator.StopReason::Breakpoint(_)) => {
+      let resumed = @simulator.step(resumable_debug_state(state))
+      match resumed.stop_reason {
+        Some(_) => resumed
+        None =>
+          if limit <= 1 {
+            resumed
+          } else {
+            @simulator.run_until_break(resumed, limit - 1)
+          }
+      }
+    }
+    Some(@simulator.StopReason::MaxSteps(_)) =>
+      @simulator.run_until_break(resumable_debug_state(state), limit)
+    Some(_) => state
+    None => @simulator.run_until_break(state, limit)
+  }
+}
+
+///|
+fn parse_optional_debug_breakpoints(
+  value : String?,
+) -> Array[@simulator.Breakpoint]? {
+  match value {
+    Some(raw) => Some(parse_breakpoint_query(Some(raw)))
+    None => None
+  }
+}
+
+///|
+fn start_debug_session_json(
+  store : DebugSessionStore,
+  file : String,
+  entry_addr : UInt,
+  breakpoints : Array[@simulator.Breakpoint],
+) -> String {
+  match @simulator.load(file, entry_override=entry_addr) {
+    @simulator.LoadFailed(err) => session_error_json(err.to_string())
+    @simulator.Loaded(state) => {
+      let resolved_entry = if entry_addr == 0U { state.pc } else { entry_addr }
+      let session = {
+        id: next_debug_session_id(store),
+        file,
+        entry_addr: resolved_entry,
+        active: true,
+        state: @simulator.with_breakpoints(state, breakpoints),
+      }
+      store_debug_session(store, session)
+      session_payload_json(session)
+    }
+  }
+}
+
+///|
+fn reset_debug_session_json(
+  store : DebugSessionStore,
+  session_id : String,
+  breakpoints : Array[@simulator.Breakpoint]?,
+) -> String {
+  match active_debug_session(store, session_id) {
+    None => session_error_json("debug session not found: " + session_id)
+    Some(session) => {
+      let next_breakpoints = match breakpoints {
+        Some(values) => values
+        None => session.state.breakpoints
+      }
+      match @simulator.load(session.file, entry_override=session.entry_addr) {
+        @simulator.LoadFailed(err) => session_error_json(err.to_string())
+        @simulator.Loaded(state) => {
+          let next = {
+            ..session,
+            state: @simulator.with_breakpoints(state, next_breakpoints),
+          }
+          store_debug_session(store, next)
+          session_payload_json(next)
+        }
+      }
+    }
+  }
+}
+
+///|
+fn step_debug_session_json(
+  store : DebugSessionStore,
+  session_id : String,
+  breakpoints : Array[@simulator.Breakpoint]?,
+) -> String {
+  match active_debug_session(store, session_id) {
+    None => session_error_json("debug session not found: " + session_id)
+    Some(session) => {
+      let next_breakpoints = match breakpoints {
+        Some(values) => values
+        None => session.state.breakpoints
+      }
+      let next_state = debug_step_state(
+        @simulator.with_breakpoints(session.state, next_breakpoints),
+      )
+      let next = { ..session, state: next_state }
+      store_debug_session(store, next)
+      session_payload_json(next)
+    }
+  }
+}
+
+///|
+fn continue_debug_session_json(
+  store : DebugSessionStore,
+  session_id : String,
+  max_steps : Int,
+  breakpoints : Array[@simulator.Breakpoint]?,
+) -> String {
+  match active_debug_session(store, session_id) {
+    None => session_error_json("debug session not found: " + session_id)
+    Some(session) => {
+      let next_breakpoints = match breakpoints {
+        Some(values) => values
+        None => session.state.breakpoints
+      }
+      let next_state = debug_continue_state(
+        @simulator.with_breakpoints(session.state, next_breakpoints),
+        max_steps,
+      )
+      let next = { ..session, state: next_state }
+      store_debug_session(store, next)
+      session_payload_json(next)
+    }
+  }
+}
+
+///|
+fn stop_debug_session_json(
+  store : DebugSessionStore,
+  session_id : String,
+) -> String {
+  match find_debug_session(store, session_id) {
+    None => session_error_json("debug session not found: " + session_id)
+    Some(session) => {
+      let next = { ..session, active: false }
+      store_debug_session(store, next)
+      "{\"ok\":true,\"data\":{\"session_id\":" +
+      json_string(session_id) +
+      ",\"stopped\":true}}"
+    }
   }
 }
 
@@ -899,6 +1399,7 @@ async fn stream_events(
 async fn run_server(opts : ServeOptions) -> Unit {
   let app = @mars.Server::new()
   let index_html = build_index_html(opts)
+  let debug_store = make_debug_session_store()
 
   app.get("/", @mars.handler(async fn(ctx) { ctx.html(index_html) }))
 
@@ -975,6 +1476,80 @@ async fn run_server(opts : ServeOptions) -> Unit {
         @workbench.StreamEventsErr(err) =>
           ctx.json({ "ok": false, "error": err }, status=400)
       }
+    }),
+  )
+
+  app.post(
+    "/api/debug/start",
+    @mars.handler(async fn(ctx) {
+      let file = choose_file(ctx.query("file"), opts.default_file)
+      let entry_addr = parse_debug_entry(ctx.query("entry"), 0U)
+      let breakpoints = parse_breakpoint_query(ctx.query("breakpoints"))
+      let payload_text = start_debug_session_json(
+        debug_store, file, entry_addr, breakpoints,
+      )
+      respond_payload_json(ctx, payload_text)
+    }),
+  )
+
+  app.get(
+    "/api/debug/state",
+    @mars.handler(async fn(ctx) {
+      let session_id = choose_file(ctx.query("id"), "")
+      let payload_text = debug_state_json(debug_store, session_id)
+      respond_payload_json(ctx, payload_text)
+    }),
+  )
+
+  app.post(
+    "/api/debug/step",
+    @mars.handler(async fn(ctx) {
+      let session_id = choose_file(ctx.query("id"), "")
+      let breakpoints = parse_optional_debug_breakpoints(
+        ctx.query("breakpoints"),
+      )
+      let payload_text = step_debug_session_json(
+        debug_store, session_id, breakpoints,
+      )
+      respond_payload_json(ctx, payload_text)
+    }),
+  )
+
+  app.post(
+    "/api/debug/continue",
+    @mars.handler(async fn(ctx) {
+      let session_id = choose_file(ctx.query("id"), "")
+      let max_steps = choose_positive_int(ctx.query("max_steps"), 128)
+      let breakpoints = parse_optional_debug_breakpoints(
+        ctx.query("breakpoints"),
+      )
+      let payload_text = continue_debug_session_json(
+        debug_store, session_id, max_steps, breakpoints,
+      )
+      respond_payload_json(ctx, payload_text)
+    }),
+  )
+
+  app.post(
+    "/api/debug/reset",
+    @mars.handler(async fn(ctx) {
+      let session_id = choose_file(ctx.query("id"), "")
+      let breakpoints = parse_optional_debug_breakpoints(
+        ctx.query("breakpoints"),
+      )
+      let payload_text = reset_debug_session_json(
+        debug_store, session_id, breakpoints,
+      )
+      respond_payload_json(ctx, payload_text)
+    }),
+  )
+
+  app.post(
+    "/api/debug/stop",
+    @mars.handler(async fn(ctx) {
+      let session_id = choose_file(ctx.query("id"), "")
+      let payload_text = stop_debug_session_json(debug_store, session_id)
+      respond_payload_json(ctx, payload_text)
     }),
   )
 

@@ -180,10 +180,14 @@ pub fn encode(inst : @decode.Instruction) -> EncodeResult {
     @decode.SH1ADD(rd, rs1, rs2) => encode_r_type_zba(rd, rs1, rs2, 0x2U)
     @decode.SH2ADD(rd, rs1, rs2) => encode_r_type_zba(rd, rs1, rs2, 0x4U)
     @decode.SH3ADD(rd, rs1, rs2) => encode_r_type_zba(rd, rs1, rs2, 0x6U)
-    @decode.SH1ADD_UW(rd, rs1, rs2) => encode_r_type_zba64(rd, rs1, rs2, 0x10U, 0x2U)
-    @decode.SH2ADD_UW(rd, rs1, rs2) => encode_r_type_zba64(rd, rs1, rs2, 0x10U, 0x4U)
-    @decode.SH3ADD_UW(rd, rs1, rs2) => encode_r_type_zba64(rd, rs1, rs2, 0x10U, 0x6U)
-    @decode.ADD_UW(rd, rs1, rs2) => encode_r_type_zba64(rd, rs1, rs2, 0x4U, 0x0U)
+    @decode.SH1ADD_UW(rd, rs1, rs2) =>
+      encode_r_type_zba64(rd, rs1, rs2, 0x10U, 0x2U)
+    @decode.SH2ADD_UW(rd, rs1, rs2) =>
+      encode_r_type_zba64(rd, rs1, rs2, 0x10U, 0x4U)
+    @decode.SH3ADD_UW(rd, rs1, rs2) =>
+      encode_r_type_zba64(rd, rs1, rs2, 0x10U, 0x6U)
+    @decode.ADD_UW(rd, rs1, rs2) =>
+      encode_r_type_zba64(rd, rs1, rs2, 0x4U, 0x0U)
     @decode.SLLI_UW(rd, rs1, shamt) => encode_shift_imm_uw(rd, rs1, shamt)
 
     // Zbb extension
@@ -646,12 +650,7 @@ fn encode_zext_h(rd : UInt, rs1 : UInt) -> UInt {
 
 ///|
 fn encode_orc_b(rd : UInt, rs1 : UInt) -> UInt {
-  (0x14U << 25) |
-  (0x7U << 20) |
-  (rs1 << 15) |
-  (0x5U << 12) |
-  (rd << 7) |
-  OP_REG
+  (0x14U << 25) | (0x7U << 20) | (rs1 << 15) | (0x5U << 12) | (rd << 7) | OP_REG
 }
 
 ///|

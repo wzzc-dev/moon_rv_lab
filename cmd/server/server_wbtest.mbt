@@ -35,6 +35,9 @@ test "index html exposes online workbench entry" {
   assert_true(html.contains("/api/workbench/function"))
   assert_true(html.contains("/api/snapshot"))
   assert_true(html.contains("/api/stream"))
+  assert_true(html.contains("/api/debug/start"))
+  assert_true(html.contains("/api/debug/state"))
+  assert_true(html.contains("/api/debug/continue"))
   assert_false(html.contains("window.__RVR_CONFIG__"))
 }
 
@@ -55,9 +58,17 @@ test "workbench route html embeds online bootstrap config" {
   assert_true(
     html.contains("\"function_endpoint\":\"/api/workbench/function\""),
   )
+  assert_true(html.contains("\"debug_start_endpoint\":\"/api/debug/start\""))
+  assert_true(html.contains("\"debug_state_endpoint\":\"/api/debug/state\""))
+  assert_true(
+    html.contains("\"debug_continue_endpoint\":\"/api/debug/continue\""),
+  )
   assert_true(html.contains("class=\"workbench-shell\""))
   assert_true(html.contains("id=\"file-input\""))
   assert_true(html.contains("id=\"file-load-btn\""))
+  assert_true(html.contains("id=\"debug-panel\""))
+  assert_true(html.contains("id=\"debug-start-btn\""))
+  assert_true(html.contains("id=\"debug-breakpoints-input\""))
   assert_true(html.contains("\"default_file\":\"out/simple.elf\""))
   assert_true(html.contains("boot.default_file"))
   assert_true(html.contains("id=\"help-panel\""))
